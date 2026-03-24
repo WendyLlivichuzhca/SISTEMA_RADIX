@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RADIX — El Camino al Éxito (A-B-C)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #030305;
+            --primary: #9d00ff;
+            --secondary: #00d2ff;
+            --accent: #00e676;
+            --card: rgba(255,255,255,0.02);
+            --border: rgba(255,255,255,0.08);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg);
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 60px 20px;
+            overflow-x: hidden;
+        }
+
+        h1 { font-size: 2.22rem; margin-bottom: 50px; text-align: center; }
+
+        /* ======= ROADMAP LINE ======= */
+        .roadmap {
+            display: flex;
+            flex-direction: column;
+            gap: 100px;
+            width: 100%;
+            max-width: 1000px;
+            position: relative;
+        }
+        .roadmap::before {
+            content: ""; position: absolute; left: 50%; top: 0; bottom: 0;
+            width: 4px; background: linear-gradient(180deg, var(--primary), var(--secondary), var(--accent));
+            opacity: 0.2; transform: translateX(-50%);
+        }
+
+        /* ======= STAGES ======= */
+        .stage {
+            display: flex;
+            align-items: center;
+            position: relative;
+            z-index: 10;
+        }
+        .stage-left { flex: 1; text-align: right; padding-right: 50px; }
+        .stage-right { flex: 1; padding-left: 50px; }
+        .stage-center {
+            width: 60px; height: 60px;
+            background: #111;
+            border: 4px solid var(--primary);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800;
+            box-shadow: 0 0 20px rgba(0,0,0,1);
+        }
+
+        .stage-box {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+        }
+        .stage-box h3 { font-size: 1.2rem; color: #fff; margin-bottom: 10px; text-transform: uppercase; }
+        .stage-box p { font-size: 0.88rem; color: #888; line-height: 1.5; }
+
+        .tag {
+            display: inline-block; padding: 4px 10px; border-radius: 5px;
+            background: rgba(255,255,255,0.05); font-size: 0.7rem; margin-bottom: 10px; color: #fff;
+        }
+
+        /* ======= ICONS ======= */
+        .icon-circle {
+            width: 25px; height: 25px; border-radius: 50%; display: inline-block;
+            margin-right: -10px; border: 2px solid var(--bg);
+        }
+
+        @media(max-width: 700px) {
+            .roadmap::before { left: 40px; }
+            .stage { flex-direction: row; align-items: flex-start; }
+            .stage-left { display: none; }
+            .stage-center { position: absolute; left: 10px; width: 50px; height: 50px; }
+            .stage-right { padding-left: 80px; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>RADIX — El Camino de los Saltos</h1>
+
+    <div class="roadmap">
+        
+        <!-- ETAPA 1 -->
+        <div class="stage">
+            <div class="stage-left">
+                <div class="stage-box">
+                    <div class="tag" style="background:var(--primary)">PUNTO DE PARTIDA</div>
+                    <h3>Tablero A ($10)</h3>
+                    <p>Necesitas que tus 3 amigos (**P1, P2, P3**) confíen en ti y entren. <br> **Al entrar ellos, tú saltas al B.**</p>
+                </div>
+            </div>
+            <div class="stage-center" style="border-color:var(--primary)">A</div>
+            <div class="stage-right">
+                <div style="font-size:1.5rem;">👨‍👧‍👦 👨‍👧‍👦 👨‍👧‍👦</div>
+                <small style="color:#555">Niveles activos abajo.</small>
+            </div>
+        </div>
+
+        <!-- ETAPA 2 -->
+        <div class="stage">
+            <div class="stage-left" style="padding-right:0;">
+                 <div style="font-size:1.5rem;">🚀 🚀 🚀</div>
+                 <small style="color:#555">Tus referidos te están siguiendo.</small>
+            </div>
+            <div class="stage-center" style="border-color:var(--secondary)">B</div>
+            <div class="stage-right">
+                <div class="stage-box">
+                    <div class="tag" style="background:var(--secondary)">MISIÓN: REUNIR AL EQUIPO</div>
+                    <h3>Tablero B ($20)</h3>
+                    <p>Tus amigos (P1, P2, P3) ahora están trabajando en su propio A. <br> **Cuando ellos completan su A, saltan contigo al B.** <br> **Cuando los 3 están en B contigo, tú saltas al C.**</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ETAPA 3 -->
+        <div class="stage">
+            <div class="stage-left">
+                <div class="stage-box">
+                    <div class="tag" style="background:var(--accent)">LA GRAN META</div>
+                    <h3>Tablero C ($40)</h3>
+                    <p>Ahora tus amigos (P1, P2, P3) están en su tablero B. <br> **Cuando ellos saltan de B al C, se reúnen contigo por última vez.** <br> **¡Aquí es donde ganas los $120 y saltas a la Fase 1!**</p>
+                </div>
+            </div>
+            <div class="stage-center" style="border-color:var(--accent)">C</div>
+            <div class="stage-right">
+                <div style="font-size:2.5rem;">💎</div>
+                <small style="color:var(--accent); font-weight:800;">ÉXITO TOTAL</small>
+            </div>
+        </div>
+
+    </div>
+
+    <div style="margin-top:80px; text-align:center; max-width:800px;">
+        <h2 style="color:var(--secondary)">¿Cuál es el secreto?</h2>
+        <p style="color:#aaa; font-size:1rem; line-height:1.6; margin-top:15px;">
+            El secreto es que **tú siempre vas una habitación adelante**. <br><br>
+            Tus amigos nunca cambian; son **los mismos P1, P2 y P3** que te siguen fielmente desde el primer día. <br> 
+            Para que tú pases al C, solo tienes que ayudar a que tus 3 amigos pasen al B. ¡Es un trabajo de equipo en cadena!
+        </p>
+    </div>
+
+</body>
+</html>

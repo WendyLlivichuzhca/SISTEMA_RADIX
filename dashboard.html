@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - RADIX</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="dashboard.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body class="dashboard-body">
+    <div class="glow-bg"></div>
+    
+    <nav class="dash-nav">
+        <div class="logo">RA<span>DIX</span></div>
+        <div class="user-info">
+            <span id="wallet-display">0x...</span>
+            <button id="logout-btn" class="btn-secondary">Salir</button>
+        </div>
+    </nav>
+
+    <main class="dash-container">
+        <!-- Sidebar / Stats Quick View -->
+        <aside class="dash-sidebar">
+            <div class="card profile-card">
+                <div class="avatar" id="user-avatar">R</div>
+                <h3 id="user-nickname">Cargando...</h3>
+                <p class="label">Miembro de RADIX</p>
+                <div class="badge-level" id="current-badge">Seed A</div>
+            </div>
+
+            <div class="card earnings-card">
+                <p>Ganancias Totales</p>
+                <h2 id="total-earnings">0.00 <span>USDT</span></h2>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <section class="dash-main">
+            <!-- Referral Link Card -->
+            <div class="card ref-link-card">
+                <h4>Tu Link de Invitación</h4>
+                <div class="copy-box">
+                    <input type="text" id="ref-link" readonly value="Cargando...">
+                    <button id="copy-btn">Copiar</button>
+                </div>
+            </div>
+
+            <!-- Matrix Visualizer -->
+            <div class="card matrix-card">
+                <h3>Mi Red Directa (3xN)</h3>
+                <div class="matrix-grid">
+                    <div class="matrix-slot" id="slot-1">
+                        <div class="slot-icon">1</div>
+                        <p class="slot-name">Vacío</p>
+                    </div>
+                    <div class="matrix-slot" id="slot-2">
+                        <div class="slot-icon">2</div>
+                        <p class="slot-name">Vacío</p>
+                    </div>
+                    <div class="matrix-slot" id="slot-3">
+                        <div class="slot-icon">3</div>
+                        <p class="slot-name">Vacío</p>
+                    </div>
+                </div>
+                <div class="progress-bar-container">
+                    <p>Progreso para Siguiente Nivel</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

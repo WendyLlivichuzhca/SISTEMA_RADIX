@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RADIX — El Momento del Clon</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #030305;
+            --primary: #9d00ff;
+            --secondary: #00d2ff;
+            --accent: #00e676;
+            --card: rgba(255,255,255,0.02);
+            --border: rgba(255,255,255,0.1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg);
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 50px 20px;
+            overflow-x: hidden;
+        }
+
+        h1 { font-size: 2.2rem; margin-bottom: 20px; text-align: center; }
+        p.subtitle { color: #888; margin-bottom: 50px; text-align: center; max-width: 600px; }
+
+        /* ======= MUNDOS (BOARD) ======= */
+        .board-container {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            max-width: 1100px;
+            margin-bottom: 50px;
+        }
+
+        .board-card {
+            flex: 1;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 25px;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transition: 0.3s;
+        }
+        .board-card:hover { border-color: var(--primary); }
+
+        .board-title { font-weight: 800; font-size: 1.1rem; margin-bottom: 20px; text-transform: uppercase; }
+
+        /* Nodos del tablero */
+        .node-group {
+            display: flex; justify-content: center; gap: 10px; margin-bottom: 20px;
+        }
+        .node {
+            width: 40px; height: 40px; border-radius: 50%; border: 2px solid #333;
+            background: #111; display: flex; align-items: center; justify-content: center; font-size: 0.7rem;
+        }
+        .node.full { background: var(--secondary); border-color: #fff; }
+
+        /* El Disparador (Trigger) */
+        .trigger-btn {
+            background: #fff; color: #000; padding: 12px 20px; border: none; border-radius: 10px;
+            font-weight: 800; cursor: pointer; transition: 0.3s; width: 100%;
+        }
+        .trigger-btn:hover { background: var(--accent); transform: scale(1.05); }
+
+        /* El Clon (Animado) */
+        .clone-spawn {
+            position: absolute;
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            background: var(--primary);
+            box-shadow: 0 0 30px var(--primary);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 0.8rem;
+            opacity: 0;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        @keyframes spawn {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+            50% { transform: translate(-50%, -150%) scale(1.5); opacity: 1; box-shadow: 0 0 50px var(--primary); }
+            100% { transform: translate(-50%, -250%) scale(1); opacity: 0; }
+        }
+        .spawn-active { animation: spawn 0.8s forwards; }
+
+        /* ======= EXPLICACIÓN ======= */
+        .explanation {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 20px; padding: 30px; max-width: 800px;
+            text-align: center;
+        }
+        .explanation h3 { color: var(--accent); margin-bottom: 15px; }
+        .explanation p { font-size: 0.95rem; color: #aaa; line-height: 1.6; }
+
+    </style>
+</head>
+<body>
+
+    <h1>¿Cuándo nacen los Clones?</h1>
+    <p class="subtitle">Haz clic en los botones para ver el momento exacto en que tu éxito se convierte en ayuda para la comunidad.</p>
+
+    <div class="board-container">
+        
+        <!-- Tablero A -->
+        <div class="board-card" id="card-a">
+            <div class="board-title" style="color:var(--primary)">Tablero A</div>
+            <div class="node-group">
+                <div class="node full">10</div>
+                <div class="node full">10</div>
+                <div class="node full">10</div>
+            </div>
+            <p style="font-size:0.8rem; margin-bottom:20px; color:#555;">Recaudado: $30 + tus $10 = $40</p>
+            <button class="trigger-btn" onclick="spawnClone('a')">COMPLETAR TABLERO</button>
+            <div class="clone-spawn" id="clone-a">CLON $10</div>
+        </div>
+
+        <!-- Tablero B -->
+        <div class="board-card" id="card-b">
+            <div class="board-title" style="color:var(--secondary)">Tablero B</div>
+            <div class="node-group">
+                <div class="node full">20</div>
+                <div class="node full">20</div>
+                <div class="node full">20</div>
+            </div>
+            <p style="font-size:0.8rem; margin-bottom:20px; color:#555;">Recaudado: $60 + tus $20 = $80</p>
+            <button class="trigger-btn" onclick="spawnClone('b')">COMPLETAR TABLERO</button>
+            <div class="clone-spawn" id="clone-b" style="background:var(--secondary); box-shadow:0 0 30px var(--secondary)">CLON $20</div>
+        </div>
+
+        <!-- Tablero C -->
+        <div class="board-card" id="card-c">
+            <div class="board-title" style="color:var(--accent)">Tablero C</div>
+            <div class="node-group">
+                <div class="node full">40</div>
+                <div class="node full">40</div>
+                <div class="node full">40</div>
+            </div>
+            <p style="font-size:0.8rem; margin-bottom:20px; color:#555;">Recaudado: $120 + tus $40 = $160</p>
+            <button class="trigger-btn" onclick="spawnClone('c')">COMPLETAR TABLERO</button>
+            <div class="clone-spawn" id="clone-c" style="background:var(--accent); box-shadow:0 0 30px var(--accent); color:#000;">CLON $40</div>
+        </div>
+
+    </div>
+
+    <div class="explanation">
+        <h3>⚡ El Disparo Automático (Trigger)</h3>
+        <p>
+            El clon se activa en el **instante exacto** en que tú terminas un tablero. <br><br>
+            De todo el dinero del pozo, el sistema "dispara" un nodo automático (el clon) hacia la red de tus referidos. <br>
+            **¿A dónde va?** El clon busca el equipo más lento o a la persona que le falta 1 solo invitado para ayudarla a saltar. <br><br>
+            **Resumen:** Cada vez que tú saltas, **activas un clon** para que alguien más salte contigo.
+        </p>
+    </div>
+
+    <script>
+        function spawnClone(type) {
+            const cloneNode = document.getElementById('clone-' + type);
+            // Reset animation
+            cloneNode.classList.remove('spawn-active');
+            void cloneNode.offsetWidth; // Trigger reflow
+            cloneNode.classList.add('spawn-active');
+            
+            // Audio effect simulation? Nah.
+        }
+    </script>
+</body>
+</html>

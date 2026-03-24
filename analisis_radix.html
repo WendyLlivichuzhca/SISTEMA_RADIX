@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Análisis RADIX — Plan vs Código</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #030305; color: #e0e0e0; font-family: 'Outfit', sans-serif; padding: 0; overflow-x: hidden; }
+
+  .hero { padding: 70px 20px 40px; text-align: center; background: radial-gradient(circle at 50% -20%, #1a0a2e, transparent); }
+  .hero h1 { font-size: 2.6rem; font-weight: 800; margin-bottom: 12px;
+    background: linear-gradient(90deg, #00d2ff, #9d00ff, #ff4444);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero p { color: #888; font-size: 1rem; max-width: 600px; margin: 0 auto; }
+
+  .score-banner {
+    max-width: 860px; margin: 0 auto 40px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    padding: 0 20px;
+  }
+  .score-card {
+    background: #12121a; border: 1px solid #2a2a3a; border-radius: 12px;
+    padding: 18px; text-align: center;
+  }
+  .score-card .val { font-size: 2rem; font-weight: 800; margin: 8px 0 4px; }
+  .score-card .lbl { font-size: 0.72rem; color: #777; text-transform: uppercase; letter-spacing: 1px; }
+  .s-ok   { border-color: #00e67644; }  .s-ok   .val { color: #00e676; }
+  .s-warn { border-color: #ff980044; }  .s-warn .val { color: #ff9800; }
+  .s-err  { border-color: #ff444444; }  .s-err  .val { color: #ff4444; }
+  .s-sec  { border-color: #9d00ff44; }  .s-sec  .val { color: #9d00ff; }
+
+  .container { max-width: 860px; margin: 0 auto; padding: 0 20px; }
+
+  .section-title {
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 2px;
+    color: #9d00ff; border-left: 3px solid #9d00ff;
+    padding-left: 10px; margin: 36px 0 16px;
+  }
+
+  /* ===== ITEM DE HALLAZGO ===== */
+  .finding {
+    background: #12121a; border: 1px solid #2a2a3a; border-radius: 12px;
+    padding: 20px 22px; margin-bottom: 14px; position: relative;
+  }
+  .finding::before {
+    content: attr(data-badge);
+    position: absolute; top: -10px; left: 20px;
+    font-size: 0.68rem; font-weight: 700; letter-spacing: 1px;
+    padding: 3px 10px; border-radius: 20px;
+  }
+  .finding.critical { border-color: #ff444455; }
+  .finding.critical::before { background: #ff4444; color: #fff; }
+  .finding.warning  { border-color: #ff980044; }
+  .finding.warning::before  { background: #ff9800; color: #000; }
+  .finding.ok       { border-color: #00e67644; }
+  .finding.ok::before       { background: #00e676; color: #000; }
+  .finding.security { border-color: #9d00ff55; }
+  .finding.security::before { background: #9d00ff; color: #fff; }
+
+  .finding h3 { font-size: 0.95rem; color: #fff; margin-bottom: 8px; padding-top: 4px; }
+  .finding p  { font-size: 0.82rem; color: #aaa; line-height: 1.6; margin-bottom: 8px; }
+  .finding p:last-child { margin-bottom: 0; }
+
+  .code-diff {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;
+  }
+  .diff-box {
+    background: #0d0d18; border-radius: 8px; padding: 12px;
+    font-size: 0.78rem; line-height: 1.7; border: 1px solid #1e1e2e;
+  }
+  .diff-box .tag { font-size: 0.68rem; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; display: block; }
+  .diff-box.plan .tag { color: #00d2ff; }
+  .diff-box.code .tag { color: #ff9800; }
+  .diff-box code { display: block; color: #cc44ff; font-family: monospace; white-space: pre-wrap; }
+  .diff-box .ok-code { color: #00e676; }
+  .diff-box .bad-code { color: #ff4444; }
+  .diff-box p { color: #888; font-size: 0.78rem; }
+
+  /* ===== TABLA COMPARATIVA ===== */
+  table { width: 100%; border-collapse: collapse; font-size: 0.83rem; margin-bottom: 30px; }
+  th { padding: 11px 14px; background: #1a1a2e; color: #9d00ff;
+       border: 1px solid #2a2a3a; font-size: 0.78rem; text-align: left; }
+  td { padding: 10px 14px; border: 1px solid #1e1e2e; vertical-align: middle; color: #bbb; }
+  tr:nth-child(even) td { background: #0f0f1a; }
+  tr:nth-child(odd)  td { background: #111118; }
+  tr:hover td { background: #161624; }
+  .td-feat { color: #fff; font-weight: 600; background: #0d0d18 !important; }
+  .td-ok   { color: #00e676; text-align: center; font-weight: bold; }
+  .td-no   { color: #ff4444; text-align: center; font-weight: bold; }
+  .td-par  { color: #ff9800; text-align: center; font-weight: bold; }
+
+  /* Chips */
+  .chip { display: inline-block; border-radius: 20px; padding: 3px 9px; font-size: 0.72rem; margin: 2px; font-weight: 600; }
+  .c-ok   { background: #001a00; color: #00e676; border: 1px solid #00e67644; }
+  .c-no   { background: #1a0000; color: #ff4444; border: 1px solid #ff444444; }
+  .c-warn { background: #1f1500; color: #ff9800; border: 1px solid #ff980044; }
+  .c-sec  { background: #1a0030; color: #cc44ff; border: 1px solid #9d00ff44; }
+
+  /* Resumen final */
+  .resumen {
+    background: linear-gradient(135deg, #0a1a0a, #1a0a2e);
+    border: 2px solid #9d00ff44; border-radius: 14px;
+    padding: 30px; text-align: center; margin: 40px 0;
+  }
+  .resumen h2 { font-size: 1.8rem; color: #fff; margin: 10px 0; }
+  .resumen p { color: #888; font-size: 0.88rem; max-width: 600px; margin: 0 auto; }
+
+  .priority-list { counter-reset: pri; }
+  .pri-item {
+    counter-increment: pri;
+    display: flex; gap: 14px; align-items: flex-start;
+    background: #12121a; border: 1px solid #2a2a3a;
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+  }
+  .pri-num {
+    min-width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 0.85rem; flex-shrink: 0;
+  }
+  .pri-1 .pri-num { background: #ff4444; color: #fff; }
+  .pri-2 .pri-num { background: #ff9800; color: #000; }
+  .pri-3 .pri-num { background: #00d2ff; color: #000; }
+  .pri-4 .pri-num { background: #9d00ff; color: #fff; }
+  .pri-item h4 { font-size: 0.88rem; color: #fff; margin-bottom: 4px; }
+  .pri-item p  { font-size: 0.78rem; color: #888; line-height: 1.5; }
+
+  .file-ref { font-family: monospace; font-size: 0.78rem; color: #00d2ff; background: #0a1a2e; padding: 2px 7px; border-radius: 4px; }
+
+  @media(max-width:600px){
+    .score-banner { grid-template-columns: 1fr 1fr; }
+    .code-diff { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>ANÁLISIS RADIX — PLAN vs CÓDIGO</h1>
+  <p>Revisión exhaustiva de lo que está implementado, lo que falla y lo que falta según el Master Plan.</p>
+</div>
+
+<!-- SCOREBOARD -->
+<div class="score-banner">
+  <div class="score-card s-ok">
+    <div class="lbl">Funciones correctas</div>
+    <div class="val">8</div>
+    <div class="lbl">Bien implementadas</div>
+  </div>
+  <div class="score-card s-err">
+    <div class="lbl">Bugs críticos</div>
+    <div class="val">4</div>
+    <div class="lbl">Rompen la lógica</div>
+  </div>
+  <div class="score-card s-warn">
+    <div class="lbl">Advertencias</div>
+    <div class="val">5</div>
+    <div class="lbl">Impactan la app</div>
+  </div>
+  <div class="score-card s-sec">
+    <div class="lbl">Riesgos seguridad</div>
+    <div class="val">3</div>
+    <div class="lbl">Urgentes</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ======= TABLA RESUMEN GENERAL ======= -->
+  <div class="section-title">📊 Tabla de cobertura — Plan vs Implementación</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40%">Funcionalidad del Plan</th>
+        <th style="width:15%">Estado</th>
+        <th>Observación</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="td-feat">Progresión Tablero A → B → C</td><td class="td-ok">✅ OK</td><td>Funciona correctamente con 3 referidos</td></tr>
+      <tr><td class="td-feat">Clones NUNCA en Nivel 1</td><td class="td-ok">✅ OK</td><td>Solo se asignan en Tablero B/C o ciclo &gt; 1</td></tr>
+      <tr><td class="td-feat">Clones SÍ en Nivel 2+</td><td class="td-ok">✅ OK</td><td>Lógica de elegibilidad correctamente implementada</td></tr>
+      <tr><td class="td-feat">Tesorería recibe $10 al completar C</td><td class="td-ok">✅ OK</td><td>Se incrementa automáticamente</td></tr>
+      <tr><td class="td-feat">Re-entrada automática Fase 0 (ciclo+1)</td><td class="td-ok">✅ OK</td><td>Nuevo registro en tableros_progreso con ciclo+1</td></tr>
+      <tr><td class="td-feat">Clones activados desde Tesorería</td><td class="td-ok">✅ OK</td><td>Verifica balance antes de crear el clon</td></tr>
+      <tr><td class="td-feat">Anti-auto-patrocinio</td><td class="td-ok">✅ OK</td><td>Validación activa en registro.php</td></tr>
+      <tr><td class="td-feat">Log de auditoría de acciones</td><td class="td-ok">✅ OK</td><td>Registra clones, avances y registros</td></tr>
+      <tr><td class="td-feat">$100 reservado para Fase 1 al terminar C</td><td class="td-no">❌ BUG</td><td>El código solo reserva $30, no $100</td></tr>
+      <tr><td class="td-feat">$40 neto líquido al usuario</td><td class="td-no">❌ BUG</td><td>No existe ningún mecanismo de pago al usuario</td></tr>
+      <tr><td class="td-feat">Esquema SQL actualizado y funcional</td><td class="td-no">❌ BUG</td><td>schema.sql desactualizado — faltan columnas y tablas</td></tr>
+      <tr><td class="td-feat">Panel Admin protegido</td><td class="td-no">❌ BUG</td><td>admin_actions.php no tiene ninguna autenticación</td></tr>
+      <tr><td class="td-feat">Monto del clon ajustado al tablero ($10/$20/$40)</td><td class="td-ok">✅ OK</td><td>Se detecta el tipo de tablero y ajusta el monto</td></tr>
+      <tr><td class="td-feat">Clones no participan como patrocinadores</td><td class="td-par">⚠️ PARCIAL</td><td>Se crean con tipo 'clon' pero no hay validación al registrar nuevos usuarios</td></tr>
+      <tr><td class="td-feat">Stats correctas (usuarios reales vs clones)</td><td class="td-par">⚠️ PARCIAL</td><td>stats.php cuenta clones como usuarios reales</td></tr>
+      <tr><td class="td-feat">Configuración del sistema accesible desde Admin</td><td class="td-par">⚠️ PARCIAL</td><td>admin_data.php usa tabla 'configuracion' vieja, no 'sistema_config'</td></tr>
+      <tr><td class="td-feat">Cálculo de ganancias por usuario</td><td class="td-par">⚠️ PARCIAL</td><td>La fórmula en user_data.php tiene inconsistencias</td></tr>
+      <tr><td class="td-feat">Credenciales seguras de BD</td><td class="td-no">❌ SEC</td><td>Contraseña en texto plano en config.php</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ======= BUGS CRÍTICOS ======= -->
+  <div class="section-title">🔴 Bugs críticos — Rompen la lógica del plan</div>
+
+  <div class="finding critical" data-badge="CRÍTICO #1">
+    <h3>Monto incorrecto para el salto a Fase 1 — solo se reservan $30 en vez de $100</h3>
+    <p>Según el plan, al completar el Tablero C, el sistema debe reservar automáticamente <strong style="color:#fff">$100</strong> para el acceso a Fase 1. Sin embargo, en <span class="file-ref">matrix_logic.php</span> línea 63, el código solo registra <strong style="color:#ff4444">$30</strong>. Esto hace que el salto a Fase 1 nunca tenga los fondos correctos.</p>
+    <div class="code-diff">
+      <div class="diff-box plan">
+        <span class="tag">📋 PLAN</span>
+        <code>Deducción al completar Tablero C:
+  -$100 → Salto a Fase 1 (Clase 1)
+  -$10  → Re-entrada Fase 0
+  -$10  → Tesorería RADIX
+  ─────────────────────────
+  Neto: $40 líquido al usuario</code>
+      </div>
+      <div class="diff-box code">
+        <span class="tag">💻 CÓDIGO (matrix_logic.php, línea 63)</span>
+        <code class="bad-code">// B. Reserva Salto Fase 1 ($30) ← INCORRECTO
+$stmt->execute([$usuario_id,
+  0,
+  30.00,   ← Debería ser 100.00
+  'salto_fase_1',
+  'completado']);</code>
+      </div>
+    </div>
+  </div>
+
+  <div class="finding critical" data-badge="CRÍTICO #2">
+    <h3>Los $40 netos nunca se envían al usuario — no existe el mecanismo de pago</h3>
+    <p>El plan promete <strong style="color:#fff">$40 USDT líquidos</strong> directo al bolsillo del usuario al completar Fase 0. En el código, los sobrantes de Tablero A ($10) y Tablero B ($20) se registran como pagos a favor del <em>patrocinador</em> del usuario (líneas 41–49 de <span class="file-ref">matrix_logic.php</span>), no al usuario mismo. Tampoco existe ningún endpoint ni función que calcule y envíe el pago neto a la wallet del usuario.</p>
+    <div class="code-diff">
+      <div class="diff-box plan">
+        <span class="tag">📋 PLAN</span>
+        <code>Sobrante A: $10 → usuario guarda
+Sobrante B: $20 → usuario guarda
+Sobrante C: $120 - deducciones
+Neto final: $40 USDT al usuario</code>
+      </div>
+      <div class="diff-box code">
+        <span class="tag">💻 CÓDIGO (matrix_logic.php, líneas 41–49)</span>
+        <code class="bad-code">// Al avanzar A→B se paga $20 al
+// PATROCINADOR, no al usuario
+$stmt->execute([
+  $usuario_id,
+  $patrocinador_id, // ← Incorrecto
+  $monto_regalo,
+  'regalo',
+  'pendiente'
+]);</code>
+      </div>
+    </div>
+  </div>
+
+  <div class="finding critical" data-badge="CRÍTICO #3">
+    <h3>schema.sql está desactualizado — ejecutarlo destruye la compatibilidad con el código</h3>
+    <p>El archivo <span class="file-ref">database/schema.sql</span> es la versión 1.0 y le faltan 4 elementos que el código actual (v2.0) necesita obligatoriamente. Si alguien ejecuta este archivo en producción, la app fallará con errores de "columna no encontrada".</p>
+    <div class="code-diff">
+      <div class="diff-box plan" style="grid-column: span 2;">
+        <span class="tag" style="color:#ff4444">❌ Faltan en schema.sql — el código los necesita</span>
+        <code>1. Tabla <span class="bad-code">sistema_config</span> — usada en clon_logic.php para tesorería
+   (schema.sql solo tiene la vieja tabla 'configuracion')
+
+2. Columna <span class="bad-code">usuarios.tipo_usuario</span> ENUM('real','clon')
+   — usada en clon_logic.php al crear clones
+
+3. Columna <span class="bad-code">tableros_progreso.ciclo</span> INT DEFAULT 1
+   — usada en matrix_logic.php y clon_logic.php
+
+4. Tipos de pago en ENUM: <span class="bad-code">'tesoreria'</span>, <span class="bad-code">'salto_fase_1'</span>
+   — usados en matrix_logic.php, no existen en el ENUM de schema.sql
+
+5. pagos.id_receptor FK a usuarios — el código inserta id_receptor=0
+   para la tesorería, rompiendo la FK constraint</code>
+      </div>
+    </div>
+    <p style="margin-top:10px">✅ <strong style="color:#00e676">Buenas noticias:</strong> <span class="file-ref">db_setup.php</span> tiene las migraciones correctas. El problema es que schema.sql no fue actualizado para reflejar la v2.0.</p>
+  </div>
+
+  <div class="finding critical" data-badge="CRÍTICO #4">
+    <h3>admin_actions.php no tiene ninguna verificación de autenticación</h3>
+    <p>El endpoint <span class="file-ref">radix_api/admin_actions.php</span> que permite cambiar el estado de cualquier usuario (suspender, activar, etc.) no verifica si el solicitante es un administrador. Cualquier persona que conozca la URL puede enviar un POST y modificar usuarios arbitrariamente.</p>
+    <div class="code-diff">
+      <div class="diff-box code" style="grid-column: span 2;">
+        <span class="tag" style="color:#ff4444">💻 CÓDIGO (admin_actions.php) — Sin protección</span>
+        <code class="bad-code">if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $usuario_id = $_POST['id'] ?? null;
+    $nuevo_estado = $_POST['estado'] ?? null;
+    // ← No hay: session_start(), verificar token,
+    //   validar si es admin, nada.
+    $stmt->execute([$nuevo_estado, $usuario_id]);
+    // Cualquiera puede ejecutar esto</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======= ADVERTENCIAS ======= -->
+  <div class="section-title">🟠 Advertencias — Afectan el funcionamiento</div>
+
+  <div class="finding warning" data-badge="ADVERTENCIA #1">
+    <h3>stats.php cuenta clones como usuarios reales — infla las métricas</h3>
+    <p>En <span class="file-ref">stats.php</span>, la query cuenta todos los usuarios con <code style="color:#cc44ff">estado = 'activo'</code>, sin excluir los que tienen <code style="color:#cc44ff">tipo_usuario = 'clon'</code>. El dashboard mostrará más "usuarios" de los que realmente hay, lo cual distorsiona las métricas de crecimiento que el plan menciona en la tabla de ejemplos (1 usuario, 2 usuarios, 4 usuarios, etc.).</p>
+    <p><strong style="color:#ff9800">Fix:</strong> Agregar <code style="color:#cc44ff">AND tipo_usuario = 'real'</code> a la query de stats.</p>
+  </div>
+
+  <div class="finding warning" data-badge="ADVERTENCIA #2">
+    <h3>admin_data.php (tab "config") usa la tabla vieja — siempre falla</h3>
+    <p>Cuando el admin abre la pestaña de configuración, <span class="file-ref">admin_data.php</span> ejecuta <code style="color:#cc44ff">SELECT clave, valor FROM configuracion</code>. Esta tabla fue reemplazada por <code style="color:#cc44ff">sistema_config</code> en la v2.0. Si la tabla vieja no existe en producción, el tab arroja error 500. Si existe, muestra datos obsoletos (monto_regalo=$5, fee=$1) que ya no controlan nada.</p>
+  </div>
+
+  <div class="finding warning" data-badge="ADVERTENCIA #3">
+    <h3>Cálculo de ganancias en user_data.php puede ser incorrecto</h3>
+    <p>La fórmula de <span class="file-ref">user_data.php</span> calcula ganancias como <em>recibido de regalos − pagado como emisor</em>. El problema: los pagos de <code style="color:#cc44ff">tesorería</code>, <code style="color:#cc44ff">salto_fase_1</code> y <code style="color:#cc44ff">reentrada</code> se restan como si el usuario los hubiera "pagado" de su bolsillo, cuando en realidad son deducciones automáticas del sistema. El resultado mostrado en el dashboard puede no reflejar el $40 neto que promete el plan.</p>
+  </div>
+
+  <div class="finding warning" data-badge="ADVERTENCIA #4">
+    <h3>Un clon puede ser usado como patrocinador al registrar nuevos usuarios</h3>
+    <p>En <span class="file-ref">registro.php</span>, al recibir un <code style="color:#cc44ff">patrocinador_wallet</code>, el código solo verifica que no sea la misma wallet del usuario (anti-auto-patrocinio). No valida si el patrocinador es un clon (<code style="color:#cc44ff">tipo_usuario = 'clon'</code>). Según el plan, los clones son entidades artificiales y no deberían poder reclutar personas reales.</p>
+  </div>
+
+  <div class="finding warning" data-badge="ADVERTENCIA #5">
+    <h3>No hay confirmación de pagos reales — todo queda en "pendiente"</h3>
+    <p>Los pagos creados al registrar nuevos usuarios quedan con <code style="color:#cc44ff">estado = 'pendiente'</code>. No existe ningún webhook, endpoint o proceso automático que los confirme. El campo <code style="color:#cc44ff">hash_transaccion</code> existe en el schema pero nunca se usa. Sin este puente con blockchain, la app asume que todos pagan sin verificarlo.</p>
+  </div>
+
+  <!-- ======= RIESGOS DE SEGURIDAD ======= -->
+  <div class="section-title">🔵 Riesgos de seguridad</div>
+
+  <div class="finding security" data-badge="SEGURIDAD #1">
+    <h3>Credenciales de base de datos en texto plano en config.php</h3>
+    <p>El archivo <span class="file-ref">radix_api/config.php</span> contiene el usuario y contraseña de la base de datos escritos directamente. Si este archivo es accesible desde el servidor web o se sube a un repositorio público, las credenciales quedan expuestas. Considera usar variables de entorno (<code style="color:#cc44ff">.env</code>) o un archivo de config fuera del directorio público.</p>
+  </div>
+
+  <div class="finding security" data-badge="SEGURIDAD #2">
+    <h3>CORS completamente abierto — cualquier dominio puede llamar la API</h3>
+    <p>En <span class="file-ref">config.php</span>, el header <code style="color:#cc44ff">Access-Control-Allow-Origin: *</code> permite que cualquier sitio web en internet haga peticiones a tu API. En producción, esto debe restringirse solo al dominio de tu frontend.</p>
+  </div>
+
+  <div class="finding security" data-badge="SEGURIDAD #3">
+    <h3>Las firmas de wallet se capturan pero nunca se validan</h3>
+    <p>En <span class="file-ref">registro.php</span>, se reciben los campos <code style="color:#cc44ff">signature</code> y <code style="color:#cc44ff">message</code> del usuario y se guardan en el log de auditoría, pero nunca se verifica criptográficamente que la firma corresponda a la wallet. Esto significa que cualquiera puede registrarse con la wallet de otra persona sin necesitar la clave privada.</p>
+  </div>
+
+  <!-- ======= LO QUE SÍ FUNCIONA ======= -->
+  <div class="section-title">✅ Lo que sí está bien implementado</div>
+
+  <div class="finding ok" data-badge="CORRECTO">
+    <h3>8 funcionalidades del plan implementadas correctamente</h3>
+    <p>
+      <span class="chip c-ok">✅ Progresión A→B→C</span>
+      <span class="chip c-ok">✅ Regla de Oro (clones solo nivel 2+)</span>
+      <span class="chip c-ok">✅ Tesorería $10 por Tablero C</span>
+      <span class="chip c-ok">✅ Re-entrada ciclo+1</span>
+      <span class="chip c-ok">✅ Clones con wallet y nickname únicos</span>
+      <span class="chip c-ok">✅ Balance de tesorería verificado antes de clonar</span>
+      <span class="chip c-ok">✅ Anti-auto-patrocinio</span>
+      <span class="chip c-ok">✅ Logs de auditoría completos</span>
+    </p>
+    <p style="margin-top:10px">La arquitectura general del backend (PDO, transacciones atómicas, separación en archivos por responsabilidad) es sólida. El núcleo de la lógica de clones en <span class="file-ref">clon_logic.php</span> es el archivo mejor implementado.</p>
+  </div>
+
+  <!-- ======= PLAN DE ACCIÓN PRIORIZADO ======= -->
+  <div class="section-title">🎯 Plan de acción — Orden de prioridad</div>
+  <div class="priority-list">
+
+    <div class="pri-item pri-1">
+      <div class="pri-num">1</div>
+      <div>
+        <h4>Corregir el monto de salto_fase_1 en matrix_logic.php</h4>
+        <p>Cambiar <code style="color:#ff4444">30.00</code> por <code style="color:#00e676">100.00</code> en la línea 63. Es un cambio de 2 dígitos que arregla la lógica financiera central del plan.</p>
+      </div>
+    </div>
+
+    <div class="pri-item pri-1">
+      <div class="pri-num">2</div>
+      <div>
+        <h4>Proteger admin_actions.php con verificación de sesión/token</h4>
+        <p>Agregar verificación de sesión de admin al inicio del archivo, igual que admin_login.php. Sin esto, el panel es vulnerable a cualquier atacante.</p>
+      </div>
+    </div>
+
+    <div class="pri-item pri-1">
+      <div class="pri-num">3</div>
+      <div>
+        <h4>Actualizar schema.sql para que sea la versión real de producción</h4>
+        <p>Sincronizar el archivo schema.sql con las migraciones de db_setup.php. Agregar las columnas <code style="color:#cc44ff">tipo_usuario</code>, <code style="color:#cc44ff">ciclo</code>, la tabla <code style="color:#cc44ff">sistema_config</code>, los nuevos tipos de ENUM y quitar la FK en id_receptor.</p>
+      </div>
+    </div>
+
+    <div class="pri-item pri-2">
+      <div class="pri-num">4</div>
+      <div>
+        <h4>Diseñar el mecanismo de pago de los $40 netos al usuario</h4>
+        <p>El plan promete $40 líquidos. Se necesita definir si esto se paga automáticamente a la wallet (requiere integración blockchain), o si se muestra como saldo acumulado disponible para retiro manual. Ninguna opción está actualmente implementada.</p>
+      </div>
+    </div>
+
+    <div class="pri-item pri-2">
+      <div class="pri-num">5</div>
+      <div>
+        <h4>Corregir el flujo de pagos A→B y B→C (patrocinador vs. usuario)</h4>
+        <p>Revisar la lógica de matrix_logic.php para que los sobrantes del usuario queden asignados al usuario mismo, no a su patrocinador. El patrocinador ya recibe su pago cuando el usuario se une inicialmente.</p>
+      </div>
+    </div>
+
+    <div class="pri-item pri-3">
+      <div class="pri-num">6</div>
+      <div>
+        <h4>Filtrar clones de las estadísticas públicas</h4>
+        <p>Agregar <code style="color:#cc44ff">AND tipo_usuario = 'real'</code> en stats.php. Fácil y necesario para métricas honestas.</p>
+      </div>
+    </div>
+
+    <div class="pri-item pri-3">
+      <div class="pri-num">7</div>
+      <div>
+        <h4>Arreglar admin_data.php para usar sistema_config en vez de configuracion</h4>
+        <p>El tab "config" del admin fallará en producción. Actualizar la query a la tabla correcta.</p>
+      </div>
+    </div>
+
+    <div class="pri-item pri-4">
+      <div class="pri-num">8</div>
+      <div>
+        <h4>Mover credenciales de BD a variables de entorno</h4>
+        <p>Crear un archivo <code style="color:#cc44ff">.env</code> o <code style="color:#cc44ff">config_private.php</code> fuera del directorio público y excluirlo del repositorio con .gitignore.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RESUMEN FINAL -->
+  <div class="resumen">
+    <p style="color:#9d00ff; font-weight:600; text-transform:uppercase; letter-spacing:2px; font-size:0.78rem">Veredicto final</p>
+    <h2>La lógica principal está bien — pero hay 4 bugs que bloquean que el plan funcione en producción</h2>
+    <p style="margin-top:12px">El sistema de clones, la tesorería y la progresión A→B→C están sólidamente construidos. Los errores críticos son corregibles en pocas horas de trabajo. El más urgente es el monto de salto_fase_1 ($30 vs $100) y la falta de autenticación en admin. Con esos 4 bugs resueltos, el 80% del plan estaría operativo.</p>
+  </div>
+
+  <div style="text-align:center; color:#444; font-size:0.78rem; padding: 20px 0 40px">
+    Generado por Claude · RADIX Master Plan Analysis · Marzo 2026
+  </div>
+
+</div>
+</body>
+</html>

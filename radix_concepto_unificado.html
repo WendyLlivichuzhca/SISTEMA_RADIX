@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RADIX — El Motor de Éxito</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #030305;
+            --primary: #9d00ff;
+            --secondary: #00d2ff;
+            --accent: #00e676;
+            --orange: #ff9800;
+            --card: rgba(255,255,255,0.02);
+            --border: rgba(255,255,255,0.05);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg);
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 50px 20px;
+            overflow-x: hidden;
+        }
+
+        h1 { font-size: 2.2rem; margin-bottom: 30px; text-align: center; }
+        .description { color:#aaa; font-size:1.1rem; max-width:800px; text-align:center; margin-bottom:50px; }
+
+        /* ======= EL MOTOR (FLOW) ======= */
+        .motor-container {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            width: 100%;
+            max-width: 1100px;
+            justify-content: center;
+        }
+
+        .step-box {
+            flex: 1;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 25px;
+            padding: 30px;
+            text-align: center;
+            min-height: 420px;
+            position: relative;
+            backdrop-filter: blur(10px);
+            transition: 0.3s;
+        }
+        .step-box:hover { border-color: var(--primary); }
+
+        .step-num {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800;
+            margin: 0 auto 20px;
+        }
+
+        .icon-box { font-size: 3rem; margin-bottom: 20px; }
+        .step-box h3 { font-size: 1.3rem; margin-bottom: 15px; color: #fff; text-transform: uppercase; letter-spacing: 1px; }
+        .step-box p { font-size: 0.88rem; color: #777; line-height: 1.5; }
+
+        /* ======= ANIMATED ARROWS ======= */
+        .arrow {
+            font-size: 2rem;
+            color: #333;
+            animation: moveX 1s infinite alternate;
+        }
+        @keyframes moveX { from { transform: translateX(0); } to { transform: translateX(10px); } }
+
+        /* ======= RESULT CARDS ======= */
+        .result-card {
+            background: #000;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            margin-top: 15px;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.8rem;
+        }
+        .result-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        /* ======= FINAL CALL TO ACTION ======= */
+        .summary-banner {
+            max-width: 1100px;
+            width: 100%;
+            margin-top: 60px;
+            background: linear-gradient(90deg, #1a0a2e, #030305);
+            border: 1px solid var(--primary);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+        }
+        .summary-banner h2 { margin-bottom: 15px; }
+
+        @media(max-width: 900px) {
+            .motor-container { flex-direction: column; }
+            .arrow { transform: rotate(90deg) !important; animation: moveY 1s infinite alternate; }
+        }
+        @keyframes moveY { from { transform: rotate(90deg) translateY(0); } to { transform: rotate(90deg) translateY(10px); } }
+
+    </style>
+</head>
+<body>
+
+    <h1>RADIX — El Concepto Unificado</h1>
+    <p class="description">¿Cómo se conectan los Niveles, el Dinero y los Clones? Descubre el motor que hace que nadie pierda.</p>
+
+    <div class="motor-container">
+        
+        <!-- PASO 1: NIVELES -->
+        <div class="step-box">
+            <div class="step-num">1</div>
+            <div class="icon-box">👥</div>
+            <h3>Gente (Niveles)</h3>
+            <p>Los niveles son la "combustión" del motor. Cuando el Nivel 2 (tus invitados) llenan sus espacios, se generan los pagos de entrada de $10.</p>
+            <div style="margin-top:20px; display:flex; justify-content:center; gap:5px;">
+                <div style="background:#444; width:15px; height:15px; border-radius:50%;"></div>
+                <div style="background:#444; width:15px; height:15px; border-radius:50%;"></div>
+                <div style="background:#444; width:15px; height:15px; border-radius:50%;"></div>
+            </div>
+            <small style="color:#555; display:block; margin-top:10px;">Sin personas, no hay dinero recolectado.</small>
+        </div>
+
+        <div class="arrow">➜</div>
+
+        <!-- PASO 2: DINERO (POZO) -->
+        <div class="step-box" style="border-color:var(--orange)">
+            <div class="step-num" style="background:var(--orange)">2</div>
+            <div class="icon-box">💰</div>
+            <h3>Recaudado</h3>
+            <p>Al completarse un tablero, se junta una suma de dinero (por ejemplo, los **$40** del Tablero A). Esta suma es el **"Monto Crudo"** del ciclo.</p>
+            <div style="background:rgba(255,152,0,0.1); border:1px solid var(--orange); padding:10px; border-radius:10px; margin-top:20px; font-weight:800; color:var(--orange);">
+                $40 USDT RECOLECTADOS
+            </div>
+        </div>
+
+        <div class="arrow">➜</div>
+
+        <!-- PASO 3: REPARTO (CLONES & AVANCE) -->
+        <div class="step-box" style="border-color:var(--accent)">
+            <div class="step-num" style="background:var(--accent)">3</div>
+            <div class="icon-box">🔄</div>
+            <h3>Reparto (Clones)</h3>
+            <p>Aquí es donde el dinero se divide automáticamente para que el motor siga girando.</p>
+            
+            <div class="result-card">
+                <div class="result-dot" style="background:var(--primary)"></div>
+                <div><strong>$10 CLONES</strong> (Activa el Agente IA para ayudar a otros)</div>
+            </div>
+            <div class="result-card">
+                <div class="result-dot" style="background:var(--secondary)"></div>
+                <div><strong>$20 UPGRADE</strong> (Te mueve al siguiente Tablero)</div>
+            </div>
+            <div class="result-card">
+                <div class="result-dot" style="background:var(--accent)"></div>
+                <div><strong>$10 GANANCIA</strong> (Dinero para ti)</div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="summary-banner">
+        <h2>💡 La Verdad sobre los Clones</h2>
+        <p style="color:#aaa; max-width:800px; margin:0 auto 20px;">
+            Los **Niveles** (la gente) son el origen del dinero. Los **Clones** son el destino de una parte de ese dinero. <br><br>
+            Cuando alguien te pregunta por qué los niveles "activan" los clones, la respuesta es simple: **Porque es el mismo dinero del nivel el que paga el clon.** <br>
+            Sin el Nivel 2 completado, el Agente IA no tiene fondos para nacer.
+        </p>
+        <div style="display:flex; justify-content:center; gap:20px;">
+            <div style="padding:10px 20px; border:1px solid var(--border); border-radius:50px; font-size:0.8rem; color: #cc44ff;">GENTE = COMBUSTIBLE</div>
+            <div style="padding:10px 20px; border:1px solid var(--border); border-radius:50px; font-size:0.8rem; color: #00d2ff;">CLON = MANTENIMIENTO</div>
+            <div style="padding:10px 20px; border:1px solid var(--border); border-radius:50px; font-size:0.8rem; color: #00e676;">AVANCE = VELOCIDAD</div>
+        </div>
+    </div>
+
+</body>
+</html>
