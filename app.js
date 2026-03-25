@@ -1,178 +1,161 @@
+/**
+ * app.js - RADIX Phase 0 Connection & Auto-Registration Logic
+ * Gestiona la conexión real de MetaMask/SafePal, el registro automático y el acceso.
+ */
+
 document.addEventListener('DOMContentLoaded', () => {
-    // Smooth scroll for nav links
-    document.querySelectorAll('nav a').forEach(anchor => {
-        anchor.addEventListener('click', function (e) {
-            e.preventDefault();
-            const targetId = this.getAttribute('href');
-            if (targetId.startsWith('#')) {
-                document.querySelector(targetId).scrollIntoView({
-                    behavior: 'smooth'
-                });
-            }
-        });
-    });
-    // Handle Referral Link parameter (?ref=)
-    const urlParams = new URLSearchParams(window.location.search);
-    const ref = urlParams.get('ref');
-    if (ref) {
-        localStorage.setItem('radix_sponsor', ref);
-        console.log('Sponsor detectado:', ref);
-    }
-
-    // Check if already connected
-    const savedWallet = localStorage.getItem('radix_wallet');
-    if (savedWallet) {
-        window.location.href = 'dashboard.html';
-    }
-
-    // Helper to animate numbers
-    function animateValue(obj, start, end, duration, suffix = '') {
-        let startTimestamp = null;
-        const step = (timestamp) => {
-            if (!startTimestamp) startTimestamp = timestamp;
-            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-            obj.innerHTML = Math.floor(progress * (end - start) + start).toLocaleString() + suffix;
-            if (progress < 1) {
-                window.requestAnimationFrame(step);
-            }
-        };
-        window.requestAnimationFrame(step);
-    }
-
-    // Animate stats from real API
-    async function updateStats() {
-        try {
-            const statsResponse = await fetch('radix_api/stats.php');
-            const data = await statsResponse.json();
-            
-            animateValue(document.getElementById('total-users'), 0, data.users || 0, 2000);
-            animateValue(document.getElementById('total-rewards'), 0, data.gifts || 0, 2000, ' USDT');
-            animateValue(document.getElementById('total-days'), 0, data.days || 1, 2000);
-        } catch (error) {
-            console.error('Error fetching stats:', error);
-            // Fallback to defaults
-            animateValue(document.getElementById('total-users'), 0, 0, 1000);
-        }
-    }
-
-    const statsObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                updateStats();
-                statsObserver.unobserve(entry.target);
-            }
-        });
-    }, { threshold: 0.5 });
-
-    const statsSection = document.getElementById('stats');
-    if (statsSection) statsObserver.observe(statsSection);
-
-    // Wallet connection with backend registration
     const connectBtn = document.getElementById('connect-wallet');
-    connectBtn.addEventListener('click', async () => {
-        if (connectBtn.classList.contains('connected')) return;
-        
-        try {
-            // MetaMask check
-            if (!window.ethereum) {
-                // Si ya dice "Instalar", redirigir al clic
-                if (connectBtn.textContent === 'Instalar MetaMask') {
-                    window.open('https://metamask.io/download/', '_blank');
+
+    if (connectBtn) {
+        connectBtn.addEventListener('click', async () => {
+            connectBtn.innerText = "CONECTANDO...";
+            connectBtn.disabled = true;
+
+            // ─── 1. Detectar TronWeb (SafePal o TronLink) ──────
+            if (typeof window.tronWeb === 'undefined' || window.tronWeb === null) {
+                // Si existe tronLink pero no tronWeb, pedir conexión
+                if (window.tronLink) {
+                   await window.tronLink.request({ method: 'tron_requestAccounts' });
+                } else {
+                   document.getElementById('wallet-modal').style.display = 'flex';
+                   connectBtn.innerText = "Conectar Billetera";
+                   connectBtn.disabled = false;
+                   return;
                 }
-                showToast('¡Por favor instala MetaMask para continuar!');
-                connectBtn.textContent = 'Instalar MetaMask';
-                connectBtn.style.pointerEvents = 'auto';
-                return;
             }
 
-            // 1. Obtener la cuenta real de MetaMask (si existe)
-            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-            const realWallet = accounts[0];
-
-            // 2. Solicitar firma (Seguridad)
-            const message = `Bienvenido a RADIX. Firma este mensaje para entrar de forma segura.\n\nNonce: ${Math.floor(Math.random() * 1000000)}`;
-            const signature = await window.ethereum.request({
-                method: 'personal_sign',
-                params: [message, realWallet],
-            });
-
-            if (!signature) {
-                showToast('Firma cancelada');
-                connectBtn.textContent = 'Conectar Billetera';
-                connectBtn.style.pointerEvents = 'auto';
-                return;
-            }
-
-            // 3. Registrar / Loguear en el backend
-            const formData = new FormData();
-            formData.append('wallet', realWallet);
-            formData.append('nickname', 'User_' + realWallet.slice(2, 6).toUpperCase());
-            formData.append('signature', signature);
-            formData.append('message', message);
-            
-            const sponsor = localStorage.getItem('radix_sponsor');
-            // Si el patrocinador es el mismo que el usuario, ignorarlo (Evita el error de auto-patrocinio)
-            if (sponsor && sponsor.toLowerCase() !== realWallet.toLowerCase()) {
-                formData.append('patrocinador', sponsor);
-            }
-            const response = await fetch('radix_api/registro.php', {
-                method: 'POST',
-                body: formData
-            });
-            const result = await response.json();
-
-            if (result.success) {
-                localStorage.setItem('radix_wallet', realWallet);
-                localStorage.setItem('radix_auth', 'true'); // Flag de autenticación activa
+            try {
+                // ─── 2. Obtener la cuenta de Tron ──────────────────────────
+                // En TronWeb, la cuenta suele estar disponible tras la carga o pidiendo 'tron_requestAccounts'
+                if (!window.tronWeb.defaultAddress.base58) {
+                    await window.tronLink.request({ method: 'tron_requestAccounts' });
+                }
                 
-                connectBtn.classList.add('connected');
-                connectBtn.innerHTML = `${realWallet.slice(0, 6)}...${realWallet.slice(-4)} <span class="badge">Conectado</span>`;
-                connectBtn.style.background = 'linear-gradient(90deg, #00d2ff, #9d00ff)';
-                
-                showToast('¡Bienvenido! Entrando al panel...');
-                
-                setTimeout(() => {
-                    window.location.href = 'dashboard.html';
-                }, 1500);
-            } else {
-                showToast('Error: ' + result.error);
-                connectBtn.textContent = 'Reintentar';
-                connectBtn.style.pointerEvents = 'auto';
-            }
-        } catch (error) {
-            showToast('Error de conexión con el servidor');
-            connectBtn.textContent = 'Conectar Billetera';
-            connectBtn.style.pointerEvents = 'auto';
-        }
-    });
+                const walletAddress = window.tronWeb.defaultAddress.base58;
 
-    function showToast(message) {
-        const toast = document.createElement('div');
-        toast.className = 'toast';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.classList.add('show'), 100);
-        setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => toast.remove(), 500);
-        }, 3000);
-    }
+                if (!walletAddress) {
+                    throw new Error("No se pudo obtener tu dirección de Tron. Desbloquea tu billetera.");
+                }
 
-    // Intersection Observer for fade-in animations
-    const observerOptions = {
-        threshold: 0.1
-    };
+                // ─── 3. Obtener nonce y FIRMAR obligatoriamente ─────────────
+                const nonceRes  = await fetch(`radix_api/get_nonce.php?wallet=${walletAddress}`);
+                const nonceData = await nonceRes.json();
+                if (!nonceData.success) {
+                    throw new Error("No se pudo obtener el desafío de verificación. Inténtalo de nuevo.");
+                }
 
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('visible');
+                let firma;
+                try {
+                    firma = await window.tronWeb.trx.sign(window.tronWeb.toHex(nonceData.mensaje));
+                } catch(e) {
+                    throw new Error("Debes firmar el mensaje de verificación en tu billetera para continuar.");
+                }
+                if (!firma) {
+                    throw new Error("La firma fue rechazada. Aprueba la solicitud en tu billetera.");
+                }
+
+                // ─── 4 & 5. Registro / Login unificado vía registro.php ───────
+                // registro.php verifica la firma tanto para usuarios nuevos como
+                // para usuarios existentes, garantizando prueba de ownership.
+                const formData = new FormData();
+                formData.append('wallet',    walletAddress);
+                formData.append('nickname',  "TRON_" + walletAddress.substring(0, 4));
+                formData.append('signature', firma);
+                formData.append('message',   nonceData.mensaje);
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const ref = urlParams.get('ref');
+                if (ref) formData.append('patrocinador', ref);
+
+                const regRes = await fetch('radix_api/registro.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const regData = await regRes.json();
+
+                if (!regData.success) {
+                    throw new Error(regData.error || "Error en la verificación de identidad.");
+                }
+
+                // ─── 6. Iniciar sesión segura ───
+                const loginForm = new FormData();
+                loginForm.append('wallet', walletAddress);
+
+                const loginRes = await fetch('radix_api/session_login.php', {
+                    method: 'POST',
+                    body: loginForm
+                });
+                const loginData = await loginRes.json();
+
+                if (!loginData.success) {
+                    throw new Error(loginData.error || "Error de sesión desconocido.");
+                }
+
+                window.location.href = 'dashboard.php';
+
+            } catch (error) {
+                console.error("Error en el acceso:", error);
+                alert("Hubo un problema al conectar:\n" + error.message);
+                connectBtn.innerText = "Conectar Billetera";
+                connectBtn.disabled = false;
             }
         });
-    }, observerOptions);
+    }
 
-    document.querySelectorAll('.step, .benefit-card, .timeline-item').forEach(el => {
-        el.classList.add('reveal-on-scroll');
-        observer.observe(el);
-    });
+    // ─── Detectar cambio de cuenta ────────────
+    if (typeof window.tronWeb !== 'undefined') {
+        // En TronWeb el evento es distinto o se monitorea por polling
+        setInterval(() => {
+            if (window.tronWeb.defaultAddress.base58 === false) {
+                 // Desconectado
+            }
+        }, 5000);
+    }
+
+    // Funcionalidad: Carga de estadísticas públicas en el Home
+    async function loadHomeStats() {
+        try {
+            const res = await fetch('radix_api/public_stats.php');
+            const data = await res.json();
+            if (data.success) {
+                if (document.getElementById('total-users')) document.getElementById('total-users').innerText = data.total_usuarios;
+                if (document.getElementById('total-rewards')) document.getElementById('total-rewards').innerText = `$${Number(data.total_pagado).toFixed(2)} USDT`;
+            }
+        } catch (e) {
+            console.log("Stats no disponibles aún.");
+        }
+    }
+
+    loadHomeStats();
+
+    // ─── Contador "Días en Funcionamiento" ────────────────────
+    const launchDate = new Date('2026-04-01'); // ← ajusta al día real de lanzamiento
+    const daysSinceLaunch = document.getElementById('total-days');
+    if (daysSinceLaunch) {
+        const today = new Date();
+        const diff = Math.max(0, Math.floor((today - launchDate) / (1000 * 60 * 60 * 24)));
+        daysSinceLaunch.innerText = diff;
+    }
+
+    // ─── Animación reveal-on-scroll para secciones ROI ────────
+    const revealEls = document.querySelectorAll('.reveal-on-scroll');
+    if (revealEls.length > 0) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    observer.unobserve(entry.target); // una sola vez
+                }
+            });
+        }, { threshold: 0.15 });
+        revealEls.forEach(el => observer.observe(el));
+    }
+
+    // ─── Botón "Saber más" → scroll suave ─────────────────────
+    const saberMasBtn = document.querySelector('.secondary-btn');
+    if (saberMasBtn) {
+        saberMasBtn.addEventListener('click', () => {
+            document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+        });
+    }
 });

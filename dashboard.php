@@ -1,223 +1,290 @@
 <?php
-// dashboard.php - RADIX Phase 0 Premium Interface
-$user_wallet = $_GET['wallet'] ?? '';
-if (empty($user_wallet)) {
-    die("Acceso denegado: Se requiere una billetera.");
+// dashboard.php — RADIX Phase 0
+session_start();
+require_once 'radix_api/config.php';
+
+if (empty($_SESSION['radix_wallet'])) {
+    header("Location: index.html");
+    exit;
 }
+$user_wallet = $_SESSION['radix_wallet'];
+
+// Obtener datos del usuario
+$stmt = $pdo->prepare("SELECT id, tipo_usuario, nickname FROM usuarios WHERE wallet_address = ?");
+$stmt->execute([$user_wallet]);
+$user_info = $stmt->fetch();
+$es_master = ($user_info && $user_info['tipo_usuario'] === 'master');
+$nickname = $user_info ? $user_info['nickname'] : 'Socio';
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RADIX — Panel de Control Premium</title>
+    <title>RADIX — Panel de Control</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/dashboard.css">
     <style>
-        :root {
-            --bg: #030305;
-            --primary: #9d00ff;
-            --secondary: #00d2ff;
-            --accent: #00e676;
-            --card: rgba(255,255,255,0.03);
-            --border: rgba(255,255,255,0.08);
-            --shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            background: var(--bg);
-            color: #fff;
-            font-family: 'Outfit', sans-serif;
-            display: flex; min-height: 100vh;
-            overflow-x: hidden;
-        }
-
-        /* ======= SIDEBAR ======= */
-        aside {
-            width: 280px;
-            background: rgba(0,0,0,0.5);
-            border-right: 1px solid var(--border);
-            padding: 40px 20px;
-            display: flex; flex-direction: column;
-            backdrop-filter: blur(20px);
-            z-index: 100;
-        }
-        .logo { font-size: 1.5rem; font-weight: 800; margin-bottom: 50px; text-align: center; background: linear-gradient(90deg, var(--secondary), var(--primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .nav-item { padding: 15px 20px; border-radius: 12px; color: #888; text-decoration: none; margin-bottom: 10px; transition: 0.3s; display: flex; align-items: center; gap: 15px; }
-        .nav-item:hover, .nav-item.active { background: var(--card); color: #fff; border: 1px solid var(--border); }
-
-        /* ======= MAIN CONTENT ======= */
-        main { flex: 1; padding: 40px; }
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
-        .user-info { display: flex; align-items: center; gap: 15px; }
-        .avatar { width: 45px; height: 45px; border-radius: 50%; background: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: 800; border: 2px solid var(--border); }
-
-        /* ======= WIDGETS ======= */
-        .widgets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }
-        .widget { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 30px; position: relative; overflow: hidden; transition: 0.3s; }
-        .widget h4 { font-size: 0.85rem; color: #888; text-transform: uppercase; margin-bottom: 10px; }
-        .widget .value { font-size: 2rem; font-weight: 800; margin-bottom: 5px; }
-        .widget .trend { font-size: 0.8rem; font-weight: 600; color: var(--accent); }
-
-        /* ======= PROGRESS BOARDS ======= */
-        .boards-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
-        .board-container { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 30px; }
-        .board-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        /* RADIX V3.2 — Estilos Premium Restaurados */
+        .dashboard-container { max-width: 1100px; margin: 0 auto; }
         
-        .progress-visual { display: flex; justify-content: space-between; position: relative; padding: 20px 0; margin-top: 40px; }
-        .progress-line { position: absolute; height: 2px; background: var(--border); top: 50%; left: 0; width: 100%; transform: translateY(-50%); z-index: 1; }
-        .progress-fill { position: absolute; height: 2px; background: var(--secondary); top: 50%; left: 0; width: 0%; transform: translateY(-50%); z-index: 2; box-shadow: 0 0 10px var(--secondary); transition: 1s ease; }
+        .scoreboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .sb { background: #12121a; border: 1px solid #2a2a3a; border-radius: 16px; padding: 20px; text-align: center; transition: 0.3s; position: relative; overflow: hidden; }
+        .sb:hover { border-color: var(--primary); transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.4); }
+        .sb .lbl { font-size: 0.65rem; color: #555; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; display: block; }
+        .sb .num { font-size: 2rem; font-weight: 800; line-height: 1; margin-bottom: 5px; }
         
-        .phase-node { width: 40px; height: 40px; border-radius: 50%; background: #111; border: 2px solid var(--border); z-index: 5; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.8rem; position: relative; transition: 0.5s; }
-        .phase-node.completed { background: var(--secondary); border-color: #fff; box-shadow: 0 0 15px var(--secondary); }
-        .phase-node.current { background: var(--primary); border-color: #fff; box-shadow: 0 0 15px var(--primary); }
-        .phase-label { position: absolute; top: 50px; font-size: 0.75rem; color: #888; white-space: nowrap; left: 50%; transform: translateX(-50%); }
+        .sb-purple { border-left: 3px solid var(--primary); } .sb-purple .num { color: var(--primary); }
+        .sb-cyan   { border-left: 3px solid var(--secondary); } .sb-cyan .num { color: var(--secondary); }
+        .sb-green  { border-left: 3px solid var(--accent); } .sb-green .num { color: var(--accent); }
+        .sb-white  { border-left: 3px solid #fff; } .sb-white .num { color: #fff; }
 
-        .clones-container { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 30px; }
-        .btn-withdraw { background: var(--accent); color: #000; padding: 12px 25px; border-radius: 10px; border: none; font-weight: 800; cursor: pointer; transition: 0.3s; }
+        .master-card { background: #12121a; border: 1px solid #2a2a3a; border-radius: 18px; padding: 25px; margin-bottom: 20px; }
+        .master-card h3 { font-size: 0.9rem; color: #fff; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 10px; }
+        .master-card h3::before { content: ''; width: 4px; height: 16px; background: var(--primary); border-radius: 10px; }
 
-        #loading-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 999; }
+        /* Progreso Circular/Línea Refinado */
+        .progress-container { position: relative; padding: 40px 10%; }
+        .progress-track { height: 4px; background: #222; border-radius: 10px; position: relative; }
+        .progress-bar-fill { position: absolute; height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); border-radius: 10px; width: 0%; transition: 1s ease; box-shadow: 0 0 15px var(--primary); }
+        .nodes-row { display: flex; justify-content: space-between; margin-top: -22px; position: relative; width: 100%; }
+        
+        .phase-node { width: 44px; height: 44px; border-radius: 50%; background: #0a0a0f; border: 2px solid #2a2a3a; display: flex; align-items: center; justify-content: center; font-weight: 800; transition: 0.5s; z-index: 10; color: #444; }
+        .phase-node.current { background: var(--primary); border-color: #fff; color: #fff; box-shadow: 0 0 20px var(--primary); animation: pulse 2s infinite; }
+        .phase-node.completed { background: var(--secondary); border-color: #fff; color: #fff; }
+        
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(157,0,255,0.7); } 70% { box-shadow: 0 0 0 10px rgba(157,0,255,0); } 100% { box-shadow: 0 0 0 0 rgba(157,0,255,0); } }
+
+        <?php if ($es_master): ?>
+        /* Solo para Master */
+        .widgets-master { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .master-grid-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+        .master-badge { background: linear-gradient(90deg, var(--primary), var(--secondary)); color: #000; padding: 6px 14px; border-radius: 8px; font-weight: 800; font-size: 0.65rem; text-transform: uppercase; }
+        .master-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .master-table th { text-align: left; padding: 12px; color: #555; border-bottom: 1px solid #2a2a3a; }
+        .master-table td { padding: 14px 12px; border-bottom: 1px solid #1a1a24; color: #ccc; }
+        <?php endif; ?>
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
+    <div id="toast-container" style="position:fixed; top:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:10px; pointer-events:none;"></div>
     <div id="loading-overlay">Cargando Sistema RADIX...</div>
 
+    <!-- MODAL DE RETIRO -->
+    <div id="retiro-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background:#12121a; border:1px solid rgba(157,0,255,0.3); border-radius:20px; padding:36px; max-width:460px; width:90%; position:relative;">
+            <button onclick="cerrarRetiro()" style="position:absolute;top:16px;right:16px;background:none;border:none;color:#555;font-size:1.4rem;cursor:pointer;">✕</button>
+            <h3 style="font-size:1.1rem; margin-bottom:6px; color:#fff;">💸 Solicitar Retiro</h3>
+            <p style="font-size:0.8rem; color:#666; margin-bottom:20px;">Retiro manual vía USDT TRC-20.</p>
+            <div style="background:#0a0a12; border-radius:12px; padding:16px; margin-bottom:20px;">
+                <div style="font-size:0.7rem; color:#555; text-transform:uppercase; margin-bottom:4px;">Saldo disponible</div>
+                <div id="retiro-saldo" style="font-size:1.8rem; font-weight:800; color:var(--accent);">$0.00 USDT</div>
+            </div>
+            <div id="historial-list" style="max-height:180px; overflow-y:auto; margin-bottom:20px; font-size:0.8rem;"></div>
+            <button id="btn-solicitar-retiro" onclick="solicitarRetiro()" style="width:100%; padding:14px; background:var(--accent); border:none; border-radius:12px; color:#000; font-weight:800; font-size:0.95rem; cursor:pointer;">CONFIRMAR RETIRO</button>
+            <div id="retiro-status" style="margin-top:10px; font-size:0.8rem; text-align:center;"></div>
+        </div>
+    </div>
+
+    <!-- MODAL DE ONBOARDING (3 pasos) -->
+    <div id="onboarding-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:2000; align-items:center; justify-content:center;">
+        <div style="background:#0d0d18; border:1px solid rgba(157,0,255,0.3); border-radius:24px; padding:36px; max-width:480px; width:92%; position:relative;">
+            <button onclick="cerrarOnboarding()" style="position:absolute;top:14px;right:14px;background:none;border:none;color:#555;font-size:1.4rem;cursor:pointer;">✕</button>
+
+            <!-- Indicadores de progreso -->
+            <div style="display:flex; justify-content:center; gap:8px; margin-bottom:28px;">
+                <span id="ob-dot-1" style="width:9px;height:9px;border-radius:50%;background:var(--primary);transition:0.3s;"></span>
+                <span id="ob-dot-2" style="width:9px;height:9px;border-radius:50%;background:#2a2a3a;transition:0.3s;"></span>
+                <span id="ob-dot-3" style="width:9px;height:9px;border-radius:50%;background:#2a2a3a;transition:0.3s;"></span>
+            </div>
+
+            <!-- Paso 1: Bienvenida -->
+            <div id="ob-step-1" class="ob-step">
+                <div style="text-align:center; font-size:3rem; margin-bottom:14px;">🌱</div>
+                <h3 style="text-align:center; color:#fff; margin-bottom:10px;">¡Bienvenido a RADIX!</h3>
+                <p style="text-align:center; color:#888; line-height:1.7;">Eres parte de una red <strong style="color:#9d00ff;">3×1</strong> en TRON blockchain.<br>Cada persona que invites activa tu ciclo de ganancias en USDT.</p>
+            </div>
+
+            <!-- Paso 2: Cómo funciona -->
+            <div id="ob-step-2" class="ob-step" style="display:none;">
+                <div style="text-align:center; font-size:3rem; margin-bottom:14px;">📊</div>
+                <h3 style="text-align:center; color:#fff; margin-bottom:14px;">¿Cómo funciona?</h3>
+                <div style="background:#0a0a12; border-radius:12px; padding:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #1a1a28;">
+                        <span style="color:#9d00ff; font-weight:700;">🅰 Tablero A</span>
+                        <span style="color:#aaa; font-size:0.85rem;">Invita 3 personas → <strong style="color:#fff;">+0</strong></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #1a1a28;">
+                        <span style="color:#00d2ff; font-weight:700;">🅱 Tablero B</span>
+                        <span style="color:#aaa; font-size:0.85rem;">Sus 3 crecen → <strong style="color:#fff;">+0</strong></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0;">
+                        <span style="color:#00e676; font-weight:700;">©️ Tablero C</span>
+                        <span style="color:#aaa; font-size:0.85rem;">Red completa → <strong style="color:#00e676;">+0 neto</strong></span>
+                    </div>
+                </div>
+                <p style="text-align:center; color:#555; font-size:0.78rem; margin-top:10px;">🤖 El sistema activa Agentes IA si hay huecos en tu red.</p>
+            </div>
+
+            <!-- Paso 3: Primer pago -->
+            <div id="ob-step-3" class="ob-step" style="display:none;">
+                <div style="text-align:center; font-size:3rem; margin-bottom:14px;">💸</div>
+                <h3 style="text-align:center; color:#fff; margin-bottom:10px;">Activa tu posición</h3>
+                <p style="text-align:center; color:#888; line-height:1.7;">Envía <strong style="color:#00e676;">10 USDT (TRC-20)</strong> a la wallet central de RADIX cuando tu patrocinador te registre.</p>
+                <p style="text-align:center; color:#555; font-size:0.78rem; margin-top:10px;">Aparecerá un aviso de &ldquo;Pago Pendiente&rdquo; en tu panel cuando tu posición esté lista.</p>
+            </div>
+
+            <!-- Botones de navegación -->
+            <div style="display:flex; gap:10px; margin-top:28px;">
+                <button id="ob-btn-back" onclick="obNavegar(-1)" style="flex:1; padding:12px; background:#1a1a28; border:1px solid #333; border-radius:12px; color:#aaa; cursor:pointer; display:none;">← Atrás</button>
+                <button id="ob-btn-next" onclick="obNavegar(1)" style="flex:2; padding:12px; background:var(--primary); border:none; border-radius:12px; color:#fff; font-weight:700; cursor:pointer;">Siguiente →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SIDEBAR -->
     <aside>
         <div class="logo">RADIX SYSTEM</div>
         <nav>
-            <a href="#" class="nav-item active">Dashboard</a>
-            <a href="#" class="nav-item">Mi Equipo</a>
-            <a href="#" class="nav-item">Mis Agentes IA</a>
-            <a href="#" class="nav-item">Mi Wallet</a>
+            <a href="#" class="nav-item active" id="nav-dashboard" onclick="switchMasterSection('dashboard')">📊 Dashboard</a>
+            <?php if ($es_master): ?>
+                <a href="#" class="nav-item" id="nav-usuarios" onclick="switchMasterSection('usuarios')">👥 Usuarios Reales</a>
+                <a href="#" class="nav-item" id="nav-retiros" onclick="switchMasterSection('retiros')">💰 Pagos Pendientes</a>
+                <a href="#" class="nav-item" id="nav-clones" onclick="switchMasterSection('clones')">🤖 Control de Clones</a>
+                <a href="#" class="nav-item" id="nav-auditoria" onclick="switchMasterSection('auditoria')">📜 Registro de Auditoría</a>
+            <?php else: ?>
+                <a href="#" class="nav-item" onclick="document.getElementById('team-list')?.closest('.master-card')?.scrollIntoView({behavior:'smooth'}); return false;">👥 Mi Equipo</a>
+                <a href="#" class="nav-item" onclick="document.getElementById('val-clones')?.closest('.sb')?.scrollIntoView({behavior:'smooth'}); return false;">🤖 Mis Agentes IA</a>
+            <?php endif; ?>
+            <a href="radix_api/session_logout.php" class="nav-item" style="margin-top:auto; color:#ff4444;">🚪 Cerrar Sesión</a>
         </nav>
     </aside>
 
+    <!-- CONTENT -->
     <main>
         <header>
             <div>
-                <h2 id="welcome-msg">Hola, ...</h2>
-                <p id="wallet-address-display" style="color:#666; font-size:0.8rem;"></p>
+                <h2>Hola, <?php echo htmlspecialchars($nickname); ?></h2>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <p id="wallet-address-display" style="color:#666; font-size:0.8rem;"></p>
+                    <?php if ($es_master): ?> <span class="master-badge">Modo Tesorería Central</span> <?php endif; ?>
+                </div>
             </div>
             <div class="user-info">
-                <button class="btn-withdraw">RETIRAR SALDO</button>
+                <?php if (!$es_master): ?> <button class="btn-withdraw" id="btn-retiro" onclick="abrirRetiro()">RETIRAR</button> <?php endif; ?>
                 <div class="avatar" id="avatar-circle">?</div>
             </div>
         </header>
 
-        <div class="widgets">
-            <div class="widget">
-                <h4>SALDO DISPONIBLE</h4>
-                <div class="value" id="val-balance">$0.00 <span style="font-size:0.8rem; color:#555;">USDT</span></div>
-                <div class="trend" id="val-trend">Esperando Ciclo</div>
-            </div>
-            <div class="widget">
-                <h4>AGENTES IA ACTIVOS</h4>
-                <div class="value" id="val-clones">0</div>
-                <div class="trend" style="color:var(--primary);">Poder de Ayuda</div>
-            </div>
-            <div class="widget">
-                <h4>FASE ACTUAL</h4>
-                <div class="value" id="val-fase">Fase 0</div>
-                <div class="trend" style="color:var(--secondary);" id="val-nivel">Cargando...</div>
-            </div>
+        <div id="section-dashboard" class="master-section active">
+            <?php if ($es_master): ?>
+                <!-- MASTER V3 LAYOUT -->
+                <div class="widgets-master">
+                    <div class="widget"><h4>Tesorería (Agentes IA)</h4><div id="val-balance" class="value">$0.00</div><div class="trend">💰 Fondo Clones</div></div>
+                    <div class="widget"><h4>Reserva Fase 1 (Pool)</h4><div id="val-fase" class="value">$0.00</div><div class="trend">Acumulado Saltos</div></div>
+                    <div class="widget"><h4>Usuarios Reales</h4><div id="val-usuarios-reales" class="value">0</div><div class="trend">Crecimiento Orgánico</div></div>
+                    <div class="widget"><h4>Ganancia Master</h4><div id="val-master-earnings" class="value">$0.00</div><div class="trend">Utilidad ID #1</div></div>
+                </div>
+
+                <div class="master-grid-top">
+                    <div class="master-card">
+                        <h4>Crecimiento Diario</h4>
+                        <div style="height:300px;"><canvas id="grafica-crecimiento"></canvas></div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:20px;">
+                        <div class="master-card" style="flex:1;">
+                            <h4>Distribución</h4>
+                            <div style="margin-bottom:10px;"><div style="display:flex; justify-content:space-between; font-size:0.7rem;"><span>Tablero A</span><span id="dist-a-val">0</span></div><div style="height:4px; background:#222;"><div id="dist-a-bar" style="height:100%; background:#9d00ff; width:0%;"></div></div></div>
+                            <div style="margin-bottom:10px;"><div style="display:flex; justify-content:space-between; font-size:0.7rem;"><span>Tablero B</span><span id="dist-b-val">0</span></div><div style="height:4px; background:#222;"><div id="dist-b-bar" style="height:100%; background:#00d2ff; width:0%;"></div></div></div>
+                            <div style="margin-bottom:10px;"><div style="display:flex; justify-content:space-between; font-size:0.7rem;"><span>Tablero C</span><span id="dist-c-val">0</span></div><div style="height:4px; background:#222;"><div id="dist-c-bar" style="height:100%; background:#00e676; width:0%;"></div></div></div>
+                            <h4 style="margin-top:20px;">Ratio Reales/Clones</h4>
+                            <div style="height:8px; background:#222; border-radius:4px;"><div id="reales-clones-bar" style="height:100%; background:var(--primary); width:50%;"></div></div>
+                        </div>
+                        <div class="master-card">
+                            <h4>Control</h4>
+                            <button class="btn-master" onclick="activarClonManual()">🚀 ACTIVAR AGENTE IA</button>
+                            <div id="clon-result" style="margin-top:10px; font-size:0.7rem;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="master-card" style="margin-bottom:20px;">
+                    <h4>📜 Libro Mayor de Tesorería</h4>
+                    <div style="overflow-x:auto;"><table class="master-table"><thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th><th>Estado</th></tr></thead><tbody id="master-ledger-body"></tbody></table></div>
+                </div>
+
+                <div class="master-grid-bottom">
+                    <div class="master-card"><h4>🤖 Historial IA</h4><table class="master-table"><thead><tr><th>Beneficiario</th><th>Costo</th><th>Fecha</th></tr></thead><tbody id="master-clones-history-body"></tbody></table></div>
+                    <div class="master-card"><h4>💸 Retiros Pendientes</h4><div id="master-retiros-mini-list"></div></div>
+                </div>
+
+                <div class="master-card"><h4>📊 Actividad del Sistema</h4><table class="master-table"><thead><tr><th>Acción</th><th>Detalles</th><th>Fecha</th></tr></thead><tbody id="master-activity-body"></tbody></table></div>
+
+            <?php else: ?>
+                <!-- USER LAYOUT V3.2 — PREMIUM RESTORATION -->
+                <div id="pago-pendiente-box" class="pago-pendiente-box" style="display:none;">
+                    <h4>⏳ Pago pendiente</h4><div class="radix-wallet" id="pp-wallet-patron">...</div>
+                    <div class="tx-input-row">
+                        <input type="text" id="tx-hash-input" placeholder="Hash TXID (0x...)">
+                        <button onclick="confirmarPago()">VERIFICAR</button>
+                    </div>
+                </div>
+
+                <div class="scoreboard">
+                    <div class="sb sb-cyan"><span class="lbl">SALDO ACTUAL</span><div id="val-balance" class="num">$0.00</div></div>
+                    <div class="sb sb-cyan"><span class="lbl">RESERVA FASE 1</span><div id="val-reserva" class="num">$0.00</div></div>
+                    <div class="sb sb-purple"><span class="lbl">AGENTES IA</span><div id="val-clones" class="num">0</div></div>
+                    <div class="sb sb-white"><span class="lbl">TABLERO ACTUAL</span><div id="val-fase" class="num" style="font-size:1.4rem;">...</div></div>
+                    <div class="sb sb-green"><span class="lbl">EQUIPO DIRECTO</span><div id="val-equipo-count" class="num">0</div></div>
+                    <div class="sb sb-white"><span class="lbl">LINK DE REFERIDO</span>
+                        <div style="display:flex; gap:8px; margin-top:5px;">
+                            <input type="text" id="ref-link-input" readonly style="background:rgba(0,0,0,0.3); border:1px solid #2a2a3a; color:#888; padding:8px; border-radius:6px; flex:1; font-size:0.7rem;">
+                            <button onclick="copyRefLink()" style="background:var(--primary); color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:0.6rem; font-weight:800; padding:0 10px;">COPIAR</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="master-card">
+                    <h3>Progreso de Niveles</h3>
+                    <div class="progress-container">
+                        <div class="progress-track">
+                            <div id="progress-fill" class="progress-bar-fill"></div>
+                        </div>
+                        <div class="nodes-row">
+                            <div id="node-a" class="phase-node">A</div>
+                            <div id="node-b" class="phase-node">B</div>
+                            <div id="node-c" class="phase-node">C</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1.5fr; gap:20px;">
+                    <div class="master-card" style="height:fit-content;">
+                        <h3>Equipo Reciente</h3>
+                        <div id="team-list" style="max-height:220px; overflow-y:auto; font-size:0.85rem;"></div>
+                    </div>
+                    <div class="master-card">
+                        <h3>Estructura de Red Visual</h3>
+                        <div id="network-tree" style="min-height:300px; background:rgba(0,0,0,0.2); border-radius:15px; border:1px dashed #2a2a3a; display:flex; align-items:center; justify-content:center; color:#333;"></div>
+                    </div>
+                </div>
+<?php endif; ?>
         </div>
 
-        <div class="boards-grid">
-            <div class="board-container">
-                <div class="board-header">
-                    <h3>Progreso de Camino</h3>
-                    <div id="live-status" style="font-size:0.75rem; border:1px solid var(--accent); color:var(--accent); padding:2px 10px; border-radius:10px;">EN VIVO</div>
-                </div>
-                
-                <div class="progress-visual">
-                    <div class="progress-line"></div>
-                    <div id="progress-fill" class="progress-fill"></div>
-                    
-                    <div id="node-a" class="phase-node">A <div class="phase-label">Tablero A</div></div>
-                    <div id="node-b" class="phase-node">B <div class="phase-label">Tablero B</div></div>
-                    <div id="node-c" class="phase-node">C <div class="phase-label">Tablero C</div></div>
-                    <div id="node-f1" class="phase-node" style="border-style:dashed;">1 <div class="phase-label">Fase 1</div></div>
-                </div>
-
-                <div style="margin-top:100px; padding:20px; background:rgba(255,255,255,0.01); border-radius:15px; border:1px solid var(--border);">
-                    <h5 style="color:var(--secondary);">PRÓXIMO OBJETIVO</h5>
-                    <p id="objective-text" style="font-size:0.85rem; color:#888; margin-top:5px;">Cargando tus metas...</p>
-                </div>
-            </div>
-
-            <div class="clones-container">
-                <h3>Agentes IA en Red</h3>
-                <p style="font-size:0.8rem; color:#555; margin-bottom:20px;">Tu éxito personal genera ayuda colectiva.</p>
-                <div id="clones-list-summary">
-                    <!-- Aquí se inyectarán detalles si los hubiera -->
-                </div>
-                <p id="no-clones-msg" style="font-size:0.8rem; color:#444; text-align:center;">Completa tableros para activar tus agentes.</p>
-            </div>
-        </div>
+        <?php if ($es_master): ?>
+            <!-- SPA SECTIONS FOR MASTER -->
+            <div id="section-usuarios" class="master-section"><div class="master-card"><h4>👥 Gestión Usuarios</h4><table class="master-table"><thead><tr><th>ID</th><th>Nick</th><th>Wallet</th></tr></thead><tbody id="master-users-body"></tbody></table></div></div>
+            <div id="section-clones" class="master-section"><div class="master-card"><h4>🤖 Todos los Agentes</h4><table class="master-table"><thead><tr><th>ID</th><th>Beneficiario</th><th>Fecha</th></tr></thead><tbody id="master-clones-full-body"></tbody></table></div></div>
+            <div id="section-retiros" class="master-section"><div class="master-card"><h4>💰 Retiros Full</h4><div id="master-retiros-full-list"></div></div></div>
+            <div id="section-auditoria" class="master-section"><div class="master-card"><h4>📜 Auditoría Completa</h4><table class="master-table"><thead><tr><th>Acción</th><th>Fecha</th></tr></thead><tbody id="master-auditoria-full-body"></tbody></table></div></div>
+        <?php endif; ?>
     </main>
 
-    <script>
-        const wallet = "<?php echo $user_wallet; ?>";
-
-        async function loadDashboard() {
-            try {
-                const response = await fetch(`radix_api/user_data.php?wallet=${wallet}`);
-                const data = await response.json();
-
-                if (data.success) {
-                    // 1. Datos personales
-                    document.getElementById('welcome-msg').innerText = `Hola, ${data.user.nickname} 👋`;
-                    document.getElementById('wallet-address-display').innerText = data.user.wallet;
-                    document.getElementById('avatar-circle').innerText = data.user.nickname.substring(0,2).toUpperCase();
-                    
-                    // 2. Widgets
-                    document.getElementById('val-balance').innerHTML = `$${data.earnings.toFixed(2)} <span style="font-size:0.8rem; color:#555;">USDT</span>`;
-                    document.getElementById('val-clones').innerText = data.user.clones_count;
-                    document.getElementById('val-nivel').innerText = `Nivel ${data.user.nivel} (Ciclo ${data.user.ciclo})`;
-                    
-                    if (data.earnings > 0) {
-                        document.getElementById('val-trend').innerText = "+ Utilidad Neta";
-                        document.getElementById('val-trend').style.color = "var(--accent)";
-                    }
-
-                    // 3. Progreso Visual
-                    const nivel = data.user.nivel;
-                    const fill = document.getElementById('progress-fill');
-                    
-                    if (nivel === 'A') {
-                        fill.style.width = "0%";
-                        document.getElementById('node-a').classList.add('current');
-                        document.getElementById('objective-text').innerText = "Trae a tus 3 referidos para saltar al Tablero B y activar tu primer Agente IA.";
-                    } else if (nivel === 'B') {
-                        fill.style.width = "33%";
-                        document.getElementById('node-a').classList.add('completed');
-                        document.getElementById('node-b').classList.add('current');
-                        document.getElementById('objective-text').innerText = "Tus 3 referidos deben saltar al Tablero B para llevarte al Tablero C.";
-                    } else if (nivel === 'C') {
-                        fill.style.width = "66%";
-                        document.getElementById('node-a').classList.add('completed');
-                        document.getElementById('node-b').classList.add('completed');
-                        document.getElementById('node-c').classList.add('current');
-                        document.getElementById('objective-text').innerText = "¡Meta final! Al completar el C, saltas automáticamente a Fase 1 con $100 y cobras tus $40.";
-                    }
-
-                    if (data.user.clones_count > 0) {
-                        document.getElementById('no-clones-msg').style.display = "none";
-                        document.getElementById('clones-list-summary').innerHTML = `<p style='color:var(--accent); font-size:rem;'>✅ Tienes ${data.user.clones_count} agentes inyectando liquidez en la red.</p>`;
-                    }
-
-                } else {
-                    alert("Error al cargar datos: " + data.error);
-                }
-            } catch (error) {
-                console.error("Error:", error);
-            } finally {
-                document.getElementById('loading-overlay').style.display = "none";
-            }
-        }
-
-        window.onload = loadDashboard;
-    </script>
+    <script src="assets/js/dashboard.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     

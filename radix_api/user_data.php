@@ -1,9 +1,16 @@
 <?php
 require_once 'config.php';
+session_start();
 
 // Endpoint para obtener información detallada del usuario para el Dashboard Premium
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    $wallet = $_GET['wallet'] ?? '';
+    // Seguridad: solo se permite si hay sesión activa
+    if (empty($_SESSION['radix_wallet'])) {
+        sendResponse(['error' => 'No autorizado'], 401);
+    }
+
+    // La wallet siempre viene de la sesión (no del GET, para evitar acceso cruzado)
+    $wallet = $_SESSION['radix_wallet'];
 
     if (empty($wallet)) {
         sendResponse(['error' => 'La billetera es necesaria'], 400);
@@ -11,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
     try {
         // 1. Datos básicos del usuario
-        $stmt = $pdo->prepare("SELECT id, nickname, wallet_address, tipo_usuario, fecha_registro FROM usuarios WHERE wallet_address = ?");
+        $stmt = $pdo->prepare("SELECT id, nickname, wallet_address, tipo_usuario, telegram_chat_id, fecha_registro FROM usuarios WHERE wallet_address = ?");
         $stmt->execute([$wallet]);
         $user = $stmt->fetch();
 
@@ -22,21 +29,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $user_id = $user['id'];
 
         // 2. Tablero actual y progreso visual
-        $stmt = $pdo->prepare("SELECT tablero_tipo, ciclo FROM tableros_progreso WHERE usuario_id = ? AND estado = 'en_progreso' ORDER BY id DESC LIMIT 1");
+        $stmt = $pdo->prepare("SELECT id, tablero_tipo, ciclo, fecha_inicio FROM tableros_progreso WHERE usuario_id = ? AND estado = 'en_progreso' ORDER BY id DESC LIMIT 1");
         $stmt->execute([$user_id]);
         $tablero = $stmt->fetch();
         $nivel_actual = $tablero ? $tablero['tablero_tipo'] : 'A';
         $ciclo_actual = $tablero ? $tablero['ciclo'] : 1;
 
-        // 3. Contador de Clones Activos (Agentes IA creados por este usuario o para este usuario)
-        // En RADIX, los clones son usuarios tipo 'clon' cuyo patrocinador es el usuario
-        $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM usuarios WHERE patrocinador_id = ? AND tipo_usuario = 'clon'");
+        // 3. Contador de Clones Activos (Agentes IA) — asignados PARA este usuario
+        $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM referidos r JOIN usuarios u ON r.id_hijo = u.id WHERE r.id_padre = ? AND u.tipo_usuario = 'clon'");
         $stmt->execute([$user_id]);
-        $clones_count = $stmt->fetch()['total'] ?? 0;
+        $clones_count = (int)($stmt->fetch()['total'] ?? 0);
 
-        // 4. Referidos directos (Humanos)
+        // 4. Referidos directos (Humanos) con estado de pago y su tablero actual
         $stmt = $pdo->prepare("
-            SELECT u.nickname, u.wallet_address, u.tipo_usuario as tipo, r.posicion 
+            SELECT
+                u.id,
+                u.nickname,
+                u.wallet_address AS wallet,
+                u.tipo_usuario AS tipo,
+                r.posicion,
+                (SELECT estado FROM pagos WHERE id_emisor = u.id AND tipo = 'regalo' ORDER BY id DESC LIMIT 1) AS pago_estado,
+                (SELECT tablero_tipo FROM tableros_progreso WHERE usuario_id = u.id AND estado = 'en_progreso' ORDER BY id DESC LIMIT 1) AS nivel_actual
             FROM referidos r
             JOIN usuarios u ON r.id_hijo = u.id
             WHERE r.id_padre = ? AND u.tipo_usuario = 'real'
@@ -45,41 +58,139 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $stmt->execute([$user_id]);
         $referidos_reales = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // 5. Cálculo de Ganancia NETA (Diagrama: $40 al final del ciclo)
-        // Sumamos ganancias de tablero (10 en A, 20 en B, 120 en C = $150 total)
-        $stmt = $pdo->prepare("SELECT SUM(monto) as total FROM pagos WHERE id_receptor = ? AND estado = 'completado' AND tipo = 'ganancia_tablero'");
+        // 5. Cálculo de Ganancias
+        // 5a. Ganancia bruta acumulada (todos los tableros completados)
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE id_receptor = ? AND estado = 'completado' AND tipo = 'ganancia_tablero'");
         $stmt->execute([$user_id]);
-        $total_ganado_bruto = $stmt->fetch()['total'] ?? 0;
+        $total_ganado_bruto = (float)$stmt->fetch()['total'];
 
-        // Restamos deducciones automáticas (100 Fase 1, 10 Re-entrada)
-        $stmt = $pdo->prepare("SELECT SUM(monto) as total FROM pagos WHERE id_emisor = ? AND estado = 'completado' AND tipo IN ('salto_fase_1', 'reentrada')");
+        // 5b. Deducciones automáticas del sistema al completar ciclo
+        //   - salto_fase_1: $100 que van al pool de Fase 1 (retención del sistema)
+        //   - reentrada:    $10 que permiten volver a participar en Fase 1 (retención del sistema)
+        //   Ambas se deducen automáticamente en matrix_logic.php al completar Tablero C.
+        //   NO son pagos manuales del usuario — son retenciones de sus ganancias brutas.
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE id_emisor = ? AND estado = 'completado' AND tipo IN ('salto_fase_1', 'reentrada')");
         $stmt->execute([$user_id]);
-        $total_deducciones = $stmt->fetch()['total'] ?? 0;
+        $total_deducciones = (float)$stmt->fetch()['total'];
 
-        $earnings_net = (float)$total_ganado_bruto - (float)$total_deducciones;
+        // 5c. Reserva Fase 1 personal: cuánto ha aportado este usuario al pool de Fase 1
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE id_emisor = ? AND estado = 'completado' AND tipo = 'salto_fase_1'");
+        $stmt->execute([$user_id]);
+        $reserva_fase1 = (float)$stmt->fetch()['total'];
 
+        // 5d. Saldo neto disponible para retiro
+        $earnings_net = $total_ganado_bruto - $total_deducciones;
+
+        // 5e. Historial de movimientos (ganancias + retenciones) para mostrar en el dashboard
+        $stmt = $pdo->prepare("
+            SELECT tipo, monto, fecha_pago AS fecha, estado,
+                   CASE tipo
+                     WHEN 'ganancia_tablero' THEN 'Ganancia Tablero'
+                     WHEN 'salto_fase_1'     THEN 'Retención Fase 1'
+                     WHEN 'reentrada'        THEN 'Re-entrada Fase 1'
+                     ELSE tipo
+                   END AS tipo_label,
+                   CASE tipo
+                     WHEN 'ganancia_tablero' THEN 'ingreso'
+                     ELSE 'deduccion'
+                   END AS direccion
+            FROM pagos
+            WHERE id_receptor = ? AND tipo = 'ganancia_tablero' AND estado = 'completado'
+            UNION ALL
+            SELECT tipo, monto, fecha_pago AS fecha, estado,
+                   CASE tipo
+                     WHEN 'salto_fase_1' THEN 'Retención Fase 1'
+                     WHEN 'reentrada'    THEN 'Re-entrada Fase 1'
+                     ELSE tipo
+                   END AS tipo_label,
+                   'deduccion' AS direccion
+            FROM pagos
+            WHERE id_emisor = ? AND tipo IN ('salto_fase_1','reentrada') AND estado = 'completado'
+            ORDER BY fecha DESC
+            LIMIT 20
+        ");
+        $stmt->execute([$user_id, $user_id]);
+        $historial_ganancias = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // 6. Pago pendiente + wallet del patrón a quien debe enviar el USDT
+        $stmt = $pdo->prepare("
+            SELECT p.id, p.monto, patron.wallet_address AS wallet_patron
+            FROM pagos p
+            JOIN usuarios patron ON p.id_receptor = patron.id
+            WHERE p.id_emisor = ? AND p.estado = 'pendiente' AND p.tipo = 'regalo'
+            ORDER BY p.id ASC LIMIT 1
+        ");
+        $stmt->execute([$user_id]);
+        $pago_pendiente = $stmt->fetch() ?: null;
+
+        // 7. Estadísticas de Tesorería Global (Solo para el Master — tipo_usuario = 'master')
+        $treasury_stats = null;
+        if ($user['tipo_usuario'] === 'master') {
+            // Balance de Tesorería (Fondos para Clones)
+            $stmt = $pdo->prepare("SELECT valor_decimal FROM sistema_config WHERE clave = 'tesoreria_balance'");
+            $stmt->execute();
+            $tesoreria_bal = (float)($stmt->fetch()['valor_decimal'] ?? 0);
+
+            // Conteo de Usuarios Reales (Total Red)
+            $stmt = $pdo->query("SELECT COUNT(*) FROM usuarios WHERE tipo_usuario = 'real'");
+            $total_reales = (int)($stmt->fetchColumn() ?? 0);
+
+            // Reserva Fase 1 acumulada (todas las retenciones de $100)
+            $stmt = $pdo->query("SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE tipo = 'salto_fase_1' AND estado = 'completado'");
+            $fase1_pool = (float)($stmt->fetchColumn() ?? 0);
+
+            // Libro Mayor (Últimos movimientos de tesorería)
+            $stmt = $pdo->query("
+                SELECT fecha, motivo AS concepto, monto, tipo
+                FROM tesoreria_movimientos
+                ORDER BY id DESC
+                LIMIT 15
+            ");
+            $ledger = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $treasury_stats = [
+                'tesoreria_balance' => $tesoreria_bal,
+                'total_reales'      => $total_reales,
+                'fase1_pool'        => $fase1_pool,
+                'ledger'            => $ledger,
+            ];
+        }
+
+        // 8. Construir y devolver respuesta completa
         sendResponse([
-            'success' => true,
-            'user' => [
-                'nickname' => $user['nickname'],
-                'wallet' => $user['wallet_address'],
-                'tipo' => $user['tipo_usuario'],
-                'nivel' => $nivel_actual,
-                'ciclo' => $ciclo_actual,
-                'fecha_registro' => $user['fecha_registro'],
-                'clones_count' => (int)$clones_count
+            'success'       => true,
+            'user'          => [
+                'id'             => (int)$user['id'],
+                'nickname'       => $user['nickname'],
+                'wallet'         => $user['wallet_address'],
+                'tipo_usuario'   => $user['tipo_usuario'],
+                'nivel'          => $nivel_actual,
+                'ciclo'          => (int)$ciclo_actual,
+                'clones_count'   => $clones_count,
+                'has_telegram'   => !empty($user['telegram_chat_id']),
+                'pago_pendiente' => $pago_pendiente !== null,
             ],
-            'referidos' => $referidos_reales,
-            'earnings' => (float)$earnings_net,
-            'debug_info' => [
-                'bruto' => $total_ganado_bruto,
-                'deducciones' => $total_deducciones
-            ]
+            // Saldo neto disponible para retirar
+            'earnings'       => round($earnings_net, 2),
+            // Desglose para transparencia
+            'earnings_bruto'       => round($total_ganado_bruto, 2),
+            'earnings_deducciones' => round($total_deducciones, 2),
+            // Aporte personal al pool de Fase 1 (para widget val-reserva)
+            'reserva_fase1'  => round($reserva_fase1, 2),
+            // Equipo directo humano (para widget val-equipo-count y tabla de equipo)
+            'referidos'      => $referidos_reales,
+            // Historial con ingresos y retenciones diferenciados
+            'historial'      => $historial_ganancias,
+            // Pago pendiente en blockchain
+            'pago_pendiente' => $pago_pendiente,
+            // Solo para master (null para usuarios normales)
+            'treasury'       => $treasury_stats,
         ]);
 
     } catch (PDOException $e) {
-        sendResponse(['error' => 'Error en el servidor: ' . $e->getMessage()], 500);
+        sendResponse(['error' => 'Error del servidor: ' . $e->getMessage()], 500);
     }
+} else {
+    sendResponse(['error' => 'Método no permitido'], 405);
 }
 ?>
-

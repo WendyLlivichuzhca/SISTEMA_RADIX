@@ -1,0 +1,42 @@
+# ============================================================
+# RADIX — Reglas de seguridad Apache
+# ============================================================
+
+# ── Bloquear acceso directo al archivo .env ───────────────
+<Files ".env">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# ── Bloquear archivos de debug/test (nunca deben ser públicos) ──
+<FilesMatch "^(reset_db|test_matrix|simulate_jump_c|fix_db|debug_levels|mejorar_db_v2|invest_seed)\.php$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# ── Bloquear acceso directo a cleanup_test_users.php después de usarlo ──
+<Files "cleanup_test_users.php">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# ── Bloquear acceso web a la carpeta de migraciones ──────
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^radix_api/migrations/ - [F,L]
+</IfModule>
+<IfModule !mod_rewrite.c>
+    # Fallback si mod_rewrite no está disponible
+    <FilesMatch "fix_master_tablero\.php$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>
+
+# ── Evitar listado de directorios ─────────────────────────
+Options -Indexes
+
+# ── Forzar HTTPS (activar cuando tengas SSL) ──────────────
+# RewriteEngine On
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
