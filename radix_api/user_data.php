@@ -148,11 +148,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             ");
             $ledger = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+            // Ganancia acumulada del Master (regalos recibidos completados)
+            $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE id_receptor = 1 AND tipo = 'regalo' AND estado = 'completado'");
+            $stmt->execute();
+            $master_earnings = (float)($stmt->fetchColumn() ?? 0);
+
             $treasury_stats = [
                 'tesoreria_balance' => $tesoreria_bal,
                 'total_reales'      => $total_reales,
                 'fase1_pool'        => $fase1_pool,
                 'ledger'            => $ledger,
+                'master_earnings'   => $master_earnings,
             ];
         }
 

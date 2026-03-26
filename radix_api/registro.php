@@ -47,13 +47,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
 
         // 1. Verificar si la billetera ya existe (Idempotencia / Login)
-        $stmt = $pdo->prepare("SELECT id, patrocinador_id FROM usuarios WHERE wallet_address = ?");
+        $stmt = $pdo->prepare("SELECT id, patrocinador_id, tipo_usuario FROM usuarios WHERE wallet_address = ?");
         $stmt->execute([$wallet]);
         $existing_user = $stmt->fetch();
-        
+
+        // Cuentas master/sistema: login directo, NUNCA generan pagos
+        if ($existing_user && in_array($existing_user['tipo_usuario'], ['master', 'sistema'])) {
+            $pdo->commit();
+            sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
+        }
+
+        // Usuario real existente con patrocinador: login directo
         if ($existing_user && $existing_user['patrocinador_id'] !== null) {
             $pdo->commit();
             sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
+        }
+
+        // Usuario real existente sin patrocinador: login directo si ya tiene pago pendiente
+        if ($existing_user && $existing_user['patrocinador_id'] === null) {
+            $stmt_chk = $pdo->prepare("SELECT id FROM pagos WHERE id_emisor = ? AND estado = 'pendiente' AND tipo = 'regalo' LIMIT 1");
+            $stmt_chk->execute([$existing_user['id']]);
+            if ($stmt_chk->fetch()) {
+                $pdo->commit();
+                sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
+            }
         }
 
         // 2. Solo si es NUEVO o no tiene patrocinador, aplicamos la regla de "no auto-patrocinio"
