@@ -33,6 +33,29 @@
     </FilesMatch>
 </IfModule>
 
+# ── Bloquear carpeta database/ (contiene schema.sql con estructura completa de BD) ──
+<IfModule mod_rewrite.c>
+    RewriteRule ^database/ - [F,L]
+</IfModule>
+
+# ── Bloquear archivos de documentación/análisis internos ──
+# Estos archivos revelan estructura interna, credenciales y análisis de vulnerabilidades
+<FilesMatch "^(XAMPP_SETUP|README)\.(md|txt)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<FilesMatch "^(analisis_mejoras_radix|reporte_final_radix|dashboard)\.html?$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# ── Bloquear dashboard.js suelto en raíz (el correcto está en assets/js/) ──
+<Files "dashboard.js">
+    Order allow,deny
+    Deny from all
+</Files>
+
 # ── Evitar listado de directorios ─────────────────────────
 Options -Indexes
 

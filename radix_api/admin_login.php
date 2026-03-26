@@ -37,7 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
     } catch (PDOException $e) {
-        sendResponse(['error' => 'Error en el servidor: ' . $e->getMessage()], 500);
+        error_log("RADIX admin_login ERROR: " . $e->getMessage());
+        sendResponse(['error' => 'Error en el servidor. Intenta de nuevo.'], 500);
     }
 }
 ?>

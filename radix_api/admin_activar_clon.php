@@ -16,7 +16,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 try {
     $resultado = intentarActivarClon($pdo);
 
-    $exito = str_starts_with($resultado, '✅');
+    // intentarActivarClon retorna un string; éxito si contiene "activado" o "Clon"
+    $exito = (stripos($resultado, 'activado') !== false || stripos($resultado, 'Clon') !== false);
 
     // Log de auditoría con acción manual
     $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles) VALUES (1, 'CLON_MANUAL_ADMIN', 'usuarios', ?)")

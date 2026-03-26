@@ -609,6 +609,36 @@ function mostrarOnboardingSiNuevo(userData) {
 
 window.onload = loadDashboard;
 
+// ─── POLLING DE EVENTOS EN TIEMPO REAL (check_events.php cada 30s) ──────────
+// Muestra toasts dentro del dashboard cuando hay nuevos referidos,
+// tableros completados o clones activados — sin necesidad de recargar la página.
+(function iniciarPollingEventos() {
+    async function verificarEventos() {
+        try {
+            const res = await fetch(`radix_api/check_events.php?since=${_lastEventTimestamp}`);
+            if (!res.ok) return; // silencioso si el servidor falla (no romper nada)
+            const data = await res.json();
+            if (!data || !Array.isArray(data.eventos)) return;
+
+            // Mostrar un toast por cada evento nuevo
+            data.eventos.forEach(e => {
+                if (e.mensaje) mostrarToast(e.mensaje, e.color || '#00d2ff');
+            });
+
+            // Actualizar el timestamp para el próximo ciclo
+            if (data.timestamp) _lastEventTimestamp = data.timestamp;
+        } catch (_) {
+            // Red caída o sesión expirada — no hacer nada, el polling sigue corriendo
+        }
+    }
+
+    // Esperar 35 segundos antes del primer check (el dashboard ya cargó los datos iniciales)
+    setTimeout(() => {
+        verificarEventos(); // primer check
+        setInterval(verificarEventos, 30000); // cada 30s después
+    }, 35000);
+})();
+
 // ─── TELEGRAM ───────────────────────────────────────────────────────────────
 
 function actualizarEstadoTelegram(hastelegram) {

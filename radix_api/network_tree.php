@@ -65,5 +65,6 @@ try {
     sendResponse(['success' => true, 'arbol' => $arbol]);
 
 } catch (PDOException $e) {
-    sendResponse(['error' => $e->getMessage()], 500);
+    error_log("RADIX network_tree ERROR: " . $e->getMessage());
+    sendResponse(['error' => 'Error del servidor. Intenta de nuevo.'], 500);
 }

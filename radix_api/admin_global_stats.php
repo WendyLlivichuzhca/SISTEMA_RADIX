@@ -124,7 +124,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ]);
 
     } catch (PDOException $e) {
-        sendResponse(['error' => 'Error del servidor: ' . $e->getMessage()], 500);
+        error_log("RADIX admin_global_stats ERROR: " . $e->getMessage());
+        sendResponse(['error' => 'Error del servidor. Intenta de nuevo.'], 500);
     }
 } else {
     sendResponse(['error' => 'Método no permitido'], 405);

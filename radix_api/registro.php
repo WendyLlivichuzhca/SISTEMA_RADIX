@@ -113,14 +113,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // 5. Asignar posición en la matriz del patrocinador
         if ($patrocinador_id) {
-            $stmt = $pdo->prepare("SELECT COUNT(*) as cuenta FROM referidos WHERE id_padre = ?");
+            // Bloquear la fila del patrocinador para evitar race conditions en registros simultáneos
+            $stmt = $pdo->prepare("SELECT COUNT(*) as cuenta FROM referidos WHERE id_padre = ? FOR UPDATE");
             $stmt->execute([$patrocinador_id]);
             $cuenta = $stmt->fetch()['cuenta'];
 
             if ($cuenta < 3) {
                 $posicion = $cuenta + 1;
-                $stmt = $pdo->prepare("INSERT INTO referidos (id_padre, id_hijo, posicion, nivel_en_red) VALUES (?, ?, ?, 1)");
-                $stmt->execute([$patrocinador_id, $new_user_id, $posicion]);
+                try {
+                    $stmt = $pdo->prepare("INSERT INTO referidos (id_padre, id_hijo, posicion, nivel_en_red) VALUES (?, ?, ?, 1)");
+                    $stmt->execute([$patrocinador_id, $new_user_id, $posicion]);
+                } catch (PDOException $e) {
+                    // La posición ya fue ocupada por otro registro simultáneo (duplicate key)
+                    $pdo->rollBack();
+                    sendResponse(['error' => 'El patrocinador ya no tiene espacios disponibles. Recarga y reintenta.'], 409);
+                }
 
                 // REGISTRAR PAGO/REGALO PENDIENTE ($10 para Tablero A)
                 $stmt = $pdo->prepare("INSERT INTO pagos (id_emisor, id_receptor, monto, tipo, estado) VALUES (?, ?, 10.00, 'regalo', 'pendiente')");

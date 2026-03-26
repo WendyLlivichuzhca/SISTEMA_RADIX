@@ -34,10 +34,15 @@ try {
     $stmt->execute([$user_id]);
     $deducciones = (float)($stmt->fetch()['total'] ?? 0);
 
-    $saldo_disponible = $bruto - $deducciones;
+    // Descontar retiros ya aprobados y procesados para evitar doble retiro
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM retiros WHERE usuario_id = ? AND estado = 'procesado'");
+    $stmt->execute([$user_id]);
+    $ya_retirado = (float)($stmt->fetch()['total'] ?? 0);
 
-    if ($saldo_disponible <= 0) {
-        sendResponse(['error' => 'No tienes saldo disponible para retirar.'], 400);
+    $saldo_disponible = $bruto - $deducciones - $ya_retirado;
+
+    if ($saldo_disponible < 10) {
+        sendResponse(['error' => 'No tienes saldo suficiente para retirar (mínimo $10.00).'], 400);
     }
 
     // 3. Verificar que no tenga ya un retiro pendiente
@@ -75,5 +80,6 @@ try {
     ]);
 
 } catch (PDOException $e) {
-    sendResponse(['error' => 'Error del servidor: ' . $e->getMessage()], 500);
+    error_log("RADIX solicitar_retiro ERROR: " . $e->getMessage());
+    sendResponse(['error' => 'Error del servidor. Intenta de nuevo.'], 500);
 }

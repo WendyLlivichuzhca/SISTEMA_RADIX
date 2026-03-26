@@ -82,5 +82,6 @@ try {
     ]);
 
 } catch (PDOException $e) {
-    sendResponse(['error' => 'Error del servidor: ' . $e->getMessage()], 500);
+    error_log("RADIX vincular_telegram ERROR: " . $e->getMessage());
+    sendResponse(['error' => 'Error del servidor. Intenta de nuevo.'], 500);
 }

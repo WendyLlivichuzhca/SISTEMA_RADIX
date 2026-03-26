@@ -91,5 +91,6 @@ try {
     ]);
 
 } catch (PDOException $e) {
-    sendResponse(['eventos' => [], 'error' => $e->getMessage()]);
+    error_log("RADIX check_events ERROR: " . $e->getMessage());
+    sendResponse(['eventos' => []]);
 }

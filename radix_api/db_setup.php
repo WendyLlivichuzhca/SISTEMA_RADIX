@@ -62,6 +62,17 @@ try {
         FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
     )");
 
+    // 8b. Restricción única en referidos: un padre no puede tener dos hijos en la misma posición
+    //     Protege contra race conditions en registros simultáneos (fraude de posición doble)
+    try {
+        $pdo->exec("ALTER TABLE referidos ADD UNIQUE KEY unique_padre_posicion (id_padre, posicion)");
+    } catch (Exception $e) { /* Constraint ya existe */ }
+
+    // 8c. Restricción única en referidos: un hijo no puede estar dos veces bajo el mismo padre
+    try {
+        $pdo->exec("ALTER TABLE referidos ADD UNIQUE KEY unique_padre_hijo (id_padre, id_hijo)");
+    } catch (Exception $e) { /* Constraint ya existe */ }
+
     // 8. Crear tabla tesoreria_movimientos si no existe
     $pdo->exec("CREATE TABLE IF NOT EXISTS tesoreria_movimientos (
         id INT AUTO_INCREMENT PRIMARY KEY,

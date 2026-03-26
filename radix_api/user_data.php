@@ -78,8 +78,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $stmt->execute([$user_id]);
         $reserva_fase1 = (float)$stmt->fetch()['total'];
 
-        // 5d. Saldo neto disponible para retiro
-        $earnings_net = $total_ganado_bruto - $total_deducciones;
+        // 5d. Retiros ya procesados (aprobados y pagados por el admin)
+        //     Se descuentan para evitar que el usuario pueda retirar el mismo saldo dos veces.
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM retiros WHERE usuario_id = ? AND estado = 'procesado'");
+        $stmt->execute([$user_id]);
+        $total_ya_retirado = (float)($stmt->fetch()['total'] ?? 0);
+
+        // Saldo neto disponible para retiro (bruto - deducciones del sistema - retiros ya cobrados)
+        $earnings_net = $total_ganado_bruto - $total_deducciones - $total_ya_retirado;
 
         // 5e. Historial de movimientos (ganancias + retenciones) para mostrar en el dashboard
         $stmt = $pdo->prepare("
@@ -194,7 +200,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ]);
 
     } catch (PDOException $e) {
-        sendResponse(['error' => 'Error del servidor: ' . $e->getMessage()], 500);
+        error_log("RADIX user_data ERROR: " . $e->getMessage());
+        sendResponse(['error' => 'Error del servidor. Intenta de nuevo.'], 500);
     }
 } else {
     sendResponse(['error' => 'Método no permitido'], 405);
