@@ -125,6 +125,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 require_once 'clon_logic.php';
                 intentarActivarClon($pdo);
             }
+        } else {
+            // ── USUARIO FUNDADOR / ROOT (sin patrocinador) ──────────────────────
+            // Aunque es el primero en la red, también debe aportar los $10 de entrada.
+            // Su pago se dirige a RADIX_MASTER (la billetera central de la plataforma).
+            // Esto garantiza que la tesorería recibe su primer ingreso desde el inicio.
+            $stmt_master = $pdo->prepare("SELECT id FROM usuarios WHERE tipo_usuario = 'master' LIMIT 1");
+            $stmt_master->execute();
+            $master_user = $stmt_master->fetch();
+
+            if ($master_user) {
+                // Crear pago pendiente del fundador hacia RADIX_MASTER
+                $stmt = $pdo->prepare("INSERT INTO pagos (id_emisor, id_receptor, monto, tipo, estado) VALUES (?, ?, 10.00, 'regalo', 'pendiente')");
+                $stmt->execute([$new_user_id, $master_user['id']]);
+
+                // Registrar en Auditoría
+                $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address) VALUES (?, 'REGISTRO_FUNDADOR', 'usuarios', ?, ?)");
+                $stmt->execute([$new_user_id, "Fundador registrado. Pago $10 pendiente a RADIX_MASTER. Firma: $signature | Msg: $message_signed", $ip_address]);
+            }
         }
 
         $pdo->commit();

@@ -6,7 +6,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     const connectBtn = document.getElementById('connect-wallet');
 
-    if (connectBtn) {
+    if (connectBtn && !connectBtn.dataset.listenerAttached) {
+        connectBtn.dataset.listenerAttached = 'true';
         connectBtn.addEventListener('click', async () => {
             connectBtn.innerText = "CONECTANDO...";
             connectBtn.disabled = true;
@@ -17,7 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (window.tronLink) {
                    await window.tronLink.request({ method: 'tron_requestAccounts' });
                 } else {
-                   document.getElementById('wallet-modal').style.display = 'flex';
+                   const wModal = document.getElementById('wallet-modal');
+                   wModal.style.cssText = 'display:flex; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.88); z-index:99999; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;';
                    connectBtn.innerText = "Conectar Billetera";
                    connectBtn.disabled = false;
                    return;
@@ -26,15 +28,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 // ─── 2. Obtener la cuenta de Tron ──────────────────────────
-                // En TronWeb, la cuenta suele estar disponible tras la carga o pidiendo 'tron_requestAccounts'
-                if (!window.tronWeb.defaultAddress.base58) {
-                    await window.tronLink.request({ method: 'tron_requestAccounts' });
+                if (!window.tronWeb.defaultAddress || !window.tronWeb.defaultAddress.base58) {
+                    if (window.tronLink) {
+                        try {
+                            await window.tronLink.request({ method: 'tron_requestAccounts' });
+                        } catch(reqErr) {
+                            const msg = (reqErr?.message || '').toLowerCase();
+                            if (msg.includes('at least one account') || msg.includes('no account')) {
+                                throw new Error("Tu billetera SafePal no tiene cuentas. Abre SafePal, crea o importa una wallet y vuelve a intentarlo.");
+                            }
+                            throw new Error("SafePal no pudo conectarse. Desbloquea la extensión e intenta de nuevo.");
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 800));
+                    }
                 }
-                
-                const walletAddress = window.tronWeb.defaultAddress.base58;
+
+                const walletAddress = window.tronWeb.defaultAddress?.base58;
 
                 if (!walletAddress) {
-                    throw new Error("No se pudo obtener tu dirección de Tron. Desbloquea tu billetera.");
+                    throw new Error("No se encontró ninguna cuenta. Abre SafePal, crea una wallet Tron e intenta de nuevo.");
                 }
 
                 // ─── 3. Obtener nonce y FIRMAR obligatoriamente ─────────────
@@ -46,12 +58,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 let firma;
                 try {
-                    firma = await window.tronWeb.trx.sign(window.tronWeb.toHex(nonceData.mensaje));
+                    // signMessageV2 es el método correcto para SafePal y TronLink modernos
+                    // Muestra el popup de firma en la extensión/app
+                    if (typeof window.tronWeb.trx.signMessageV2 === 'function') {
+                        firma = await window.tronWeb.trx.signMessageV2(nonceData.mensaje);
+                    } else {
+                        // Fallback para versiones antiguas de TronLink
+                        firma = await window.tronWeb.trx.sign(window.tronWeb.toHex(nonceData.mensaje));
+                    }
                 } catch(e) {
-                    throw new Error("Debes firmar el mensaje de verificación en tu billetera para continuar.");
+                    if (e && (e.message || '').toLowerCase().includes('cancel')) {
+                        throw new Error("Cancelaste la firma. Vuelve a intentarlo y aprueba la solicitud en SafePal.");
+                    }
+                    throw new Error("Abre SafePal y aprueba el mensaje de verificación para continuar.");
                 }
                 if (!firma) {
-                    throw new Error("La firma fue rechazada. Aprueba la solicitud en tu billetera.");
+                    throw new Error("La firma fue rechazada. Aprueba la solicitud en tu billetera SafePal.");
                 }
 
                 // ─── 4 & 5. Registro / Login unificado vía registro.php ───────
@@ -95,7 +117,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             } catch (error) {
                 console.error("Error en el acceso:", error);
-                alert("Hubo un problema al conectar:\n" + error.message);
+                // Mostrar toast en vez del alert feo del browser
+                mostrarToastLanding("❌ " + (error.message || "Error al conectar. Intenta de nuevo."));
                 connectBtn.innerText = "Conectar Billetera";
                 connectBtn.disabled = false;
             }
@@ -159,3 +182,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// ─── Toast de error/info para la landing page ──────────────
+function mostrarToastLanding(msg, color = '#ff5252') {
+    // Crear contenedor si no existe
+    let c = document.getElementById('landing-toast-container');
+    if (!c) {
+        c = document.createElement('div');
+        c.id = 'landing-toast-container';
+        c.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;';
+        document.body.appendChild(c);
+    }
+    const t = document.createElement('div');
+    t.style.cssText = `background:#111;color:#fff;padding:13px 22px;border-radius:12px;border-left:3px solid ${color};font-size:0.9rem;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,0.5);pointer-events:auto;max-width:380px;text-align:center;line-height:1.4;`;
+    t.innerText = msg;
+    c.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.4s'; setTimeout(() => t.remove(), 400); }, 5000);
+}

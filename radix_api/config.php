@@ -1,9 +1,17 @@
 <?php
 // Permitir conexiones desde cualquier origen (CORS)
 if (php_sapi_name() !== 'cli') {
-    header("Access-Control-Allow-Origin: *");
+    $allowed_origins = [
+        'https://corporativoqbank.com',
+        'https://www.corporativoqbank.com',
+    ];
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if (in_array($origin, $allowed_origins)) {
+        header("Access-Control-Allow-Origin: $origin");
+    }
     header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
     header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
+    header("Vary: Origin");
 }
 
 if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] == 'OPTIONS') {

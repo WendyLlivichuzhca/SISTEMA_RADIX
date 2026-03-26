@@ -111,23 +111,49 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
 
             <!-- Paso 2: Cómo funciona -->
             <div id="ob-step-2" class="ob-step" style="display:none;">
-                <div style="text-align:center; font-size:3rem; margin-bottom:14px;">📊</div>
+                <div style="text-align:center; font-size:2.5rem; margin-bottom:14px;">📊</div>
                 <h3 style="text-align:center; color:#fff; margin-bottom:14px;">¿Cómo funciona?</h3>
-                <div style="background:#0a0a12; border-radius:12px; padding:16px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #1a1a28;">
-                        <span style="color:#9d00ff; font-weight:700;">🅰 Tablero A</span>
-                        <span style="color:#aaa; font-size:0.85rem;">Invita 3 personas → <strong style="color:#fff;">+0</strong></span>
+                <div style="background:#0a0a12; border-radius:14px; padding:6px 12px;">
+                    <!-- Tablero A -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:11px 4px; border-bottom:1px solid #1a1a28;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="background:rgba(157,0,255,0.15); border:1px solid rgba(157,0,255,0.4); color:#9d00ff; font-size:0.7rem; font-weight:900; padding:2px 8px; border-radius:6px;">A</span>
+                            <span style="color:#ddd; font-weight:700; font-size:0.9rem;">Tablero A</span>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="color:#aaa; font-size:0.75rem;">Invita 3 personas</div>
+                            <div style="color:#00e676; font-weight:800; font-size:0.95rem;">+$10 USDT</div>
+                        </div>
                     </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #1a1a28;">
-                        <span style="color:#00d2ff; font-weight:700;">🅱 Tablero B</span>
-                        <span style="color:#aaa; font-size:0.85rem;">Sus 3 crecen → <strong style="color:#fff;">+0</strong></span>
+                    <!-- Tablero B -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:11px 4px; border-bottom:1px solid #1a1a28;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="background:rgba(0,210,255,0.12); border:1px solid rgba(0,210,255,0.35); color:#00d2ff; font-size:0.7rem; font-weight:900; padding:2px 8px; border-radius:6px;">B</span>
+                            <span style="color:#ddd; font-weight:700; font-size:0.9rem;">Tablero B</span>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="color:#aaa; font-size:0.75rem;">Sus 3 también invitan</div>
+                            <div style="color:#00e676; font-weight:800; font-size:0.95rem;">+$20 USDT</div>
+                        </div>
                     </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0;">
-                        <span style="color:#00e676; font-weight:700;">©️ Tablero C</span>
-                        <span style="color:#aaa; font-size:0.85rem;">Red completa → <strong style="color:#00e676;">+0 neto</strong></span>
+                    <!-- Tablero C -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:11px 4px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="background:rgba(0,230,118,0.12); border:1px solid rgba(0,230,118,0.35); color:#00e676; font-size:0.7rem; font-weight:900; padding:2px 8px; border-radius:6px;">C</span>
+                            <span style="color:#ddd; font-weight:700; font-size:0.9rem;">Tablero C</span>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="color:#aaa; font-size:0.75rem;">Red completa</div>
+                            <div style="color:#00e676; font-weight:800; font-size:0.95rem;">+$40 USDT neto</div>
+                        </div>
                     </div>
                 </div>
-                <p style="text-align:center; color:#555; font-size:0.78rem; margin-top:10px;">🤖 El sistema activa Agentes IA si hay huecos en tu red.</p>
+                <!-- Total -->
+                <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(157,0,255,0.08); border:1px solid rgba(157,0,255,0.2); border-radius:10px; padding:10px 14px; margin-top:10px;">
+                    <span style="color:#aaa; font-size:0.82rem;">💰 Ganancia total por ciclo</span>
+                    <span style="color:#fff; font-weight:900; font-size:1rem;">$70 USDT</span>
+                </div>
+                <p style="text-align:center; color:#555; font-size:0.75rem; margin-top:10px;">🤖 El sistema activa Agentes IA si hay huecos en tu red.</p>
             </div>
 
             <!-- Paso 3: Primer pago -->
@@ -272,6 +298,73 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
                         <div id="network-tree" style="min-height:300px; background:rgba(0,0,0,0.2); border-radius:15px; border:1px dashed #2a2a3a; display:flex; align-items:center; justify-content:center; color:#333;"></div>
                     </div>
                 </div>
+
+                <!-- SECCIÓN TELEGRAM -->
+                <div class="master-card" style="margin-top:20px;">
+                    <h3>🔔 Notificaciones Telegram</h3>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;">
+
+                        <!-- Instrucciones -->
+                        <div style="background:#0a0a12; border-radius:14px; padding:18px;">
+                            <div style="font-size:1.8rem; text-align:center; margin-bottom:10px;">📱</div>
+                            <p style="color:#aaa; font-size:0.82rem; line-height:1.7; margin-bottom:12px;">
+                                Recibe alertas automáticas en Telegram cuando:
+                            </p>
+                            <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">
+                                <li style="display:flex; align-items:center; gap:8px; color:#ccc; font-size:0.8rem;">
+                                    <span style="background:rgba(157,0,255,0.2); border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:0.75rem;">🏆</span>
+                                    Completes un Tablero
+                                </li>
+                                <li style="display:flex; align-items:center; gap:8px; color:#ccc; font-size:0.8rem;">
+                                    <span style="background:rgba(0,210,255,0.15); border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:0.75rem;">👤</span>
+                                    Un referido se una a tu red
+                                </li>
+                                <li style="display:flex; align-items:center; gap:8px; color:#ccc; font-size:0.8rem;">
+                                    <span style="background:rgba(0,230,118,0.15); border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:0.75rem;">🤖</span>
+                                    Se active un Agente IA para ti
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- Formulario de vinculación -->
+                        <div>
+                            <!-- Estado: no vinculado -->
+                            <div id="tg-no-vinculado">
+                                <p style="color:#888; font-size:0.8rem; line-height:1.7; margin-bottom:14px;">
+                                    <strong style="color:#fff;">Paso 1:</strong> Abre Telegram y busca
+                                    <a href="https://t.me/RADIXNotificaciones_bot" target="_blank" style="color:#9d00ff; text-decoration:none; font-weight:700;">@RADIXNotificaciones_bot</a><br>
+                                    <strong style="color:#fff;">Paso 2:</strong> Escribe <code style="background:#1a1a28; padding:2px 6px; border-radius:4px; color:#00d2ff;">/start</code> — el bot te dará tu ID.<br>
+                                    <strong style="color:#fff;">Paso 3:</strong> Pega ese número aquí abajo:
+                                </p>
+                                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                                    <input type="text" id="tg-chat-id-input" placeholder="Ej: 123456789"
+                                        style="flex:1; background:#0a0a12; border:1px solid #2a2a3a; color:#fff; padding:12px 14px; border-radius:10px; font-size:0.9rem; outline:none;"
+                                        oninput="this.style.borderColor='#9d00ff'">
+                                    <button onclick="vincularTelegram()"
+                                        style="background:linear-gradient(135deg,#9d00ff,#00d2ff); border:none; border-radius:10px; color:#fff; font-weight:800; font-size:0.82rem; padding:0 18px; cursor:pointer; white-space:nowrap; transition:0.3s;"
+                                        onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+                                        VINCULAR
+                                    </button>
+                                </div>
+                                <div id="tg-status" style="font-size:0.78rem; color:#555; min-height:16px;"></div>
+                            </div>
+
+                            <!-- Estado: ya vinculado -->
+                            <div id="tg-vinculado" style="display:none;">
+                                <div style="background:rgba(0,230,118,0.08); border:1px solid rgba(0,230,118,0.25); border-radius:14px; padding:18px; text-align:center;">
+                                    <div style="font-size:2rem; margin-bottom:8px;">✅</div>
+                                    <p style="color:#00e676; font-weight:700; margin-bottom:4px;">¡Telegram vinculado!</p>
+                                    <p style="color:#555; font-size:0.75rem; margin-bottom:14px;">Recibirás notificaciones automáticamente.</p>
+                                    <button onclick="desvincularTelegram()"
+                                        style="background:transparent; border:1px solid #333; border-radius:8px; color:#555; font-size:0.72rem; padding:6px 14px; cursor:pointer;">
+                                        Desvincular
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
 <?php endif; ?>
         </div>
 

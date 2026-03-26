@@ -22,7 +22,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendResponse(['error' => 'Método no permitido'], 405);
 }
 
-$chat_id = trim($_POST['chat_id'] ?? '');
+$chat_id     = trim($_POST['chat_id'] ?? '');
+$desvincular = !empty($_POST['desvincular']);
+
+// ── Desvincular Telegram ────────────────────────────────────────────────────
+if ($desvincular) {
+    $wallet = $_SESSION['radix_wallet'];
+    $stmt = $pdo->prepare("UPDATE usuarios SET telegram_chat_id = NULL WHERE wallet_address = ?");
+    $stmt->execute([$wallet]);
+    sendResponse(['success' => true, 'mensaje' => 'Telegram desvinculado.']);
+}
 
 // Validación básica: solo dígitos y opcionalmente signo negativo (grupos son negativos)
 if (!preg_match('/^-?\d{5,15}$/', $chat_id)) {

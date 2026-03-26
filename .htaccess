@@ -9,7 +9,7 @@
 </Files>
 
 # ── Bloquear archivos de debug/test (nunca deben ser públicos) ──
-<FilesMatch "^(reset_db|test_matrix|simulate_jump_c|fix_db|debug_levels|mejorar_db_v2|invest_seed)\.php$">
+<FilesMatch "^(reset_db|test_matrix|simulate_jump_c|fix_db|debug_levels|mejorar_db_v2|invest_seed|debug_db|debug_user|fix_master_tron|limpiar_tesoreria|setup_webhook)\.php$">
     Order allow,deny
     Deny from all
 </FilesMatch>
@@ -36,7 +36,9 @@
 # ── Evitar listado de directorios ─────────────────────────
 Options -Indexes
 
-# ── Forzar HTTPS (activar cuando tengas SSL) ──────────────
-# RewriteEngine On
-# RewriteCond %{HTTPS} off
-# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# ── Forzar HTTPS ──────────────────────────────────────────
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>

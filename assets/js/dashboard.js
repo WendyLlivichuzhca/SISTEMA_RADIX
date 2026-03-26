@@ -55,7 +55,7 @@ async function loadDashboard() {
             if(document.getElementById('val-reserva')) document.getElementById('val-reserva').innerText = `$${(data.reserva_fase1 || 0).toFixed(2)}`;
             // Widget: EQUIPO DIRECTO — referidos humanos directos
             if(document.getElementById('val-equipo-count')) document.getElementById('val-equipo-count').innerText = data.referidos ? data.referidos.length : 0;
-            if(document.getElementById('ref-link-input'))   document.getElementById('ref-link-input').value = `${window.location.origin}/?ref=${data.user.wallet}`;
+            if(document.getElementById('ref-link-input'))   document.getElementById('ref-link-input').value = `${window.location.href.replace('dashboard.php', '')}?ref=${data.user.wallet}`;
 
             // User Progress
             const fill = document.getElementById('progress-fill');
@@ -76,6 +76,7 @@ async function loadDashboard() {
             renderHistorial();
             renderNetworkTree();
             mostrarOnboardingSiNuevo(data);
+            actualizarEstadoTelegram(data.user.has_telegram || false);
         }
 
         // Common components
@@ -431,3 +432,69 @@ function mostrarOnboardingSiNuevo(userData) {
 }
 
 window.onload = loadDashboard;
+
+// ─── TELEGRAM ───────────────────────────────────────────────────────────────
+
+function actualizarEstadoTelegram(hastelegram) {
+    const noVinc = document.getElementById('tg-no-vinculado');
+    const vinc   = document.getElementById('tg-vinculado');
+    if (!noVinc || !vinc) return;
+    if (hastelegram) {
+        noVinc.style.display = 'none';
+        vinc.style.display   = 'block';
+    } else {
+        noVinc.style.display = 'block';
+        vinc.style.display   = 'none';
+    }
+}
+
+async function vincularTelegram() {
+    const input    = document.getElementById('tg-chat-id-input');
+    const statusEl = document.getElementById('tg-status');
+    const chatId   = (input?.value || '').trim();
+
+    if (!chatId) {
+        statusEl.style.color = '#ff4444';
+        statusEl.innerText   = '⚠️ Ingresa tu Chat ID de Telegram.';
+        return;
+    }
+
+    statusEl.style.color = '#888';
+    statusEl.innerText   = 'Vinculando...';
+
+    try {
+        const fd = new FormData();
+        fd.append('chat_id', chatId);
+        const res  = await fetch('radix_api/vincular_telegram.php', { method: 'POST', body: fd });
+        const data = await res.json();
+
+        if (data.success) {
+            actualizarEstadoTelegram(true);
+            mostrarToast('✅ ¡Telegram vinculado! Revisa tu chat.', '#00e676');
+        } else if (data.advertencia) {
+            statusEl.style.color = '#ffaa00';
+            statusEl.innerText   = '⚠️ ' + data.advertencia;
+        } else {
+            statusEl.style.color = '#ff4444';
+            statusEl.innerText   = '❌ ' + (data.error || 'Error al vincular.');
+        }
+    } catch (e) {
+        statusEl.style.color = '#ff4444';
+        statusEl.innerText   = '❌ Error de conexión. Intenta de nuevo.';
+    }
+}
+
+async function desvincularTelegram() {
+    if (!confirm('¿Desvincular Telegram? Dejarás de recibir notificaciones.')) return;
+    try {
+        const fd = new FormData();
+        fd.append('chat_id', '');
+        fd.append('desvincular', '1');
+        const res  = await fetch('radix_api/vincular_telegram.php', { method: 'POST', body: fd });
+        const data = await res.json();
+        actualizarEstadoTelegram(false);
+        mostrarToast('Telegram desvinculado.', '#888');
+    } catch(e) {
+        mostrarToast('Error al desvincular.', '#ff4444');
+    }
+}
