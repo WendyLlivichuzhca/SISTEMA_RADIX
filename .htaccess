@@ -50,11 +50,6 @@
     Deny from all
 </FilesMatch>
 
-# ── Bloquear dashboard.js suelto en raíz (el correcto está en assets/js/) ──
-<Files "dashboard.js">
-    Order allow,deny
-    Deny from all
-</Files>
 
 # ── Evitar listado de directorios ─────────────────────────
 Options -Indexes
