@@ -12,11 +12,35 @@ document.addEventListener('DOMContentLoaded', () => {
             connectBtn.innerText = "CONECTANDO...";
             connectBtn.disabled = true;
 
+            // ─── Helper: tronLink.request con timeout de 6 s ─────
+            const tronRequestWithTimeout = (method = 'tron_requestAccounts', ms = 6000) =>
+                Promise.race([
+                    window.tronLink.request({ method }),
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('timeout')), ms)
+                    )
+                ]);
+
             // ─── 1. Detectar TronWeb (SafePal o TronLink) ──────
             if (typeof window.tronWeb === 'undefined' || window.tronWeb === null) {
                 // Si existe tronLink pero no tronWeb, pedir conexión
                 if (window.tronLink) {
-                   await window.tronLink.request({ method: 'tron_requestAccounts' });
+                    try {
+                        await tronRequestWithTimeout();
+                        // Esperar brevemente a que tronWeb se inicialice
+                        await new Promise(resolve => setTimeout(resolve, 800));
+                    } catch (initErr) {
+                        connectBtn.innerText = "Conectar Billetera";
+                        connectBtn.disabled = false;
+                        const msg = (initErr?.message || '').toLowerCase();
+                        if (msg === 'timeout' || msg.includes('at least one account') || msg.includes('no account')) {
+                            const setupModal = document.getElementById('wallet-setup-modal');
+                            if (setupModal) setupModal.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+                        } else {
+                            mostrarToastLanding("❌ SafePal no respondió. Desbloquea la extensión e intenta de nuevo.");
+                        }
+                        return;
+                    }
                 } else {
                    const wModal = document.getElementById('wallet-modal');
                    wModal.style.cssText = 'display:flex; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.88); z-index:99999; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;';
@@ -31,11 +55,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!window.tronWeb.defaultAddress || !window.tronWeb.defaultAddress.base58) {
                     if (window.tronLink) {
                         try {
-                            await window.tronLink.request({ method: 'tron_requestAccounts' });
+                            await tronRequestWithTimeout();
                         } catch(reqErr) {
                             const msg = (reqErr?.message || '').toLowerCase();
-                            if (msg.includes('at least one account') || msg.includes('no account')) {
-                                throw new Error("Tu billetera SafePal no tiene cuentas. Abre SafePal, crea o importa una wallet y vuelve a intentarlo.");
+                            connectBtn.innerText = "Conectar Billetera";
+                            connectBtn.disabled = false;
+                            if (msg === 'timeout' || msg.includes('at least one account') || msg.includes('no account')) {
+                                const setupModal = document.getElementById('wallet-setup-modal');
+                                if (setupModal) setupModal.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+                                return;
                             }
                             throw new Error("SafePal no pudo conectarse. Desbloquea la extensión e intenta de nuevo.");
                         }
@@ -46,7 +74,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const walletAddress = window.tronWeb.defaultAddress?.base58;
 
                 if (!walletAddress) {
-                    throw new Error("No se encontró ninguna cuenta. Abre SafePal, crea una wallet Tron e intenta de nuevo.");
+                    connectBtn.innerText = "Conectar Billetera";
+                    connectBtn.disabled = false;
+                    const setupModal = document.getElementById('wallet-setup-modal');
+                    if (setupModal) setupModal.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+                    return;
                 }
 
                 // ─── 3. Obtener nonce y FIRMAR obligatoriamente ─────────────

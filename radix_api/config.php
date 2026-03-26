@@ -36,7 +36,7 @@ if (file_exists($env_path)) {
 define('BSCSCAN_API_KEY',   $_ENV['BSCSCAN_API_KEY'] ?? '');
 
 // ── Red Tron (TRC-20) ────────────────────────────────────────────────────────
-define('RADIX_CENTRAL_WALLET', 'TKqTCwyVnJRqLkUF1ibAT8yL6TCKgCuU9c');
+define('RADIX_CENTRAL_WALLET', 'TDLFwy5swL2B8stX6tgUgQr2BjB1DFdwoU');
 define('USDT_TRC20_CONTRACT',  'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t');
 define('TRON_NETWORK_NAME',    'Tron Mainnet');
 

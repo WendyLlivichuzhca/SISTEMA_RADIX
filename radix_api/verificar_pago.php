@@ -93,14 +93,13 @@ try {
         sendResponse(['error' => 'La transacción no contiene una transferencia de USDT-TRC20.'], 422);
     }
 
-    // 5. Validar destinatario y emisor (Previene robo de TXIDs)
+    // 5. Validar destinatario (Acepta pagos desde cualquier billetera)
     if ($transfer['to_address'] !== RADIX_CENTRAL_WALLET) {
         sendResponse(['error' => 'El destinatario de la transacción no es la billetera oficial de RADIX.'], 422);
     }
 
-    if ($transfer['from_address'] !== $_SESSION['radix_wallet']) {
-        sendResponse(['error' => 'La billetera que envió los fondos no coincide con tu cuenta de usuario.'], 422);
-    }
+    // Nota: No se verifica la billetera emisora para permitir pagos desde
+    // exchanges (Binance, etc.) u otras billeteras externas.
 
     // 6. Validar monto (USDT TRC-20 tiene 6 decimales)
     $decimales      = intval($transfer['decimals'] ?? 6);

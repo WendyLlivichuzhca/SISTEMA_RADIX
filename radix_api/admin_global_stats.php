@@ -35,8 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ");
         $logs_clones = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // 5. Ganancia del Master (Cuenta ID #1)
-        $stmt = $pdo->query("SELECT SUM(monto) as total FROM pagos WHERE id_receptor = 1 AND tipo = 'ganancia_tablero' AND estado = 'completado'");
+        // 5. Ganancia del Master (Cuenta ID #1) — pagos tipo 'regalo' recibidos
+        $stmt = $pdo->query("SELECT SUM(monto) as total FROM pagos WHERE id_receptor = 1 AND tipo = 'regalo' AND estado = 'completado'");
         $master_earnings = (float)($stmt->fetch()['total'] ?? 0);
 
         // 6. Distribución de usuarios por tablero actual
