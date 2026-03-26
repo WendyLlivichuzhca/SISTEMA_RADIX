@@ -316,15 +316,24 @@ async function loadAdminStats() {
         const retirosEl = document.getElementById('retiros-list');
         if (data.retiros_pendientes && data.retiros_pendientes.length > 0) {
             retirosEl.innerHTML = data.retiros_pendientes.map(r => `
-                <div class="retiro-item">
-                    <div>
-                        <div style="font-size:0.82rem;color:#ddd;">${r.nickname}</div>
-                        <div style="font-size:0.7rem;color:#555;margin-top:2px;">${(r.wallet_destino||'').substring(0,14)}...</div>
-                        <div style="font-size:0.68rem;color:#444;">${(r.fecha_solicitud||'').split(' ')[0]}</div>
+                <div class="retiro-item" id="retiro-${r.id}" style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.04);gap:10px;">
+                    <div style="flex:1;">
+                        <div style="font-size:0.85rem;color:#ddd;font-weight:700;">${r.nickname}</div>
+                        <div style="font-size:0.7rem;color:#555;margin-top:2px;word-break:break-all;">${r.wallet_destino||''}</div>
+                        <div style="font-size:0.68rem;color:#444;margin-top:2px;">${(r.fecha_solicitud||'').split(' ')[0]}</div>
                     </div>
-                    <div>
-                        <div style="font-size:1rem;font-weight:800;color:var(--gold);">$${parseFloat(r.monto).toFixed(2)}</div>
-                        <span style="font-size:0.68rem;color:var(--gold);background:rgba(255,204,0,0.1);padding:2px 8px;border-radius:10px;">PENDIENTE</span>
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div style="font-size:1.1rem;font-weight:800;color:var(--gold);margin-bottom:8px;">$${parseFloat(r.monto).toFixed(2)} USDT</div>
+                        <div style="display:flex;gap:6px;justify-content:flex-end;">
+                            <button onclick="procesarRetiro(${r.id},'aprobar')"
+                                style="background:#00e676;color:#000;border:none;border-radius:8px;padding:6px 14px;font-size:0.72rem;font-weight:800;cursor:pointer;">
+                                ✅ APROBAR
+                            </button>
+                            <button onclick="procesarRetiro(${r.id},'rechazar')"
+                                style="background:rgba(255,82,82,0.15);color:#ff5252;border:1px solid rgba(255,82,82,0.3);border-radius:8px;padding:6px 14px;font-size:0.72rem;font-weight:800;cursor:pointer;">
+                                ❌ RECHAZAR
+                            </button>
+                        </div>
                     </div>
                 </div>
             `).join('');
@@ -372,6 +381,46 @@ async function activarClonManual() {
     } catch (e) {
         resultEl.style.color = '#ff5252';
         resultEl.innerText = '❌ Error de conexión.';
+    }
+}
+
+async function procesarRetiro(retiroId, accion) {
+    const etiqueta = accion === 'aprobar' ? 'APROBAR' : 'RECHAZAR';
+    let notas = '';
+
+    if (accion === 'rechazar') {
+        notas = prompt('Motivo del rechazo (opcional):') || '';
+    }
+
+    if (!confirm(`¿Confirmas ${etiqueta} el retiro #${retiroId}?`)) return;
+
+    const el = document.getElementById(`retiro-${retiroId}`);
+    if (el) el.style.opacity = '0.4';
+
+    try {
+        const fd = new FormData();
+        fd.append('retiro_id', retiroId);
+        fd.append('accion', accion);
+        fd.append('notas', notas);
+
+        const res  = await fetch('radix_api/procesar_retiro.php', { method: 'POST', body: fd });
+        const data = await res.json();
+
+        if (data.success) {
+            if (el) {
+                el.style.opacity = '1';
+                el.innerHTML = `<div style="width:100%;text-align:center;padding:10px 0;font-size:0.82rem;color:${accion==='aprobar'?'#00e676':'#ff5252'};">
+                    ${accion === 'aprobar' ? '✅ Aprobado y notificado' : '❌ Rechazado y notificado'}
+                </div>`;
+            }
+            setTimeout(() => loadAdminStats(), 2000);
+        } else {
+            if (el) el.style.opacity = '1';
+            alert('Error: ' + (data.error || 'No se pudo procesar'));
+        }
+    } catch(e) {
+        if (el) el.style.opacity = '1';
+        alert('Error de conexión.');
     }
 }
 

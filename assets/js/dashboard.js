@@ -2,6 +2,51 @@
  * dashboard.js — RADIX V3 — Command Center Logic
  */
 
+/* ── PREMIUM HELPERS — V4.0 ──────────────────────────────────── */
+
+/**
+ * animateValue — smooth count-up animation for numeric elements
+ * @param {HTMLElement} el   - target element
+ * @param {number}      end  - final value
+ * @param {string}      pre  - prefix (e.g. "$")
+ * @param {string}      suf  - suffix (e.g. " USDT")
+ * @param {boolean}     dec  - show 2 decimal places
+ */
+function animateValue(el, end, pre = '', suf = '', dec = false) {
+    if (!el) return;
+    const start    = 0;
+    const duration = 900;
+    const startTs  = performance.now();
+    const fmt = v => dec ? v.toFixed(2) : Math.floor(v).toString();
+    function step(ts) {
+        const elapsed  = ts - startTs;
+        const progress = Math.min(elapsed / duration, 1);
+        // ease-out cubic
+        const eased = 1 - Math.pow(1 - progress, 3);
+        el.innerText = pre + fmt(start + (end - start) * eased) + suf;
+        if (progress < 1) requestAnimationFrame(step);
+        else {
+            el.innerText = pre + fmt(end) + suf;
+            el.classList.add('num-pop');
+            setTimeout(() => el.classList.remove('num-pop'), 500);
+        }
+    }
+    requestAnimationFrame(step);
+}
+
+/**
+ * updateSidebarWallet — show truncated wallet in sidebar once data loads
+ */
+function updateSidebarWallet(wallet) {
+    const el = document.getElementById('sidebar-wallet-short');
+    if (!el || !wallet) return;
+    el.textContent = wallet.length > 12
+        ? wallet.substring(0, 6) + '…' + wallet.substring(wallet.length - 4)
+        : wallet;
+}
+
+/* ─────────────────────────────────────────────────────────────── */
+
 let _saldoActual        = 0;
 let _historialData      = [];
 let _masterUserList     = [];
@@ -20,13 +65,16 @@ async function loadDashboard() {
         if(document.getElementById('welcome-msg')) document.getElementById('welcome-msg').innerText = `Hola, ${data.user.nickname} 👋`;
         if(document.getElementById('wallet-address-display')) document.getElementById('wallet-address-display').innerText = data.user.wallet;
         if(document.getElementById('avatar-circle')) document.getElementById('avatar-circle').innerText = data.user.nickname.substring(0, 2).toUpperCase();
+        // V4 — sidebar wallet short display
+        updateSidebarWallet(data.user.wallet);
 
         // 2. Mode Handling
         if (data.treasury) {
             // MASTER MODE
-            if(document.getElementById('val-balance')) document.getElementById('val-balance').innerText = `$${data.treasury.tesoreria_balance.toFixed(2)}`;
-            if(document.getElementById('val-fase'))    document.getElementById('val-fase').innerText    = `$${data.treasury.fase1_pool.toFixed(2)}`;
-            if(document.getElementById('val-usuarios-reales')) document.getElementById('val-usuarios-reales').innerText = data.treasury.total_reales;
+            actualizarEstadoTelegram(data.user.has_telegram || false);
+            animateValue(document.getElementById('val-balance'),          data.treasury.tesoreria_balance, '$', '', true);
+            animateValue(document.getElementById('val-fase'),             data.treasury.fase1_pool,        '$', '', true);
+            animateValue(document.getElementById('val-usuarios-reales'),  data.treasury.total_reales,      '',  '', false);
             
             // Master Ledger (Libro Mayor)
             const ledgerBody = document.getElementById('master-ledger-body');
@@ -47,14 +95,15 @@ async function loadDashboard() {
             // USER MODE
             _saldoActual   = data.earnings || 0;
             _historialData = data.historial || [];
-            if(document.getElementById('val-balance')) document.getElementById('val-balance').innerText = `$${_saldoActual.toFixed(2)}`;
-            if(document.getElementById('val-clones'))  document.getElementById('val-clones').innerText  = data.user.clones_count;
-            if(document.getElementById('val-fase'))    document.getElementById('val-fase').innerText    = `Tablero ${data.user.nivel}`;
+            animateValue(document.getElementById('val-balance'),      _saldoActual,                    '$', '', true);
+            animateValue(document.getElementById('val-clones'),       data.user.clones_count || 0,     '',  '', false);
+            // Tablero label is text — set directly
+            if(document.getElementById('val-fase')) document.getElementById('val-fase').innerText = `Tablero ${data.user.nivel}`;
 
-            // Widget: RESERVA FASE 1 — aporte personal al pool de Fase 1 (retenciones al completar ciclos)
-            if(document.getElementById('val-reserva')) document.getElementById('val-reserva').innerText = `$${(data.reserva_fase1 || 0).toFixed(2)}`;
-            // Widget: EQUIPO DIRECTO — referidos humanos directos
-            if(document.getElementById('val-equipo-count')) document.getElementById('val-equipo-count').innerText = data.referidos ? data.referidos.length : 0;
+            // Widget: RESERVA FASE 1
+            animateValue(document.getElementById('val-reserva'),      data.reserva_fase1 || 0,         '$', '', true);
+            // Widget: EQUIPO DIRECTO
+            animateValue(document.getElementById('val-equipo-count'), data.referidos ? data.referidos.length : 0, '', '', false);
             if(document.getElementById('ref-link-input'))   document.getElementById('ref-link-input').value = `${window.location.href.replace('dashboard.php', '')}?ref=${data.user.wallet}`;
 
             // User Progress
@@ -92,10 +141,10 @@ async function loadMasterAdvancedData() {
         const data = await res.json();
         if (!data.success) return;
 
-        if(document.getElementById('val-master-earnings')) document.getElementById('val-master-earnings').innerText = `$${data.master_id1_earnings.toFixed(2)}`;
-        if(document.getElementById('val-usuarios-reales')) document.getElementById('val-usuarios-reales').innerText = data.usuarios.reales;
-        if(document.getElementById('val-balance')) document.getElementById('val-balance').innerText = `$${data.tesoreria.toFixed(2)}`;
-        if(document.getElementById('val-fase'))    document.getElementById('val-fase').innerText    = `$${data.fase1_pool.toFixed(2)}`;
+        animateValue(document.getElementById('val-master-earnings'), data.master_id1_earnings || 0, '$', '', true);
+        animateValue(document.getElementById('val-usuarios-reales'), data.usuarios?.reales || 0,   '',  '', false);
+        animateValue(document.getElementById('val-balance'),         data.tesoreria || 0,           '$', '', true);
+        animateValue(document.getElementById('val-fase'),            data.fase1_pool || 0,          '$', '', true);
         
         renderMasterCharts(data.crecimiento_diario || []);
         
@@ -303,11 +352,16 @@ function mostrarPagoPendiente(p) {
     const walletEl = document.getElementById('pp-wallet-patron');
     if (box) box.style.display = 'block';
     if (walletEl) {
-        // RADIX Central Wallet is usually TKqTCwyVnJRqLkUF1ibAT8yL6TCKgCuU9c
-        // But we use the one returned by the backend (p.wallet_patron)
-        const monto = p.monto ? parseFloat(p.monto).toFixed(2) : '10.00';
-        walletEl.innerHTML = `<span style="color:#888;">Enviar $${monto} USDT (TRC-20) a:</span><br><strong>${p.wallet_patron}</strong>`;
+        // Show wallet address + copy button
+        const wallet = p.wallet_patron || '—';
+        walletEl.innerHTML = `${wallet}
+            <button onclick="navigator.clipboard.writeText('${wallet}').then(()=>mostrarToast('✅ Dirección copiada','#00e676'))"
+                style="display:inline-block; margin-left:10px; background:rgba(0,210,255,0.12); border:1px solid rgba(0,210,255,0.3); color:#00d2ff; border-radius:6px; padding:3px 10px; font-size:0.65rem; cursor:pointer; vertical-align:middle;">COPIAR</button>`;
     }
+    // Update amount label in box
+    const monto = p.monto ? parseFloat(p.monto).toFixed(2) : '10.00';
+    const montoLabel = document.querySelector('#pago-pendiente-box strong[data-monto]');
+    if (montoLabel) montoLabel.textContent = `$${monto} USDT (TRC-20)`;
     _pagoPendienteId = p.id;
 }
 
@@ -339,11 +393,133 @@ async function confirmarPago() {
 async function renderNetworkTree() {
     const container = document.getElementById('network-tree');
     if (!container) return;
-    const res = await fetch('radix_api/network_tree.php');
-    const data = await res.json();
-    if (!data.success) return;
-    // Basic D3 Logic... (simplified for now to ensure no errors)
-    container.innerHTML = `<p style="color:#666; font-size:0.8rem;">Vista de red cargada: OK</p>`;
+
+    container.innerHTML = `<p style="color:#444; font-size:0.8rem;">Cargando red...</p>`;
+
+    try {
+        const res  = await fetch('radix_api/network_tree.php');
+        const data = await res.json();
+        if (!data.success || !data.arbol) {
+            container.innerHTML = `<p style="color:#444; font-size:0.8rem; text-align:center;">Sin datos de red aún.</p>`;
+            return;
+        }
+
+        container.innerHTML = '';
+        container.style.overflowX = 'auto';
+        container.style.padding   = '20px 10px';
+
+        const W = Math.max(container.offsetWidth || 500, 500);
+        const H = 280;
+
+        // Convertir árbol plano a jerarquía D3
+        const root = d3.hierarchy(data.arbol, d => d.hijos && d.hijos.length ? d.hijos : null);
+        const treeLayout = d3.tree().size([W - 60, H - 80]);
+        treeLayout(root);
+
+        const svg = d3.select(container)
+            .append('svg')
+            .attr('width', W)
+            .attr('height', H)
+            .style('overflow', 'visible');
+
+        const g = svg.append('g').attr('transform', 'translate(30, 40)');
+
+        // Degradado de líneas
+        const defs = svg.append('defs');
+        const grad = defs.append('linearGradient')
+            .attr('id', 'linkGrad').attr('x1','0%').attr('y1','0%').attr('x2','100%').attr('y2','0%');
+        grad.append('stop').attr('offset','0%').attr('stop-color','#9d00ff').attr('stop-opacity', 0.6);
+        grad.append('stop').attr('offset','100%').attr('stop-color','#00d2ff').attr('stop-opacity', 0.6);
+
+        // Links (líneas)
+        g.selectAll('.link')
+            .data(root.links())
+            .enter().append('path')
+            .attr('class', 'link')
+            .attr('d', d3.linkVertical().x(d => d.x).y(d => d.y))
+            .attr('fill', 'none')
+            .attr('stroke', 'url(#linkGrad)')
+            .attr('stroke-width', 2)
+            .attr('stroke-dasharray', function() { return this.getTotalLength(); })
+            .attr('stroke-dashoffset', function() { return this.getTotalLength(); })
+            .transition().duration(800).delay((d, i) => i * 150)
+            .attr('stroke-dashoffset', 0);
+
+        // Nodos
+        const node = g.selectAll('.node')
+            .data(root.descendants())
+            .enter().append('g')
+            .attr('class', 'node')
+            .attr('transform', d => `translate(${d.x},${d.y})`);
+
+        // Color por tipo
+        const getColor = (d) => {
+            if (d.data.es_raiz)                      return '#9d00ff';
+            if (d.data.tipo_usuario === 'clon')       return '#ff9800';
+            if (d.data.pago_estado === 'completado')  return '#00e676';
+            if (d.data.pago_estado === 'pendiente')   return '#ff5252';
+            return '#00d2ff';
+        };
+
+        // Círculo con glow
+        node.append('circle')
+            .attr('r', 0)
+            .attr('fill', d => getColor(d))
+            .attr('stroke', '#0a0a12')
+            .attr('stroke-width', 2)
+            .style('filter', d => `drop-shadow(0 0 6px ${getColor(d)})`)
+            .transition().duration(500).delay((d, i) => i * 120)
+            .attr('r', d => d.data.es_raiz ? 22 : 16);
+
+        // Inicial del nickname dentro del círculo
+        node.append('text')
+            .attr('text-anchor', 'middle')
+            .attr('dy', '0.35em')
+            .attr('font-size', d => d.data.es_raiz ? '10px' : '8px')
+            .attr('font-weight', '800')
+            .attr('fill', '#000')
+            .text(d => (d.data.nickname || '?').substring(0, 4));
+
+        // Nickname debajo del nodo
+        node.append('text')
+            .attr('text-anchor', 'middle')
+            .attr('dy', d => d.data.es_raiz ? '38px' : '30px')
+            .attr('font-size', '9px')
+            .attr('fill', '#aaa')
+            .text(d => {
+                const nick = d.data.nickname || '';
+                return nick.length > 10 ? nick.substring(0, 10) + '…' : nick;
+            });
+
+        // Tablero badge encima del nodo raíz
+        if (root.data.tablero_actual) {
+            g.select('.node:first-child')
+             .append('text')
+             .attr('text-anchor', 'middle')
+             .attr('dy', '-30px')
+             .attr('font-size', '9px')
+             .attr('fill', '#9d00ff')
+             .text(`Tablero ${root.data.tablero_actual}`);
+        }
+
+        // Leyenda
+        const leyenda = [
+            { color: '#9d00ff', label: 'Tú' },
+            { color: '#00e676', label: 'Pagó' },
+            { color: '#ff5252', label: 'Pendiente' },
+            { color: '#ff9800', label: 'Agente IA' },
+            { color: '#00d2ff', label: 'Nuevo' },
+        ];
+        const legG = svg.append('g').attr('transform', `translate(10, ${H - 20})`);
+        leyenda.forEach((l, i) => {
+            legG.append('circle').attr('cx', i * 90).attr('cy', 0).attr('r', 5).attr('fill', l.color);
+            legG.append('text').attr('x', i * 90 + 10).attr('y', 4).attr('font-size', '9px').attr('fill', '#666').text(l.label);
+        });
+
+    } catch(e) {
+        container.innerHTML = `<p style="color:#444; font-size:0.8rem; text-align:center;">Error al cargar red.</p>`;
+        console.error('NetworkTree error:', e);
+    }
 }
 
 function copyRefLink() {

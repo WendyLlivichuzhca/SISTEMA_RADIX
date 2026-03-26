@@ -29,16 +29,40 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
         /* RADIX V3.2 — Estilos Premium Restaurados */
         .dashboard-container { max-width: 1100px; margin: 0 auto; }
         
-        .scoreboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        /* Scoreboard — 5 cards normales + 1 ref-link ancha */
+        .scoreboard {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr) 1.4fr;
+            gap: 12px;
+            margin-bottom: 30px;
+        }
         .sb { background: #12121a; border: 1px solid #2a2a3a; border-radius: 16px; padding: 20px; text-align: center; transition: 0.3s; position: relative; overflow: hidden; }
         .sb:hover { border-color: var(--primary); transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.4); }
         .sb .lbl { font-size: 0.65rem; color: #555; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; display: block; }
         .sb .num { font-size: 2rem; font-weight: 800; line-height: 1; margin-bottom: 5px; }
-        
         .sb-purple { border-left: 3px solid var(--primary); } .sb-purple .num { color: var(--primary); }
         .sb-cyan   { border-left: 3px solid var(--secondary); } .sb-cyan .num { color: var(--secondary); }
         .sb-green  { border-left: 3px solid var(--accent); } .sb-green .num { color: var(--accent); }
         .sb-white  { border-left: 3px solid #fff; } .sb-white .num { color: #fff; }
+
+        /* Móvil: 2 columnas para las primeras 4 cards, ref-link ocupa todo el ancho */
+        @media (max-width: 900px) {
+            .scoreboard {
+                grid-template-columns: 1fr 1fr;
+            }
+            .sb-ref-link {
+                grid-column: 1 / -1; /* Ocupa todo el ancho */
+            }
+        }
+        @media (max-width: 480px) {
+            .scoreboard {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+            .sb { padding: 14px 12px; }
+            .sb .num { font-size: 1.5rem; }
+            .sb .lbl { font-size: 0.58rem; }
+        }
 
         .master-card { background: #12121a; border: 1px solid #2a2a3a; border-radius: 18px; padding: 25px; margin-bottom: 20px; }
         .master-card h3 { font-size: 0.9rem; color: #fff; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 10px; }
@@ -55,6 +79,24 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
         .phase-node.completed { background: var(--secondary); border-color: #fff; color: #fff; }
         
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(157,0,255,0.7); } 70% { box-shadow: 0 0 0 10px rgba(157,0,255,0); } 100% { box-shadow: 0 0 0 0 rgba(157,0,255,0); } }
+
+        /* ── Pago Pendiente — Pasos ──────────────────────────────── */
+        @keyframes pulseOrange { 0% { box-shadow: 0 0 0 0 rgba(255,107,53,0.6); } 70% { box-shadow: 0 0 0 10px rgba(255,107,53,0); } 100% { box-shadow: 0 0 0 0 rgba(255,107,53,0); } }
+        .pp-step { background: #0a0a12; border: 1px solid #2a2a3a; border-radius: 12px; padding: 14px 10px; text-align: center; transition: 0.3s; }
+        .pp-step-icon { font-size: 1.4rem; margin-bottom: 6px; }
+        .pp-step-num { font-size: 0.6rem; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+        .pp-step-label { font-size: 0.72rem; font-weight: 600; color: #555; }
+        .pp-step-done { border-color: rgba(0,230,118,0.4); background: rgba(0,230,118,0.04); }
+        .pp-step-done .pp-step-label { color: #00e676; }
+        .pp-step-active { border-color: rgba(255,107,53,0.5); background: rgba(255,107,53,0.06); animation: ppBorderPulse 2s infinite; }
+        .pp-step-active .pp-step-label { color: #ff6b35; }
+        .pp-step-pending .pp-step-label { color: #444; }
+        @keyframes ppBorderPulse { 0%, 100% { border-color: rgba(255,107,53,0.5); } 50% { border-color: rgba(255,107,53,0.15); } }
+        @media (max-width: 480px) {
+            .pp-step { padding: 10px 6px; }
+            .pp-step-icon { font-size: 1.1rem; }
+            .pp-step-label { font-size: 0.65rem; }
+        }
 
         <?php if ($es_master): ?>
         /* Solo para Master */
@@ -175,6 +217,21 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
     <!-- SIDEBAR -->
     <aside>
         <div class="logo">RADIX SYSTEM</div>
+
+        <!-- Profile Card -->
+        <div class="sidebar-profile">
+            <div class="sidebar-avatar-big" id="sidebar-avatar-big">
+                <?php echo strtoupper(substr($nickname, 0, 1)); ?>
+            </div>
+            <div class="sidebar-nickname" id="sidebar-nickname-text">
+                <?php echo htmlspecialchars($nickname); ?>
+            </div>
+            <div class="sidebar-wallet-short" id="sidebar-wallet-short">●●●●●●</div>
+            <div class="sidebar-status-dot">
+                <?php echo $es_master ? 'Tesorería Central' : 'Activo en Red'; ?>
+            </div>
+        </div>
+
         <nav>
             <a href="#" class="nav-item active" id="nav-dashboard" onclick="switchMasterSection('dashboard')">📊 Dashboard</a>
             <?php if ($es_master): ?>
@@ -250,23 +307,123 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
 
                 <div class="master-card"><h4>📊 Actividad del Sistema</h4><table class="master-table"><thead><tr><th>Acción</th><th>Detalles</th><th>Fecha</th></tr></thead><tbody id="master-activity-body"></tbody></table></div>
 
-            <?php else: ?>
-                <!-- USER LAYOUT V3.2 — PREMIUM RESTORATION -->
-                <div id="pago-pendiente-box" class="pago-pendiente-box" style="display:none;">
-                    <h4>⏳ Pago pendiente</h4><div class="radix-wallet" id="pp-wallet-patron">...</div>
-                    <div class="tx-input-row">
-                        <input type="text" id="tx-hash-input" placeholder="Hash TXID (0x...)">
-                        <button onclick="confirmarPago()">VERIFICAR</button>
+                <!-- TELEGRAM MASTER -->
+                <div class="master-card" style="margin-top:20px;">
+                    <h3>🔔 Notificaciones Telegram — Master</h3>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;">
+                        <div style="background:#0a0a12; border-radius:14px; padding:18px;">
+                            <div style="font-size:1.6rem; text-align:center; margin-bottom:10px;">📡</div>
+                            <p style="color:#aaa; font-size:0.82rem; line-height:1.7;">Recibe alertas de administración cuando:</p>
+                            <ul style="list-style:none; padding:0; margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+                                <li style="display:flex; align-items:center; gap:8px; color:#ccc; font-size:0.8rem;">
+                                    <span style="background:rgba(255,204,0,0.15); border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center;">👤</span>
+                                    Alguien nuevo se registra
+                                </li>
+                                <li style="display:flex; align-items:center; gap:8px; color:#ccc; font-size:0.8rem;">
+                                    <span style="background:rgba(0,230,118,0.15); border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center;">💸</span>
+                                    Hay una solicitud de retiro
+                                </li>
+                                <li style="display:flex; align-items:center; gap:8px; color:#ccc; font-size:0.8rem;">
+                                    <span style="background:rgba(157,0,255,0.2); border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center;">🤖</span>
+                                    Se activa un Agente IA
+                                </li>
+                            </ul>
+                        </div>
+                        <div>
+                            <div id="tg-no-vinculado">
+                                <p style="color:#888; font-size:0.8rem; line-height:1.7; margin-bottom:14px;">
+                                    <strong style="color:#fff;">Paso 1:</strong> Busca en Telegram
+                                    <a href="https://t.me/RADIXNotificaciones_bot" target="_blank" style="color:#ffcc00; text-decoration:none; font-weight:700;">@RADIXNotificaciones_bot</a><br>
+                                    <strong style="color:#fff;">Paso 2:</strong> Escribe <code style="background:#1a1a28; padding:2px 6px; border-radius:4px; color:#00d2ff;">/start</code><br>
+                                    <strong style="color:#fff;">Paso 3:</strong> Pega tu Chat ID aquí:
+                                </p>
+                                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                                    <input type="text" id="tg-chat-id-input" placeholder="Ej: 123456789"
+                                        style="flex:1; background:#0a0a12; border:1px solid #2a2a3a; color:#fff; padding:12px 14px; border-radius:10px; font-size:0.9rem; outline:none;"
+                                        oninput="this.style.borderColor='#ffcc00'">
+                                    <button onclick="vincularTelegram()"
+                                        style="background:linear-gradient(135deg,#ffcc00,#ff9800); border:none; border-radius:10px; color:#000; font-weight:800; font-size:0.82rem; padding:0 18px; cursor:pointer;">
+                                        VINCULAR
+                                    </button>
+                                </div>
+                                <div id="tg-status" style="font-size:0.78rem; color:#555; min-height:16px;"></div>
+                            </div>
+                            <div id="tg-vinculado" style="display:none;">
+                                <div style="background:rgba(0,230,118,0.08); border:1px solid rgba(0,230,118,0.25); border-radius:14px; padding:18px; text-align:center;">
+                                    <div style="font-size:2rem; margin-bottom:8px;">✅</div>
+                                    <p style="color:#00e676; font-weight:700; margin-bottom:4px;">¡Telegram vinculado!</p>
+                                    <p style="color:#555; font-size:0.75rem; margin-bottom:14px;">Recibirás alertas del sistema automáticamente.</p>
+                                    <button onclick="desvincularTelegram()" style="background:transparent; border:1px solid #333; border-radius:8px; color:#555; font-size:0.72rem; padding:6px 14px; cursor:pointer;">Desvincular</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
+            <?php else: ?>
+                <!-- USER LAYOUT V3.2 — PREMIUM RESTORATION -->
+                <!-- ── PAGO PENDIENTE (mejorado) ─────────────────────── -->
+                <div id="pago-pendiente-box" class="pago-pendiente-box" style="display:none;">
+                    <!-- Header -->
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:18px;">
+                        <div style="width:40px; height:40px; border-radius:50%; background:rgba(255,107,53,0.15); border:2px solid rgba(255,107,53,0.5); display:flex; align-items:center; justify-content:center; font-size:1.2rem; flex-shrink:0; animation:pulseOrange 2s infinite;">⏳</div>
+                        <div>
+                            <div style="color:#ff6b35; font-weight:800; font-size:1rem; letter-spacing:0.5px;">PAGO DE ACTIVACIÓN PENDIENTE</div>
+                            <div style="color:#666; font-size:0.72rem; margin-top:2px;">Completa el pago para activar tu cuenta en la red</div>
+                        </div>
+                        <div style="margin-left:auto; background:rgba(255,107,53,0.12); border:1px solid rgba(255,107,53,0.3); border-radius:20px; padding:4px 12px; font-size:0.65rem; color:#ff6b35; font-weight:700; letter-spacing:1px; white-space:nowrap;">EN ESPERA</div>
+                    </div>
+
+                    <!-- Pasos -->
+                    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-bottom:20px;">
+                        <!-- Paso 1 -->
+                        <div class="pp-step pp-step-done">
+                            <div class="pp-step-icon">✅</div>
+                            <div class="pp-step-num">Paso 1</div>
+                            <div class="pp-step-label">Wallet conectada</div>
+                        </div>
+                        <!-- Paso 2 -->
+                        <div class="pp-step pp-step-active">
+                            <div class="pp-step-icon">💸</div>
+                            <div class="pp-step-num">Paso 2</div>
+                            <div class="pp-step-label">Enviar $10 USDT</div>
+                        </div>
+                        <!-- Paso 3 -->
+                        <div class="pp-step pp-step-pending">
+                            <div class="pp-step-icon">🚀</div>
+                            <div class="pp-step-num">Paso 3</div>
+                            <div class="pp-step-label">Cuenta activada</div>
+                        </div>
+                    </div>
+
+                    <!-- Dirección destino -->
+                    <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,107,53,0.25); border-radius:12px; padding:14px 16px; margin-bottom:16px;">
+                        <div style="font-size:0.65rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Enviar exactamente <strong data-monto style="color:#ff6b35;">$10.00 USDT (TRC-20)</strong> a:</div>
+                        <div id="pp-wallet-patron" style="font-family:monospace; font-size:0.8rem; color:#00d2ff; word-break:break-all; line-height:1.6; user-select:all;">...</div>
+                    </div>
+
+                    <!-- Aviso red -->
+                    <div style="background:rgba(255,193,7,0.06); border:1px solid rgba(255,193,7,0.2); border-radius:8px; padding:10px 14px; margin-bottom:16px; display:flex; gap:10px; align-items:center;">
+                        <span style="font-size:1rem;">⚠️</span>
+                        <span style="color:#aaa; font-size:0.73rem; line-height:1.5;">Asegúrate de enviar por la red <strong style="color:#ffc107;">TRON (TRC-20)</strong>. Enviar por otra red resultará en pérdida del pago.</span>
+                    </div>
+
+                    <!-- Input de verificación -->
+                    <div style="font-size:0.7rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Después de enviar, pega aquí el TXID de la transacción:</div>
+                    <div class="tx-input-row">
+                        <input type="text" id="tx-hash-input" placeholder="Ej: a1b2c3d4e5f6... (64+ caracteres)">
+                        <button onclick="confirmarPago()">VERIFICAR</button>
+                    </div>
+                    <div style="font-size:0.65rem; color:#555; margin-top:8px; text-align:center;">Puedes encontrar el TXID en el historial de tu billetera TronLink o en <a href="https://tronscan.org" target="_blank" style="color:#00d2ff; text-decoration:none;">TronScan.org</a></div>
+                </div>
+
                 <div class="scoreboard">
-                    <div class="sb sb-cyan"><span class="lbl">SALDO ACTUAL</span><div id="val-balance" class="num">$0.00</div></div>
-                    <div class="sb sb-cyan"><span class="lbl">RESERVA FASE 1</span><div id="val-reserva" class="num">$0.00</div></div>
-                    <div class="sb sb-purple"><span class="lbl">AGENTES IA</span><div id="val-clones" class="num">0</div></div>
-                    <div class="sb sb-white"><span class="lbl">TABLERO ACTUAL</span><div id="val-fase" class="num" style="font-size:1.4rem;">...</div></div>
-                    <div class="sb sb-green"><span class="lbl">EQUIPO DIRECTO</span><div id="val-equipo-count" class="num">0</div></div>
-                    <div class="sb sb-white"><span class="lbl">LINK DE REFERIDO</span>
+                    <div class="sb sb-cyan"><span class="sb-icon">💰</span><span class="lbl">SALDO ACTUAL</span><div id="val-balance" class="num">$0.00</div></div>
+                    <div class="sb sb-cyan"><span class="sb-icon">🏦</span><span class="lbl">RESERVA FASE 1</span><div id="val-reserva" class="num">$0.00</div></div>
+                    <div class="sb sb-purple"><span class="sb-icon">🤖</span><span class="lbl">AGENTES IA</span><div id="val-clones" class="num">0</div></div>
+                    <div class="sb sb-white"><span class="sb-icon">📊</span><span class="lbl">TABLERO ACTUAL</span><div id="val-fase" class="num" style="font-size:1.4rem;">...</div></div>
+                    <div class="sb sb-green"><span class="sb-icon">👥</span><span class="lbl">EQUIPO DIRECTO</span><div id="val-equipo-count" class="num">0</div></div>
+                    <div class="sb sb-white sb-ref-link"><span class="sb-icon">🔗</span><span class="lbl">LINK DE REFERIDO</span>
                         <div style="display:flex; gap:8px; margin-top:5px;">
                             <input type="text" id="ref-link-input" readonly style="background:rgba(0,0,0,0.3); border:1px solid #2a2a3a; color:#888; padding:8px; border-radius:6px; flex:1; font-size:0.7rem;">
                             <button onclick="copyRefLink()" style="background:var(--primary); color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:0.6rem; font-weight:800; padding:0 10px;">COPIAR</button>

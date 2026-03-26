@@ -12,6 +12,20 @@
     <script src="app.js" defer></script>
 </head>
 <body>
+
+    <!-- BANNER DE REFERIDO — solo visible cuando hay ?ref= en la URL -->
+    <div id="ref-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:9999;
+        background:linear-gradient(90deg,rgba(157,0,255,0.95),rgba(0,210,255,0.95));
+        padding:12px 20px; text-align:center; backdrop-filter:blur(10px);
+        box-shadow:0 2px 20px rgba(157,0,255,0.4);">
+        <span style="color:#fff; font-size:0.88rem; font-weight:600;">
+            👋 Fuiste invitado por <strong id="ref-nickname" style="color:#fff; font-weight:900;"></strong>
+            — Conecta tu billetera para unirte a RADIX
+        </span>
+        <button onclick="document.getElementById('ref-banner').style.display='none'"
+            style="position:absolute;right:16px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(255,255,255,0.6);font-size:1.2rem;cursor:pointer;line-height:1;">✕</button>
+    </div>
+
     <header>
         <nav>
             <div class="logo">RA<span>DIX</span></div>

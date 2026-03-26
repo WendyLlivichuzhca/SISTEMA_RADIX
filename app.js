@@ -183,6 +183,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// ─── Banner de referido ─────────────────────────────────────
+(async function mostrarBannerReferido() {
+    const params  = new URLSearchParams(window.location.search);
+    const refWallet = params.get('ref');
+    if (!refWallet) return;
+
+    const banner   = document.getElementById('ref-banner');
+    const nickEl   = document.getElementById('ref-nickname');
+    if (!banner || !nickEl) return;
+
+    // Mostrar banner inmediatamente con la wallet truncada
+    nickEl.innerText = refWallet.substring(0, 6) + '...' + refWallet.slice(-4);
+    banner.style.display = 'block';
+
+    // Ajustar el header para que no quede debajo del banner
+    const header = document.querySelector('header');
+    if (header) header.style.marginTop = '46px';
+
+    // Intentar obtener el nickname real desde la API
+    try {
+        const res  = await fetch(`radix_api/public_stats.php?ref_wallet=${encodeURIComponent(refWallet)}`);
+        const data = await res.json();
+        if (data.nickname) {
+            nickEl.innerText = data.nickname;
+        }
+    } catch(e) { /* silencioso — ya se muestra la wallet truncada */ }
+})();
+
 // ─── Toast de error/info para la landing page ──────────────
 function mostrarToastLanding(msg, color = '#ff5252') {
     // Crear contenedor si no existe
