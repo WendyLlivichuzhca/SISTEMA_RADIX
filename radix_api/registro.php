@@ -148,6 +148,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // INTENTAR ACTIVAR CLONES CON FONDOS DE TESORERÍA (Si hay disponibles)
                 require_once 'clon_logic.php';
                 intentarActivarClon($pdo);
+
+            } else {
+                // ── SPILLOVER AUTOMÁTICO ──────────────────────────────────────────
+                // El patrocinador original ya tiene 3 referidos (Nivel 1 lleno).
+                // Buscamos automáticamente el primer referido suyo (P1/P2/P3)
+                // que aún tenga espacio disponible para recibir a esta persona.
+                $stmt = $pdo->prepare("
+                    SELECT r.id_hijo AS nuevo_patron_id
+                    FROM referidos r
+                    JOIN usuarios u ON r.id_hijo = u.id
+                    WHERE r.id_padre = ?
+                      AND u.tipo_usuario = 'real'
+                      AND (SELECT COUNT(*) FROM referidos r2 WHERE r2.id_padre = r.id_hijo) < 3
+                    ORDER BY r.posicion ASC
+                    LIMIT 1
+                ");
+                $stmt->execute([$patrocinador_id]);
+                $spillover = $stmt->fetch();
+
+                if ($spillover) {
+                    $nuevo_patron_id = $spillover['nuevo_patron_id'];
+
+                    // Reconteo con bloqueo para el nuevo patrón
+                    $stmt = $pdo->prepare("SELECT COUNT(*) as cuenta FROM referidos WHERE id_padre = ? FOR UPDATE");
+                    $stmt->execute([$nuevo_patron_id]);
+                    $cuenta_nuevo = $stmt->fetch()['cuenta'];
+
+                    if ($cuenta_nuevo < 3) {
+                        $posicion_nueva = $cuenta_nuevo + 1;
+                        try {
+                            $stmt = $pdo->prepare("INSERT INTO referidos (id_padre, id_hijo, posicion, nivel_en_red) VALUES (?, ?, ?, 1)");
+                            $stmt->execute([$nuevo_patron_id, $new_user_id, $posicion_nueva]);
+                        } catch (PDOException $e) {
+                            $pdo->rollBack();
+                            sendResponse(['error' => 'Posición ocupada simultáneamente. Recarga e intenta de nuevo.'], 409);
+                        }
+
+                        // Pago pendiente al nuevo patrón (P1/P2/P3), no al original
+                        $stmt = $pdo->prepare("INSERT INTO pagos (id_emisor, id_receptor, monto, tipo, estado) VALUES (?, ?, 10.00, 'regalo', 'pendiente')");
+                        $stmt->execute([$new_user_id, $nuevo_patron_id]);
+
+                        // Auditoría del spillover
+                        $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address) VALUES (?, 'REGISTRO_SPILLOVER', 'usuarios', ?, ?)");
+                        $stmt->execute([$new_user_id, "Spillover: Patrón original ID $patrocinador_id lleno. Asignado a ID $nuevo_patron_id (posición $posicion_nueva). Firma: $signature", $ip_address]);
+
+                        // Notificar al nuevo patrón
+                        require_once 'notificaciones.php';
+                        notificarNuevoReferido($pdo, $nuevo_patron_id, $nickname);
+
+                        // Verificar avance del nuevo patrón
+                        require_once 'matrix_logic.php';
+                        verificarAvanceTablero($nuevo_patron_id, $pdo);
+
+                        // Intentar activar clones
+                        require_once 'clon_logic.php';
+                        intentarActivarClon($pdo);
+
+                    } else {
+                        $pdo->rollBack();
+                        sendResponse(['error' => 'La red de tu patrocinador está llena en este nivel. Contacta a tu patrocinador para obtener un link directo de uno de sus referidos.'], 409);
+                    }
+                } else {
+                    $pdo->rollBack();
+                    sendResponse(['error' => 'Tu patrocinador tiene la red completa en este nivel. Pide el link de uno de sus referidos directos para unirte.'], 409);
+                }
             }
         } else {
             // ── USUARIO FUNDADOR / ROOT (sin patrocinador) ──────────────────────
