@@ -2,6 +2,19 @@
 require_once 'config.php';
 session_start();
 
+function obtenerCicloActivoUsuario($pdo, $usuario_id) {
+    $stmt = $pdo->prepare("
+        SELECT ciclo
+        FROM tableros_progreso
+        WHERE usuario_id = ?
+        ORDER BY (estado = 'en_progreso') DESC, ciclo DESC, id DESC
+        LIMIT 1
+    ");
+    $stmt->execute([$usuario_id]);
+    $ciclo = $stmt->fetchColumn();
+    return $ciclo ? (int)$ciclo : 1;
+}
+
 // Endpoint para el registro de nuevos usuarios (Radix v2.0)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $wallet              = trim($_POST['wallet'] ?? '');
@@ -63,14 +76,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
         }
 
-        // Usuario real existente sin patrocinador: login directo si ya tiene pago pendiente
+        // Usuario real existente sin patrocinador:
+        // - Si ya pagó (completado) → login directo sin importar si trae link de referido
+        //   (no se puede cambiar el destino de un pago ya procesado)
+        // - Si tiene pago PENDIENTE y viene SIN link → login directo
+        // - Si tiene pago PENDIENTE y viene CON link → dejar caer al flujo de actualización
+        //   para asignar el patrocinador correcto y redirigir el pago
         if ($existing_user && $existing_user['patrocinador_id'] === null) {
-            $stmt_chk = $pdo->prepare("SELECT id FROM pagos WHERE id_emisor = ? AND estado = 'pendiente' AND tipo = 'regalo' LIMIT 1");
+            $stmt_chk = $pdo->prepare("SELECT id, estado FROM pagos WHERE id_emisor = ? AND tipo = 'regalo' AND estado IN ('pendiente', 'completado') ORDER BY id DESC LIMIT 1");
             $stmt_chk->execute([$existing_user['id']]);
-            if ($stmt_chk->fetch()) {
-                $pdo->commit();
-                sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
+            $pago_existente = $stmt_chk->fetch();
+
+            if ($pago_existente) {
+                // Pago ya completado → no se puede reasignar, login directo
+                if ($pago_existente['estado'] === 'completado') {
+                    $pdo->commit();
+                    sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
+                }
+                // Pago pendiente sin link de referido → login directo
+                if ($pago_existente['estado'] === 'pendiente' && empty($patrocinador_wallet)) {
+                    $pdo->commit();
+                    sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
+                }
+                // Pago pendiente CON link de referido → cae al flujo de actualización
             }
+            // Sin pago → cae al flujo normal de registro/asignación
         }
 
         // 2. Solo si es NUEVO o no tiene patrocinador, aplicamos la regla de "no auto-patrocinio"
@@ -90,6 +120,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $patrocinador_id = $res ? $res['id'] : null;
         }
 
+        $stmt_master = $pdo->prepare("SELECT id, wallet_address FROM usuarios WHERE tipo_usuario = 'master' LIMIT 1");
+        $stmt_master->execute();
+        $master_user = $stmt_master->fetch();
+
         // 3. Insertar o Actualizar usuario con patrocinador
         if ($new_user_id) {
             $stmt = $pdo->prepare("UPDATE usuarios SET patrocinador_id = ? WHERE id = ?");
@@ -102,27 +136,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // 4. Inicializar progreso en Tablero A (solo usuarios reales, nunca master/sistema)
             // Doble seguridad: la tabla usuarios tiene tipo_usuario DEFAULT 'real',
             // pero verificamos explícitamente para no crear tableros a cuentas administrativas.
-            $stmt_tipo = $pdo->prepare("SELECT tipo_usuario FROM usuarios WHERE id = ?");
-            $stmt_tipo->execute([$new_user_id]);
-            $tipo_nuevo = $stmt_tipo->fetchColumn();
-            if (!in_array($tipo_nuevo, ['master', 'sistema'])) {
-                $stmt = $pdo->prepare("INSERT INTO tableros_progreso (usuario_id, tablero_tipo) VALUES (?, 'A')");
-                $stmt->execute([$new_user_id]);
-            }
+            // El tablero A ya no se activa en registro.
+            // Primero se crea el usuario y el pago pendiente.
+            // El tablero se activa solo cuando el pago queda confirmado.
         }
 
         // 5. Asignar posición en la matriz del patrocinador
         if ($patrocinador_id) {
             // Bloquear la fila del patrocinador para evitar race conditions en registros simultáneos
-            $stmt = $pdo->prepare("SELECT COUNT(*) as cuenta FROM referidos WHERE id_padre = ? FOR UPDATE");
-            $stmt->execute([$patrocinador_id]);
+            $ciclo_red = obtenerCicloActivoUsuario($pdo, $patrocinador_id);
+
+            $stmt = $pdo->prepare("SELECT COUNT(*) as cuenta FROM referidos WHERE id_padre = ? AND ciclo = ? FOR UPDATE");
+            $stmt->execute([$patrocinador_id, $ciclo_red]);
             $cuenta = $stmt->fetch()['cuenta'];
 
             if ($cuenta < 3) {
                 $posicion = $cuenta + 1;
                 try {
-                    $stmt = $pdo->prepare("INSERT INTO referidos (id_padre, id_hijo, posicion, nivel_en_red) VALUES (?, ?, ?, 1)");
-                    $stmt->execute([$patrocinador_id, $new_user_id, $posicion]);
+                    $stmt = $pdo->prepare("INSERT INTO referidos (id_padre, id_hijo, posicion, nivel_en_red, ciclo) VALUES (?, ?, ?, 1, ?)");
+                    $stmt->execute([$patrocinador_id, $new_user_id, $posicion, $ciclo_red]);
                 } catch (PDOException $e) {
                     // La posición ya fue ocupada por otro registro simultáneo (duplicate key)
                     $pdo->rollBack();
@@ -130,8 +162,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 // REGISTRAR PAGO/REGALO PENDIENTE ($10 para Tablero A)
-                $stmt = $pdo->prepare("INSERT INTO pagos (id_emisor, id_receptor, monto, tipo, estado) VALUES (?, ?, 10.00, 'regalo', 'pendiente')");
-                $stmt->execute([$new_user_id, $patrocinador_id]);
+                $stmt = $pdo->prepare("
+                    INSERT INTO pagos (
+                        id_emisor, id_receptor, beneficiario_usuario_id, wallet_destino_real,
+                        tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
+                    ) VALUES (?, ?, ?, ?, 'A', 1, 'externo', 10.00, 'regalo', 'pendiente')
+                ");
+                $stmt->execute([$new_user_id, $patrocinador_id, $patrocinador_id, $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET]);
 
                 // Registrar en Auditoría (Incluyendo firma para verificación futura)
                 $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address) VALUES (?, 'REGISTRO_CON_FIRMA', 'usuarios', ?, ?)");
@@ -159,35 +196,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     FROM referidos r
                     JOIN usuarios u ON r.id_hijo = u.id
                     WHERE r.id_padre = ?
+                      AND r.ciclo = ?
                       AND u.tipo_usuario = 'real'
-                      AND (SELECT COUNT(*) FROM referidos r2 WHERE r2.id_padre = r.id_hijo) < 3
+                      AND (SELECT COUNT(*) FROM referidos r2 WHERE r2.id_padre = r.id_hijo AND r2.ciclo = ?) < 3
                     ORDER BY r.posicion ASC
                     LIMIT 1
                 ");
-                $stmt->execute([$patrocinador_id]);
+                $stmt->execute([$patrocinador_id, $ciclo_red, $ciclo_red]);
                 $spillover = $stmt->fetch();
 
                 if ($spillover) {
                     $nuevo_patron_id = $spillover['nuevo_patron_id'];
 
                     // Reconteo con bloqueo para el nuevo patrón
-                    $stmt = $pdo->prepare("SELECT COUNT(*) as cuenta FROM referidos WHERE id_padre = ? FOR UPDATE");
-                    $stmt->execute([$nuevo_patron_id]);
+                    $stmt = $pdo->prepare("SELECT COUNT(*) as cuenta FROM referidos WHERE id_padre = ? AND ciclo = ? FOR UPDATE");
+                    $stmt->execute([$nuevo_patron_id, $ciclo_red]);
                     $cuenta_nuevo = $stmt->fetch()['cuenta'];
 
                     if ($cuenta_nuevo < 3) {
                         $posicion_nueva = $cuenta_nuevo + 1;
                         try {
-                            $stmt = $pdo->prepare("INSERT INTO referidos (id_padre, id_hijo, posicion, nivel_en_red) VALUES (?, ?, ?, 1)");
-                            $stmt->execute([$nuevo_patron_id, $new_user_id, $posicion_nueva]);
+                            $stmt = $pdo->prepare("INSERT INTO referidos (id_padre, id_hijo, posicion, nivel_en_red, ciclo) VALUES (?, ?, ?, 1, ?)");
+                            $stmt->execute([$nuevo_patron_id, $new_user_id, $posicion_nueva, $ciclo_red]);
                         } catch (PDOException $e) {
                             $pdo->rollBack();
                             sendResponse(['error' => 'Posición ocupada simultáneamente. Recarga e intenta de nuevo.'], 409);
                         }
 
                         // Pago pendiente al nuevo patrón (P1/P2/P3), no al original
-                        $stmt = $pdo->prepare("INSERT INTO pagos (id_emisor, id_receptor, monto, tipo, estado) VALUES (?, ?, 10.00, 'regalo', 'pendiente')");
-                        $stmt->execute([$new_user_id, $nuevo_patron_id]);
+                        $stmt = $pdo->prepare("
+                            INSERT INTO pagos (
+                                id_emisor, id_receptor, beneficiario_usuario_id, wallet_destino_real,
+                                tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
+                            ) VALUES (?, ?, ?, ?, 'A', 1, 'externo', 10.00, 'regalo', 'pendiente')
+                        ");
+                        $stmt->execute([$new_user_id, $nuevo_patron_id, $nuevo_patron_id, $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET]);
 
                         // Auditoría del spillover
                         $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address) VALUES (?, 'REGISTRO_SPILLOVER', 'usuarios', ?, ?)");
@@ -210,8 +253,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         sendResponse(['error' => 'La red de tu patrocinador está llena en este nivel. Contacta a tu patrocinador para obtener un link directo de uno de sus referidos.'], 409);
                     }
                 } else {
-                    $pdo->rollBack();
-                    sendResponse(['error' => 'Tu patrocinador tiene la red completa en este nivel. Pide el link de uno de sus referidos directos para unirte.'], 409);
+                    // ── SPILLOVER NIVEL 2 ────────────────────────────────────────────
+                    // Nivel 1 (P1/P2/P3) está totalmente lleno.
+                    // Buscar entre los hijos de P1/P2/P3 que aún tengan espacio.
+                    $stmt = $pdo->prepare("
+                        SELECT r2.id_hijo AS nuevo_patron_id
+                    FROM referidos r1
+                    JOIN referidos r2 ON r2.id_padre = r1.id_hijo
+                    JOIN usuarios u1  ON r1.id_hijo  = u1.id
+                    JOIN usuarios u2  ON r2.id_hijo  = u2.id
+                    WHERE r1.id_padre = ?
+                      AND r1.ciclo = ?
+                      AND r2.ciclo = ?
+                      AND u1.tipo_usuario = 'real'
+                      AND u2.tipo_usuario = 'real'
+                      AND (SELECT COUNT(*) FROM referidos r3 WHERE r3.id_padre = r2.id_hijo AND r3.ciclo = ?) < 3
+                    ORDER BY r1.posicion ASC, r2.posicion ASC
+                    LIMIT 1
+                ");
+                    $stmt->execute([$patrocinador_id, $ciclo_red, $ciclo_red, $ciclo_red]);
+                    $spillover_n2 = $stmt->fetch();
+
+                    if ($spillover_n2) {
+                        $nuevo_patron_id = $spillover_n2['nuevo_patron_id'];
+
+                        // Bloquear fila del nuevo patrón nivel 2
+                        $stmt = $pdo->prepare("SELECT COUNT(*) as cuenta FROM referidos WHERE id_padre = ? AND ciclo = ? FOR UPDATE");
+                        $stmt->execute([$nuevo_patron_id, $ciclo_red]);
+                        $cuenta_n2 = $stmt->fetch()['cuenta'];
+
+                        if ($cuenta_n2 < 3) {
+                            $posicion_n2 = $cuenta_n2 + 1;
+                            try {
+                                $stmt = $pdo->prepare("INSERT INTO referidos (id_padre, id_hijo, posicion, nivel_en_red, ciclo) VALUES (?, ?, ?, 1, ?)");
+                                $stmt->execute([$nuevo_patron_id, $new_user_id, $posicion_n2, $ciclo_red]);
+                            } catch (PDOException $e) {
+                                $pdo->rollBack();
+                                sendResponse(['error' => 'Posición ocupada simultáneamente. Recarga e intenta de nuevo.'], 409);
+                            }
+
+                            // Pago pendiente al patrón de nivel 2
+                            $stmt = $pdo->prepare("
+                                INSERT INTO pagos (
+                                    id_emisor, id_receptor, beneficiario_usuario_id, wallet_destino_real,
+                                    tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
+                                ) VALUES (?, ?, ?, ?, 'A', 1, 'externo', 10.00, 'regalo', 'pendiente')
+                            ");
+                            $stmt->execute([$new_user_id, $nuevo_patron_id, $nuevo_patron_id, $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET]);
+
+                            // Auditoría del spillover nivel 2
+                            $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address) VALUES (?, 'REGISTRO_SPILLOVER_N2', 'usuarios', ?, ?)");
+                            $stmt->execute([$new_user_id, "Spillover N2: Patrón original ID $patrocinador_id lleno. Asignado a ID $nuevo_patron_id (pos $posicion_n2). Firma: $signature", $ip_address]);
+
+                            require_once 'notificaciones.php';
+                            notificarNuevoReferido($pdo, $nuevo_patron_id, $nickname);
+
+                            require_once 'matrix_logic.php';
+                            verificarAvanceTablero($nuevo_patron_id, $pdo);
+
+                            require_once 'clon_logic.php';
+                            intentarActivarClon($pdo);
+
+                        } else {
+                            $pdo->rollBack();
+                            sendResponse(['error' => 'Todos los espacios de nivel 2 están ocupados. Contacta a tu patrocinador para obtener un link disponible.'], 409);
+                        }
+                    } else {
+                        $pdo->rollBack();
+                        sendResponse(['error' => 'Tu patrocinador tiene la red completa en niveles 1 y 2. Pide el link de uno de sus referidos directos para unirte.'], 409);
+                    }
                 }
             }
         } else {
@@ -219,14 +329,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Aunque es el primero en la red, también debe aportar los $10 de entrada.
             // Su pago se dirige a RADIX_MASTER (la billetera central de la plataforma).
             // Esto garantiza que la tesorería recibe su primer ingreso desde el inicio.
-            $stmt_master = $pdo->prepare("SELECT id FROM usuarios WHERE tipo_usuario = 'master' LIMIT 1");
-            $stmt_master->execute();
-            $master_user = $stmt_master->fetch();
-
             if ($master_user) {
                 // Crear pago pendiente del fundador hacia RADIX_MASTER
-                $stmt = $pdo->prepare("INSERT INTO pagos (id_emisor, id_receptor, monto, tipo, estado) VALUES (?, ?, 10.00, 'regalo', 'pendiente')");
-                $stmt->execute([$new_user_id, $master_user['id']]);
+                $stmt = $pdo->prepare("
+                    INSERT INTO pagos (
+                        id_emisor, id_receptor, beneficiario_usuario_id, wallet_destino_real,
+                        tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
+                    ) VALUES (?, ?, ?, ?, 'A', 1, 'externo', 10.00, 'regalo', 'pendiente')
+                ");
+                $stmt->execute([$new_user_id, $master_user['id'], $master_user['id'], $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET]);
 
                 // Registrar en Auditoría
                 $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address) VALUES (?, 'REGISTRO_FUNDADOR', 'usuarios', ?, ?)");

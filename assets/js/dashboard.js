@@ -48,6 +48,7 @@ function updateSidebarWallet(wallet) {
 /* ─────────────────────────────────────────────────────────────── */
 
 let _saldoActual        = 0;
+let _fase0Completada    = false;
 let _historialData      = [];
 let _masterUserList     = [];
 let _masterRetirosList  = [];
@@ -93,35 +94,51 @@ async function loadDashboard() {
             loadMasterAdvancedData();
         } else {
             // USER MODE
-            _saldoActual   = data.earnings || 0;
-            _historialData = data.historial || [];
+            _saldoActual      = data.earnings || 0;
+            _fase0Completada  = data.fase0_completada || false;
+            _historialData    = data.historial || [];
             animateValue(document.getElementById('val-balance'),      _saldoActual,                    '$', '', true);
             animateValue(document.getElementById('val-clones'),       data.user.clones_count || 0,     '',  '', false);
             // Tablero label is text — set directly
-            if(document.getElementById('val-fase')) document.getElementById('val-fase').innerText = `Tablero ${data.user.nivel}`;
+            if (document.getElementById('val-fase')) {
+                const fase0Completa = data.user.nivel === 'FASE0_COMPLETADA';
+                const tableroTxt = fase0Completa
+                    ? `C${data.user.ciclo} · Fase 0`
+                    : `C${data.user.ciclo} · ${data.tablero?.tipo || data.user.nivel}`;
+                document.getElementById('val-fase').innerText = tableroTxt;
+            }
 
             // Widget: RESERVA FASE 1
-            animateValue(document.getElementById('val-reserva'),      data.reserva_fase1 || 0,         '$', '', true);
+            animateValue(
+                document.getElementById('val-reserva'),
+                (data.reservas?.fase1 ?? data.reserva_fase1) || 0,
+                '$', '', true
+            );
             // Widget: EQUIPO DIRECTO
-            animateValue(document.getElementById('val-equipo-count'), data.referidos ? data.referidos.length : 0, '', '', false);
+            animateValue(
+                document.getElementById('val-equipo-count'),
+                data.equipo_ciclo?.reales ?? (data.referidos ? data.referidos.length : 0),
+                '', '', false
+            );
             if(document.getElementById('ref-link-input'))   document.getElementById('ref-link-input').value = `${window.location.href.replace('dashboard.php', '')}?ref=${data.user.wallet}`;
 
             // User Progress
             const fill = document.getElementById('progress-fill');
             if (fill) {
-                const nivelMap = {'A': 0, 'B': 1, 'C': 2};
+                const fase0Completa = data.user.nivel === 'FASE0_COMPLETADA';
+                const nivelMap = {'A': 0, 'B': 1, 'C': 2, 'FASE0_COMPLETADA': 3};
                 const nivelIdx = nivelMap[data.user.nivel] ?? 0;
-                const pctMap   = {'A': '0%', 'B': '50%', 'C': '100%'};
+                const pctMap   = {'A': '0%', 'B': '50%', 'C': '100%', 'FASE0_COMPLETADA': '100%'};
                 fill.style.width = pctMap[data.user.nivel] || '0%';
                 ['node-a','node-b','node-c'].forEach((id, i) => {
                     const n = document.getElementById(id);
                     if (!n) return;
-                    if (i < nivelIdx)      n.className = 'phase-node completed';  // tablero ya completado
-                    else if (i === nivelIdx) n.className = 'phase-node current';   // tablero activo
-                    else                   n.className = 'phase-node';             // tablero futuro
+                    if (fase0Completa || i < nivelIdx) n.className = 'phase-node completed';
+                    else if (i === nivelIdx)           n.className = 'phase-node current';
+                    else                               n.className = 'phase-node';
                 });
             }
-            renderUserTeam(data.referidos);
+            renderUserTeam(data.referidos, data.equipo_ciclo, data.reservas, data.tablero);
             renderHistorial();
             renderNetworkTree();
             mostrarOnboardingSiNuevo(data);
@@ -141,10 +158,12 @@ async function loadMasterAdvancedData() {
         const data = await res.json();
         if (!data.success) return;
 
-        animateValue(document.getElementById('val-master-earnings'), data.master_id1_earnings || 0, '$', '', true);
-        animateValue(document.getElementById('val-usuarios-reales'), data.usuarios?.reales || 0,   '',  '', false);
-        animateValue(document.getElementById('val-balance'),         data.tesoreria || 0,           '$', '', true);
-        animateValue(document.getElementById('val-fase'),            data.fase1_pool || 0,          '$', '', true);
+        animateValue(document.getElementById('val-master-earnings'),    data.master_id1_earnings || 0,   '$', '', true);
+        animateValue(document.getElementById('val-total-blockchain'),  data.total_blockchain || 0,      '$', '', true);
+        animateValue(document.getElementById('val-pendiente-dist'),    data.pendiente_distribuir || 0,  '$', '', true);
+        animateValue(document.getElementById('val-usuarios-reales'),   data.usuarios?.reales || 0,      '',  '', false);
+        animateValue(document.getElementById('val-balance'),           data.tesoreria || 0,             '$', '', true);
+        animateValue(document.getElementById('val-fase'),              data.fase1_pool || 0,            '$', '', true);
         
         renderMasterCharts(data.crecimiento_diario || []);
         
@@ -213,6 +232,10 @@ async function loadMasterAdvancedData() {
 }
 
 function abrirRetiro() {
+    if (!_fase0Completada) {
+        mostrarToast("⏳ Debes completar la Fase 0 (Tableros A → B → C) para poder retirar.", "#ffb300");
+        return;
+    }
     if (_saldoActual < 10) {
         mostrarToast("Saldo insuficiente (mínimo $10.00)", "#ff5252");
         return;
@@ -286,8 +309,8 @@ function renderMasterClonesFull() {
     if (!body) return;
     const cloneLogs = (_masterAuditoria || []).filter(l => l.accion === 'ACTIVACION_CLON');
     body.innerHTML = cloneLogs.length
-        ? cloneLogs.map(l => `<tr>
-            <td style="color:#aaa;">#${l.id || '—'}</td>
+        ? cloneLogs.map((l, i) => `<tr>
+            <td style="color:#aaa;">#${l.id || (i + 1)}</td>
             <td style="color:#00d2ff;">${l.nickname || '—'}</td>
             <td style="color:#555; font-size:0.75rem;">${(l.fecha||'').split(' ')[0]}</td>
           </tr>`).join('')
@@ -314,10 +337,23 @@ function renderMasterCharts(growthData) {
     });
 }
 
-function renderUserTeam(refs) {
+function renderUserTeam(refs, equipoCiclo = null, reservas = null, tablero = null) {
     const box = document.getElementById('team-list');
     if (!box) return;
-    box.innerHTML = refs.length ? refs.map(r => {
+    const resumen = `
+        <div style="background:rgba(255,255,255,0.02); border:1px solid #1a1a28; border-radius:10px; padding:10px 12px; margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; gap:10px; font-size:0.72rem; color:#777; flex-wrap:wrap;">
+                <span>Ciclo ${equipoCiclo?.ciclo ?? tablero?.ciclo ?? 1}</span>
+                <span>Reales: <strong style="color:#ddd;">${equipoCiclo?.reales ?? refs.length ?? 0}</strong></span>
+                <span>Clones: <strong style="color:#ffb300;">${equipoCiclo?.clones ?? 0}</strong></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:10px; font-size:0.7rem; color:#555; margin-top:8px; flex-wrap:wrap;">
+                <span>A→B: $${parseFloat(reservas?.a_b ?? 0).toFixed(2)}</span>
+                <span>B→C: $${parseFloat(reservas?.b_c ?? 0).toFixed(2)}</span>
+                <span>Reentrada A: $${parseFloat(reservas?.reentrada_a ?? 0).toFixed(2)}</span>
+            </div>
+        </div>`;
+    const equipoHtml = refs.length ? refs.map(r => {
         const estado = r.pago_estado === 'completado' ? '<span style="color:#00e676;">✓ Pagado</span>' :
                        r.pago_estado === 'pendiente'  ? '<span style="color:#ffb300;">⏳ Pendiente</span>' :
                                                         '<span style="color:#666;">Sin pago</span>';
@@ -327,6 +363,7 @@ function renderUserTeam(refs) {
             <span style="font-size:0.78rem;">${estado}${nivel}</span>
         </div>`;
     }).join('') : '<div style="color:#444; text-align:center; padding:10px;">Sin equipo aún.</div>';
+    box.innerHTML = resumen + equipoHtml;
 }
 
 async function activarClonManual() {
@@ -379,12 +416,54 @@ async function confirmarPago() {
             body: `tx_hash=${tx}&pago_id=${_pagoPendienteId}`
         });
         const data = await res.json();
+
         if (data.success) {
+            // ✅ Pago completo
             mostrarToast("✅ Pago Verificado con éxito!", "#00e676");
             setTimeout(() => location.reload(), 2000);
+
+        } else if (data.parcial) {
+            // ⚠️ Pago parcial — mostrar cuánto recibió y cuánto falta
+            mostrarToast("⚠️ Pago parcial registrado", "#ff9800");
+
+            // Mostrar alerta visual detallada debajo del campo de hash
+            const inputBox = document.getElementById('tx-hash-input');
+            if (inputBox) {
+                // Limpiar alerta anterior si existe
+                const prev = document.getElementById('parcial-alert');
+                if (prev) prev.remove();
+
+                const alerta = document.createElement('div');
+                alerta.id = 'parcial-alert';
+                alerta.style.cssText = `
+                    background: rgba(255,152,0,0.1);
+                    border: 1px solid rgba(255,152,0,0.5);
+                    border-radius: 10px;
+                    padding: 14px 16px;
+                    margin-top: 12px;
+                    color: #ffb74d;
+                    font-size: 0.85rem;
+                    line-height: 1.6;
+                `;
+                alerta.innerHTML = `
+                    <div style="font-weight:800; font-size:1rem; margin-bottom:8px;">⚠️ Pago Parcial Registrado</div>
+                    <div>✅ Recibido: <strong style="color:#fff;">$${data.monto_recibido} USDT</strong></div>
+                    <div>❌ Faltante: <strong style="color:#ff5252;">$${data.monto_faltante} USDT</strong></div>
+                    <div style="margin-top:8px; color:#aaa;">
+                        Envía los <strong style="color:#ff5252;">$${data.monto_faltante} USDT</strong> restantes
+                        a la misma wallet oficial y pega el nuevo hash aquí abajo.
+                    </div>
+                `;
+                inputBox.parentNode.insertBefore(alerta, inputBox.nextSibling);
+                inputBox.value = ''; // Limpiar campo para el segundo hash
+                inputBox.focus();
+            }
+
         } else {
+            // ❌ Error
             mostrarToast("❌ " + (data.error || "No se pudo verificar"), "#ff5252");
         }
+
     } catch (e) {
         mostrarToast("❌ Error de comunicación", "#ff5252");
     }
@@ -493,13 +572,16 @@ async function renderNetworkTree() {
 
         // Tablero badge encima del nodo raíz
         if (root.data.tablero_actual) {
+            const tableroLabel = root.data.tablero_actual === 'FASE0_COMPLETADA'
+                ? '✅ Fase 0 Completa'
+                : `Tablero ${root.data.tablero_actual}`;
             g.select('.node:first-child')
              .append('text')
              .attr('text-anchor', 'middle')
              .attr('dy', '-30px')
              .attr('font-size', '9px')
              .attr('fill', '#9d00ff')
-             .text(`Tablero ${root.data.tablero_actual}`);
+             .text(tableroLabel);
         }
 
         // Leyenda

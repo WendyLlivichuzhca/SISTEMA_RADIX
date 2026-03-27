@@ -25,40 +25,40 @@ try {
     if (!$user) sendResponse(['error' => 'Usuario no encontrado'], 404);
     $user_id = $user['id'];
 
-    // 2. Calcular saldo disponible
-    $stmt = $pdo->prepare("SELECT SUM(monto) as total FROM pagos WHERE id_receptor = ? AND estado = 'completado' AND tipo = 'ganancia_tablero'");
+    // 2. Verificar que el usuario haya completado la Fase 0 (Tablero C completado)
+    // Sin esto, usuarios en Fase 0 podrían retirar créditos o ganancias parciales.
+    $stmt = $pdo->prepare("SELECT id FROM tableros_progreso WHERE usuario_id = ? AND tablero_tipo = 'C' AND estado = 'completado' LIMIT 1");
+    $stmt->execute([$user_id]);
+    if (!$stmt->fetch()) {
+        sendResponse(['error' => 'Debes completar la Fase 0 (Tableros A → B → C) antes de poder retirar tus ganancias.'], 403);
+    }
+
+    // 3. Calcular saldo disponible (ganancias + crédito excedente - deducciones - ya retirado)
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE id_receptor = ? AND estado = 'completado' AND tipo = 'ganancia_tablero'");
     $stmt->execute([$user_id]);
     $bruto = (float)($stmt->fetch()['total'] ?? 0);
 
-    $stmt = $pdo->prepare("SELECT SUM(monto) as total FROM pagos WHERE id_emisor = ? AND estado = 'completado' AND tipo IN ('salto_fase_1','reentrada')");
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE id_emisor = ? AND estado = 'completado' AND tipo IN ('salto_fase_1','reentrada')");
     $stmt->execute([$user_id]);
     $deducciones = (float)($stmt->fetch()['total'] ?? 0);
+
+    // Crédito por excedente de pago (cuando pagó más de $10 al entrar)
+    $stmt = $pdo->prepare("SELECT COALESCE(credito_saldo, 0) as credito FROM usuarios WHERE id = ?");
+    $stmt->execute([$user_id]);
+    $credito = (float)($stmt->fetch()['credito'] ?? 0);
 
     // Descontar retiros ya aprobados y procesados para evitar doble retiro
     $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM retiros WHERE usuario_id = ? AND estado = 'procesado'");
     $stmt->execute([$user_id]);
     $ya_retirado = (float)($stmt->fetch()['total'] ?? 0);
 
-    $saldo_disponible = $bruto - $deducciones - $ya_retirado;
+    $saldo_disponible = $bruto - $deducciones + $credito - $ya_retirado;
 
     if ($saldo_disponible < 10) {
         sendResponse(['error' => 'No tienes saldo suficiente para retirar (mínimo $10.00).'], 400);
     }
 
     // 3. Verificar que no tenga ya un retiro pendiente
-    // Primero verificar si existe la tabla retiros, si no, crearla
-    $pdo->exec("CREATE TABLE IF NOT EXISTS retiros (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        usuario_id INT NOT NULL,
-        monto DECIMAL(10,2) NOT NULL,
-        wallet_destino VARCHAR(100) NOT NULL,
-        estado ENUM('pendiente','procesado','rechazado') DEFAULT 'pendiente',
-        fecha_solicitud TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        fecha_proceso TIMESTAMP NULL,
-        notas TEXT,
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-    )");
-
     $stmt = $pdo->prepare("SELECT id FROM retiros WHERE usuario_id = ? AND estado = 'pendiente'");
     $stmt->execute([$user_id]);
     if ($stmt->fetch()) {

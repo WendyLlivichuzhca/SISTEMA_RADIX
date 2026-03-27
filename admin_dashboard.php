@@ -138,9 +138,9 @@ elseif (!empty($_SESSION['radix_admin_id'])) {
             <div class="sub">Crecimiento orgánico</div>
         </div>
         <div class="card">
-            <h4>GANANCIA MASTER</h4>
+            <h4>💰 GANANCIA RED</h4>
             <div class="value" id="stat-master">$0.00</div>
-            <div class="sub">Utilidad acumulada ID#1</div>
+            <div class="sub">Distribuido a usuarios</div>
         </div>
     </div>
 

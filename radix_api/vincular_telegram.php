@@ -62,19 +62,19 @@ try {
                     . "• 👤 Un nuevo referido se una a tu equipo\n\n"
                     . "_Sistema RADIX — Fase 0_";
 
+    // 4. Log de auditoría — siempre antes de cualquier sendResponse para garantizar que se registra
+    $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles) VALUES (?, 'VINCULAR_TELEGRAM', 'usuarios', ?)");
+    $stmt->execute([$user_id, "Telegram chat_id vinculado: {$chat_id}"]);
+
     $enviado = enviarTelegram($chat_id, $mensaje_prueba);
 
     if (!$enviado) {
-        // Guardado en BD pero no se pudo enviar el mensaje de prueba
+        // Guardado en BD y auditado, pero no se pudo enviar el mensaje de prueba
         sendResponse([
-            'success'  => true,
+            'success'     => true,
             'advertencia' => 'Chat ID guardado, pero no se pudo enviar el mensaje de prueba. Verifica que hayas iniciado el bot primero con /start.',
         ]);
     }
-
-    // 4. Log de auditoría
-    $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles) VALUES (?, 'VINCULAR_TELEGRAM', 'usuarios', ?)");
-    $stmt->execute([$user_id, "Telegram chat_id vinculado: {$chat_id}"]);
 
     sendResponse([
         'success' => true,

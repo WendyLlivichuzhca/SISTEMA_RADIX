@@ -8,6 +8,12 @@
     Deny from all
 </Files>
 
+# ── Bloquear acceso directo a config.php (solo debe usarse internamente) ──
+<Files "config.php">
+    Order allow,deny
+    Deny from all
+</Files>
+
 # ── Bloquear archivos de debug/test/utilidades (nunca deben ser públicos) ──
 <FilesMatch "^(reset_db|test_matrix|simulate_jump_c|fix_db|debug_levels|mejorar_db_v2|invest_seed|debug_db|debug_user|fix_master_tron|limpiar_tesoreria|setup_webhook|limpiar_fundador|limpiar_pagos_duplicados|create_admin|db_setup)\.php$">
     Order allow,deny
@@ -59,4 +65,17 @@ Options -Indexes
     RewriteEngine On
     RewriteCond %{HTTPS} off
     RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# ── Cabeceras de seguridad HTTP ────────────────────────────
+# Protegen contra XSS, clickjacking y sniffing de contenido
+<IfModule mod_headers.c>
+    # Evita que el navegador "adivine" el tipo MIME (previene ataques de content sniffing)
+    Header always set X-Content-Type-Options "nosniff"
+    # Bloquea que la app sea embebida en un iframe de otro dominio (anti-clickjacking)
+    Header always set X-Frame-Options "DENY"
+    # Activa el filtro XSS del navegador (protección adicional en browsers antiguos)
+    Header always set X-XSS-Protection "1; mode=block"
+    # No enviar la URL completa como Referer cuando se navega a otro dominio
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
 </IfModule>

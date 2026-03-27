@@ -2,6 +2,7 @@
 /**
  * session_logout.php - Cierra la sesión RADIX del usuario y redirige al inicio.
  */
+require_once 'config.php'; // Necesario para sendResponse() en respuestas AJAX
 session_start();
 session_unset();
 session_destroy();

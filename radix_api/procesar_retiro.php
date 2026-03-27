@@ -37,6 +37,35 @@ try {
         sendResponse(['error' => 'Retiro no encontrado o ya fue procesado.'], 404);
     }
 
+    // 1b. Solo al APROBAR: verificar que el usuario aún tiene saldo suficiente
+    //     Protege contra el caso de 2 retiros pendientes aprobados por el admin.
+    if ($accion === 'aprobar') {
+        $uid = $retiro['usuario_id'];
+
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE id_receptor=? AND estado='completado' AND tipo='ganancia_tablero'");
+        $stmt->execute([$uid]);
+        $bruto = (float)$stmt->fetch()['t'];
+
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE id_emisor=? AND estado='completado' AND tipo IN ('salto_fase_1','reentrada')");
+        $stmt->execute([$uid]);
+        $deducciones = (float)$stmt->fetch()['t'];
+
+        $stmt = $pdo->prepare("SELECT COALESCE(credito_saldo,0) as c FROM usuarios WHERE id=?");
+        $stmt->execute([$uid]);
+        $credito = (float)$stmt->fetch()['c'];
+
+        // Retiros ya procesados (excluye el actual que aún está 'pendiente')
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto),0) as t FROM retiros WHERE usuario_id=? AND estado='procesado'");
+        $stmt->execute([$uid]);
+        $ya_retirado = (float)$stmt->fetch()['t'];
+
+        $saldo_real = $bruto - $deducciones + $credito - $ya_retirado;
+
+        if ($saldo_real < (float)$retiro['monto']) {
+            sendResponse(['error' => "Saldo insuficiente. El usuario tiene $" . number_format($saldo_real, 2) . " USDT disponible pero solicita $" . number_format($retiro['monto'], 2) . " USDT."], 400);
+        }
+    }
+
     $pdo->beginTransaction();
 
     $nuevo_estado = $accion === 'aprobar' ? 'procesado' : 'rechazado';

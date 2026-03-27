@@ -108,8 +108,12 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
         .master-table td { padding: 14px 12px; border-bottom: 1px solid #1a1a24; color: #ccc; }
         <?php endif; ?>
     </style>
+    <!-- D3.js: necesario para el árbol de red (todos los usuarios) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <?php if ($es_master): ?>
+    <!-- Chart.js: solo necesario para las gráficas del panel master -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <?php endif; ?>
 </head>
 <body>
 
@@ -270,7 +274,9 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
                     <div class="widget"><h4>Tesorería (Agentes IA)</h4><div id="val-balance" class="value">$0.00</div><div class="trend">💰 Fondo Clones</div></div>
                     <div class="widget"><h4>Reserva Fase 1 (Pool)</h4><div id="val-fase" class="value">$0.00</div><div class="trend">Acumulado Saltos</div></div>
                     <div class="widget"><h4>Usuarios Reales</h4><div id="val-usuarios-reales" class="value">0</div><div class="trend">Crecimiento Orgánico</div></div>
-                    <div class="widget"><h4>Ganancia Master</h4><div id="val-master-earnings" class="value">$0.00</div><div class="trend">Utilidad ID #1</div></div>
+                    <div class="widget"><h4>💰 Ganancia Red</h4><div id="val-master-earnings" class="value">$0.00</div><div class="trend">Distribuido a usuarios</div></div>
+                    <div class="widget" style="border-left: 3px solid #00d2ff;"><h4>💎 Total Blockchain</h4><div id="val-total-blockchain" class="value">$0.00</div><div class="trend">Recibido en tu wallet</div></div>
+                    <div class="widget" style="border-left: 3px solid #ffab00;"><h4>⏳ Por Distribuir</h4><div id="val-pendiente-dist" class="value">$0.00</div><div class="trend">Comisiones red pendientes</div></div>
                 </div>
 
                 <div class="master-grid-top">

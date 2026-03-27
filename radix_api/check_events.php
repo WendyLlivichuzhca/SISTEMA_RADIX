@@ -25,7 +25,7 @@ try {
     $user_id = $user['id'];
     $eventos = [];
 
-    // 1. Nuevos referidos desde el último check
+    // 1. Nuevos referidos desde el último check (máx. 10 por polling)
     $stmt = $pdo->prepare("
         SELECT u.nickname, u.fecha_registro
         FROM referidos r
@@ -34,6 +34,7 @@ try {
           AND u.tipo_usuario = 'real'
           AND u.fecha_registro > ?
         ORDER BY u.fecha_registro DESC
+        LIMIT 10
     ");
     $stmt->execute([$user_id, $since_dt]);
     $nuevos_refs = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -45,7 +46,7 @@ try {
         ];
     }
 
-    // 2. Avances de tablero (ganancias nuevas)
+    // 2. Avances de tablero (ganancias nuevas) (máx. 10 por polling)
     $stmt = $pdo->prepare("
         SELECT monto, tipo, fecha_pago
         FROM pagos
@@ -54,6 +55,7 @@ try {
           AND tipo = 'ganancia_tablero'
           AND fecha_pago > ?
         ORDER BY fecha_pago DESC
+        LIMIT 10
     ");
     $stmt->execute([$user_id, $since_dt]);
     $nuevas_ganancias = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -65,7 +67,7 @@ try {
         ];
     }
 
-    // 3. Clones activados para este usuario
+    // 3. Clones activados para este usuario (máx. 10 por polling)
     $stmt = $pdo->prepare("
         SELECT al.detalles, al.fecha
         FROM auditoria_logs al
@@ -73,6 +75,7 @@ try {
           AND al.accion = 'ACTIVACION_CLON'
           AND al.fecha > ?
         ORDER BY al.fecha DESC
+        LIMIT 10
     ");
     $stmt->execute([$user_id, $since_dt]);
     $nuevos_clones = $stmt->fetchAll(PDO::FETCH_ASSOC);

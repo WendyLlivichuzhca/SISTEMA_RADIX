@@ -158,14 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ─── Detectar cambio de cuenta ────────────
-    if (typeof window.tronWeb !== 'undefined') {
-        // En TronWeb el evento es distinto o se monitorea por polling
-        setInterval(() => {
-            if (window.tronWeb.defaultAddress.base58 === false) {
-                 // Desconectado
-            }
-        }, 5000);
-    }
+    // TronLink/SafePal no expone eventos nativos de desconexión; se maneja
+    // vía la sesión del servidor (session_logout.php) y la recarga de página.
 
     // Funcionalidad: Carga de estadísticas públicas en el Home
     async function loadHomeStats() {

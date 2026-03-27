@@ -104,8 +104,10 @@ function intentarActivarClon($pdo) {
         // 9. Notificar al beneficiario (fuera de la transacción para no bloquear)
         notificarClonActivado($pdo, $padre_id, (float)$monto_clon);
 
-        // NOTA: No se llama verificarAvanceTablero aquí para evitar recursión infinita.
-        // El avance del beneficiario se evaluará en la próxima acción del sistema.
+        // 10. Verificar si el clon completó el tablero del beneficiario
+        // Se llama DESPUÉS del commit para no anidar transacciones.
+        // La recursión está acotada: cada clon gasta tesorería, que eventualmente se agota.
+        verificarAvanceTablero($padre_id, $pdo);
 
         return "Clon $clon_nickname activado para usuario ID $padre_id (\$$monto_clon USDT).";
 
