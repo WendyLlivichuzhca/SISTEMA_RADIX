@@ -15,7 +15,7 @@
 </Files>
 
 # ── Bloquear archivos de debug/test/utilidades (nunca deben ser públicos) ──
-<FilesMatch "^(reset_db|test_matrix|simulate_jump_c|fix_db|debug_levels|mejorar_db_v2|invest_seed|debug_db|debug_user|fix_master_tron|limpiar_tesoreria|setup_webhook|limpiar_fundador|limpiar_pagos_duplicados|create_admin|db_setup)\.php$">
+<FilesMatch "^(reset_db|test_matrix|simulate_jump_c|simulate_phase0|simulate_reentry|recheck_progress|diagnose_board_progress|fix_db|debug_levels|mejorar_db_v2|invest_seed|debug_db|debug_user|fix_master_tron|limpiar_tesoreria|setup_webhook|limpiar_fundador|limpiar_pagos_duplicados|create_admin|db_setup)\.php$">
     Order allow,deny
     Deny from all
 </FilesMatch>

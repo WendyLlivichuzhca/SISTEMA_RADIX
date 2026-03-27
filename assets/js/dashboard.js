@@ -483,22 +483,35 @@ async function renderNetworkTree() {
             return;
         }
 
-        container.innerHTML = '';
-        container.style.overflowX = 'auto';
-        container.style.padding   = '20px 10px';
-
-        const W = Math.max(container.offsetWidth || 500, 500);
-        const H = 280;
-
         // Convertir árbol plano a jerarquía D3
         const root = d3.hierarchy(data.arbol, d => d.hijos && d.hijos.length ? d.hijos : null);
-        const treeLayout = d3.tree().size([W - 60, H - 80]);
+        const isMobile = window.innerWidth <= 768;
+        const nodeCount = root.descendants().length;
+        const leafCount = Math.max(root.leaves().length, 1);
+        const depthCount = Math.max(root.height + 1, 1);
+
+        container.innerHTML = '';
+        container.style.overflowX = 'auto';
+        container.style.padding   = isMobile ? '10px 6px' : '20px 10px';
+
+        const baseWidth = container.clientWidth || container.offsetWidth || 320;
+        const W = isMobile
+            ? Math.max(baseWidth - 12, Math.min(leafCount * 120, 560))
+            : Math.max(baseWidth, leafCount * 140, 500);
+        const H = isMobile
+            ? Math.max(220, Math.min(260 + (depthCount - 1) * 18, 320))
+            : Math.max(280, 240 + (depthCount - 1) * 22);
+
+        const treeLayout = d3.tree().size([Math.max(W - 60, 220), Math.max(H - 90, 150)]);
         treeLayout(root);
 
         const svg = d3.select(container)
             .append('svg')
             .attr('width', W)
             .attr('height', H)
+            .attr('viewBox', `0 0 ${W} ${H}`)
+            .style('width', `${W}px`)
+            .style('min-width', `${W}px`)
             .style('overflow', 'visible');
 
         const g = svg.append('g').attr('transform', 'translate(30, 40)');
@@ -548,13 +561,13 @@ async function renderNetworkTree() {
             .attr('stroke-width', 2)
             .style('filter', d => `drop-shadow(0 0 6px ${getColor(d)})`)
             .transition().duration(500).delay((d, i) => i * 120)
-            .attr('r', d => d.data.es_raiz ? 22 : 16);
+            .attr('r', d => d.data.es_raiz ? (isMobile ? 20 : 22) : (isMobile ? 14 : 16));
 
         // Inicial del nickname dentro del círculo
         node.append('text')
             .attr('text-anchor', 'middle')
             .attr('dy', '0.35em')
-            .attr('font-size', d => d.data.es_raiz ? '10px' : '8px')
+            .attr('font-size', d => d.data.es_raiz ? (isMobile ? '9px' : '10px') : (isMobile ? '7px' : '8px'))
             .attr('font-weight', '800')
             .attr('fill', '#000')
             .text(d => (d.data.nickname || '?').substring(0, 4));
@@ -563,11 +576,12 @@ async function renderNetworkTree() {
         node.append('text')
             .attr('text-anchor', 'middle')
             .attr('dy', d => d.data.es_raiz ? '38px' : '30px')
-            .attr('font-size', '9px')
+            .attr('font-size', isMobile ? '8px' : '9px')
             .attr('fill', '#aaa')
             .text(d => {
                 const nick = d.data.nickname || '';
-                return nick.length > 10 ? nick.substring(0, 10) + '…' : nick;
+                const maxLen = isMobile ? 8 : 10;
+                return nick.length > maxLen ? nick.substring(0, maxLen) + '…' : nick;
             });
 
         // Tablero badge encima del nodo raíz
@@ -578,8 +592,8 @@ async function renderNetworkTree() {
             g.select('.node:first-child')
              .append('text')
              .attr('text-anchor', 'middle')
-             .attr('dy', '-30px')
-             .attr('font-size', '9px')
+             .attr('dy', isMobile ? '-26px' : '-30px')
+             .attr('font-size', isMobile ? '8px' : '9px')
              .attr('fill', '#9d00ff')
              .text(tableroLabel);
         }
@@ -592,10 +606,17 @@ async function renderNetworkTree() {
             { color: '#ff9800', label: 'Agente IA' },
             { color: '#00d2ff', label: 'Nuevo' },
         ];
+        const legendItems = isMobile ? leyenda.slice(0, 4) : leyenda;
+        const legendSpacing = isMobile ? 76 : 90;
         const legG = svg.append('g').attr('transform', `translate(10, ${H - 20})`);
-        leyenda.forEach((l, i) => {
-            legG.append('circle').attr('cx', i * 90).attr('cy', 0).attr('r', 5).attr('fill', l.color);
-            legG.append('text').attr('x', i * 90 + 10).attr('y', 4).attr('font-size', '9px').attr('fill', '#666').text(l.label);
+        legendItems.forEach((l, i) => {
+            legG.append('circle').attr('cx', i * legendSpacing).attr('cy', 0).attr('r', isMobile ? 4.5 : 5).attr('fill', l.color);
+            legG.append('text')
+                .attr('x', i * legendSpacing + 10)
+                .attr('y', 4)
+                .attr('font-size', isMobile ? '8px' : '9px')
+                .attr('fill', '#666')
+                .text(l.label);
         });
 
     } catch(e) {

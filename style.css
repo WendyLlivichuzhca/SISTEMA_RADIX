@@ -37,6 +37,8 @@ nav {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
 }
 
 .logo {
@@ -72,6 +74,38 @@ nav ul li a:hover {
     padding: 0.5rem 1.2rem;
     border-radius: 50px;
     font-size: 0.9rem;
+}
+
+.mobile-dapp-notice {
+    display: none;
+    margin-bottom: 1.35rem;
+    padding: 0.95rem 1rem;
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(0, 210, 255, 0.12), rgba(157, 0, 255, 0.12));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
+}
+
+.mobile-dapp-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.55rem;
+    padding: 0.28rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    background: rgba(13, 13, 13, 0.5);
+    color: #9fe8ff;
+}
+
+.mobile-dapp-notice p {
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.55;
+    color: #d7e8f2;
 }
 
 /* HERO SECTION */
@@ -565,46 +599,211 @@ footer {
 .roi-note strong { color: #9d00ff; }
 
 @media (max-width: 768px) {
-    .hero {
-        flex-direction: column;
-        padding-top: 8rem;
+    header {
+        position: sticky;
+        top: 0;
+    }
+
+    nav {
+        padding: 0.95rem 1rem;
+        justify-content: center;
         text-align: center;
     }
+
+    nav ul {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.8rem 1rem;
+    }
+
+    nav ul li a {
+        font-size: 0.9rem;
+    }
+
+    .nav-btn {
+        padding: 0.55rem 1rem;
+    }
+
+    .hero {
+        flex-direction: column;
+        min-height: auto;
+        padding: 2rem 1rem 4rem;
+        text-align: center;
+        gap: 2rem;
+    }
+
+    .hero-content {
+        width: 100%;
+    }
+
+    .mobile-dapp-notice {
+        display: block;
+    }
+
     .hero-content h1 {
-        font-size: 2.5rem;
+        font-size: clamp(2.35rem, 11vw, 3.35rem);
+        margin-bottom: 1rem;
     }
+
     .hero-content p {
-        margin: 0 auto 2rem;
+        margin: 0 auto 1.5rem;
+        max-width: 32rem;
+        font-size: 1rem;
     }
+
     .hero-image {
-        margin-top: 3rem;
+        margin-top: 0;
+        width: 100%;
+        justify-content: center;
     }
+
+    .glass-card {
+        width: min(100%, 440px);
+        padding: 1rem;
+        border-radius: 24px;
+    }
+
     .cta-group {
         justify-content: center;
+        flex-direction: column;
+        width: 100%;
+        max-width: 22rem;
+        margin: 0 auto;
+    }
+
+    .cta-group button {
+        width: 100%;
+        min-height: 54px;
+    }
+
+    section {
+        padding: 4.25rem 1rem;
+    }
+
+    .section-title {
+        font-size: 2rem;
+        margin-bottom: 2.2rem;
+    }
+
+    .steps,
+    .benefits-grid,
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .step,
+    .benefit-card,
+    .timeline-content {
+        padding: 1.4rem 1.15rem;
+        border-radius: 18px;
+    }
+
+    .step-num {
+        font-size: 2.2rem;
+        top: 0.8rem;
+        right: 1rem;
+    }
+
+    .stat-item h2 {
+        font-size: 2.6rem;
     }
     
     .timeline::before {
-        left: 30px;
+        left: 22px;
     }
+
     .timeline-item {
         width: 100%;
-        padding-left: 5rem !important;
+        padding: 0 0 0 3.75rem !important;
         text-align: left !important;
+        margin-left: 0 !important;
     }
+
     .time-point {
         left: 0 !important;
+        width: 44px;
+        height: 44px;
+        font-size: 0.9rem;
     }
 
     /* ROI section mobile */
+    .roi-subtitle {
+        margin-top: -1.3rem;
+        margin-bottom: 2rem;
+        padding: 0 0.4rem;
+    }
+
     .roi-flow {
         flex-direction: column;
         align-items: center;
+        gap: 0.9rem;
     }
+
     .roi-connector {
         transform: rotate(90deg);
         min-width: 40px;
     }
-    .roi-card { min-width: 200px; }
+
+    .roi-card {
+        min-width: 0;
+        width: min(100%, 280px);
+        padding: 1.1rem 1rem;
+    }
+
+    .roi-note {
+        flex-direction: column;
+        gap: 0.65rem;
+        padding: 1rem;
+        margin-top: 2rem;
+    }
+
+    .modal-overlay {
+        padding: 12px;
+    }
+
+    .modal-content {
+        padding: 1.2rem 1rem;
+        border-radius: 20px;
+        max-height: 92vh;
+    }
+
+    .modal-app-links {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 420px) {
+    .logo {
+        font-size: 1.3rem;
+    }
+
+    nav ul {
+        gap: 0.55rem 0.85rem;
+    }
+
+    nav ul li a {
+        font-size: 0.83rem;
+    }
+
+    .hero-content h1 {
+        font-size: 2.05rem;
+    }
+
+    .hero-content p,
+    .mobile-dapp-notice p {
+        font-size: 0.92rem;
+    }
+
+    .section-title {
+        font-size: 1.75rem;
+    }
+
+    .roi-amount,
+    .roi-final {
+        font-size: 1.9rem;
+    }
 }
 /* ── MODAL: BILLETERA NO DETECTADA ────────────────────── */
 .modal-overlay {

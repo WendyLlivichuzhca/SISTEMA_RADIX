@@ -244,6 +244,24 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
                 <a href="#" class="nav-item" id="nav-clones" onclick="switchMasterSection('clones')">🤖 Control de Clones</a>
                 <a href="#" class="nav-item" id="nav-auditoria" onclick="switchMasterSection('auditoria')">📜 Registro de Auditoría</a>
             <?php else: ?>
+                <div class="user-dashboard-shell">
+                <section class="user-hero-card">
+                    <div class="user-hero-copy">
+                        <span class="user-hero-eyebrow">RADIX PHASE 0</span>
+                        <h3>Tu panel ya estÃ¡ listo para operar y crecer dentro de la red.</h3>
+                        <p>Desde aquÃ­ puedes seguir tu activaciÃ³n, revisar tu tablero actual, monitorear tu equipo y entender visualmente en quÃ© parte del ciclo te encuentras.</p>
+                    </div>
+                    <div class="user-hero-badges">
+                        <div class="user-hero-badge">
+                            <span class="user-hero-badge-label">Wallet Real</span>
+                            <strong>RADIX_MASTER</strong>
+                        </div>
+                        <div class="user-hero-badge">
+                            <span class="user-hero-badge-label">Modelo</span>
+                            <strong>Red 3Ã—1 por ciclos</strong>
+                        </div>
+                    </div>
+                </section>
                 <a href="#" class="nav-item" onclick="document.getElementById('team-list')?.closest('.master-card')?.scrollIntoView({behavior:'smooth'}); return false;">👥 Mi Equipo</a>
                 <a href="#" class="nav-item" onclick="document.getElementById('val-clones')?.closest('.sb')?.scrollIntoView({behavior:'smooth'}); return false;">🤖 Mis Agentes IA</a>
             <?php endif; ?>
@@ -369,6 +387,23 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
             <?php else: ?>
                 <!-- USER LAYOUT V3.2 — PREMIUM RESTORATION -->
                 <!-- ── PAGO PENDIENTE (mejorado) ─────────────────────── -->
+                <section class="user-hero-card">
+                    <div class="user-hero-copy">
+                        <span class="user-hero-eyebrow">RADIX PHASE 0</span>
+                        <h3>Tu panel ya esta listo para operar y crecer dentro de la red.</h3>
+                        <p>Desde aqui puedes seguir tu activacion, revisar tu tablero actual y monitorear tu equipo con una experiencia mas clara y visual.</p>
+                    </div>
+                    <div class="user-hero-badges">
+                        <div class="user-hero-badge">
+                            <span class="user-hero-badge-label">Wallet Real</span>
+                            <strong>RADIX_MASTER</strong>
+                        </div>
+                        <div class="user-hero-badge">
+                            <span class="user-hero-badge-label">Modelo</span>
+                            <strong>Red 3x1 por ciclos</strong>
+                        </div>
+                    </div>
+                </section>
                 <div id="pago-pendiente-box" class="pago-pendiente-box" style="display:none;">
                     <!-- Header -->
                     <div style="display:flex; align-items:center; gap:12px; margin-bottom:18px;">
@@ -423,7 +458,7 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
                     <div style="font-size:0.65rem; color:#555; margin-top:8px; text-align:center;">Puedes encontrar el TXID en el historial de tu billetera TronLink o en <a href="https://tronscan.org" target="_blank" style="color:#00d2ff; text-decoration:none;">TronScan.org</a></div>
                 </div>
 
-                <div class="scoreboard">
+                <div class="scoreboard scoreboard-user">
                     <div class="sb sb-cyan"><span class="sb-icon">💰</span><span class="lbl">SALDO ACTUAL</span><div id="val-balance" class="num">$0.00</div></div>
                     <div class="sb sb-cyan"><span class="sb-icon">🏦</span><span class="lbl">RESERVA FASE 1</span><div id="val-reserva" class="num">$0.00</div></div>
                     <div class="sb sb-purple"><span class="sb-icon">🤖</span><span class="lbl">AGENTES IA</span><div id="val-clones" class="num">0</div></div>
@@ -437,7 +472,7 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
                     </div>
                 </div>
 
-                <div class="master-card">
+                <div class="master-card user-feature-card">
                     <h3>Progreso de Niveles</h3>
                     <div class="progress-container">
                         <div class="progress-track">
@@ -451,7 +486,7 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
                     </div>
                 </div>
 
-                <div style="display:grid; grid-template-columns: 1fr 1.5fr; gap:20px;">
+                <div class="user-main-grid">
                     <div class="master-card" style="height:fit-content;">
                         <h3>Equipo Reciente</h3>
                         <div id="team-list" style="max-height:220px; overflow-y:auto; font-size:0.85rem;"></div>
