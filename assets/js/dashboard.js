@@ -55,6 +55,7 @@ let _masterRetirosList  = [];
 let _masterAuditoria    = [];
 let _chartInstance      = null;
 let _lastEventTimestamp = Math.floor(Date.now() / 1000);
+let _profileSnapshot    = null;
 
 function getDisplayName(entity) {
     if (!entity) return '';
@@ -105,9 +106,278 @@ function normalizeDashboardCopy() {
     });
 }
 
+function setProfileStatus(targetId, message = '', color = '#7f86a7') {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    el.textContent = message;
+    el.style.color = color;
+}
+
+function openProfileModal() {
+    const modal = document.getElementById('profile-modal');
+    if (!modal) return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    loadProfilePanel();
+}
+
+function closeProfileModal() {
+    const modal = document.getElementById('profile-modal');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+}
+
+function wireProfileTriggers() {
+    const avatar = document.getElementById('avatar-circle');
+    if (avatar && !avatar.dataset.profileBound) {
+        avatar.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openProfileModal();
+            }
+        });
+        avatar.dataset.profileBound = '1';
+    }
+
+    document.querySelectorAll('a.nav-item').forEach((link) => {
+        if ((link.textContent || '').includes('Mi Perfil')) {
+            link.onclick = (event) => {
+                event.preventDefault();
+                openProfileModal();
+                return false;
+            };
+        }
+    });
+}
+
+window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+        closeProfileModal();
+    }
+});
+
+function applyProfileVisuals(profile) {
+    if (!profile) return;
+
+    const displayName = (profile.display_name || profile.nombre_completo || profile.nickname || '').trim();
+    const nickname = profile.nickname || '';
+    const wallet = profile.wallet || '';
+    const initials = getDisplayInitials({
+        display_name: displayName,
+        nickname,
+    });
+
+    const welcomeEl = document.getElementById('welcome-msg');
+    const avatarCircle = document.getElementById('avatar-circle');
+    const sidebarNick = document.getElementById('sidebar-nickname-text');
+    const sidebarAvatar = document.getElementById('sidebar-avatar-big');
+    const summaryAvatar = document.getElementById('profile-summary-avatar');
+    const summaryName = document.getElementById('profile-summary-name');
+    const summaryNick = document.getElementById('profile-summary-nick');
+    const summaryWallet = document.getElementById('profile-summary-wallet');
+
+    if (welcomeEl && displayName) welcomeEl.textContent = `Hola, ${displayName}`;
+    if (avatarCircle) avatarCircle.textContent = initials;
+    if (sidebarNick && displayName) sidebarNick.textContent = displayName;
+    if (sidebarAvatar) sidebarAvatar.textContent = initials.charAt(0);
+    if (summaryAvatar) summaryAvatar.textContent = initials;
+    if (summaryName && displayName) summaryName.textContent = displayName;
+    if (summaryNick) summaryNick.textContent = nickname ? `@${nickname}` : 'Sin nick';
+    if (summaryWallet && wallet) summaryWallet.textContent = wallet;
+    if (wallet) updateSidebarWallet(wallet);
+}
+
+function fillProfileForm(profile) {
+    if (!profile) return;
+
+    const nicknameInput = document.getElementById('profile-nickname');
+    const walletInput = document.getElementById('profile-wallet');
+    const nombreInput = document.getElementById('profile-nombre');
+    const telefonoInput = document.getElementById('profile-telefono');
+    const correoInput = document.getElementById('profile-correo');
+    const passwordBadge = document.getElementById('profile-password-badge');
+    const currentPasswordInput = document.getElementById('profile-current-password');
+
+    if (nicknameInput) nicknameInput.value = profile.nickname || '';
+    if (walletInput) walletInput.value = profile.wallet || '';
+    if (nombreInput) nombreInput.value = profile.nombre_completo || '';
+    if (telefonoInput) telefonoInput.value = profile.telefono || '';
+    if (correoInput) correoInput.value = profile.correo_electronico || '';
+
+    if (passwordBadge) {
+        passwordBadge.textContent = profile.has_password ? 'Protegido' : 'Sin contraseña';
+        passwordBadge.style.color = profile.has_password ? 'var(--secondary)' : '#ffb300';
+        passwordBadge.style.borderColor = profile.has_password ? 'rgba(0,210,255,0.18)' : 'rgba(255,179,0,0.18)';
+        passwordBadge.style.background = profile.has_password ? 'rgba(0,210,255,0.08)' : 'rgba(255,179,0,0.08)';
+    }
+
+    if (currentPasswordInput) {
+        currentPasswordInput.placeholder = profile.has_password
+            ? 'Ingresa tu contraseña actual'
+            : 'No tienes contraseña previa';
+    }
+
+    applyProfileVisuals(profile);
+}
+
+async function loadProfilePanel(forceReload = false) {
+    const panel = document.getElementById('profile-panel');
+    if (!panel) return;
+
+    if (_profileSnapshot && !forceReload) {
+        fillProfileForm(_profileSnapshot);
+        return;
+    }
+
+    setProfileStatus('profile-status', 'Cargando perfil...', '#7f86a7');
+
+    try {
+        const res = await fetch('radix_api/profile_get.php');
+        const data = await res.json();
+
+        if (!data.success || !data.profile) {
+            setProfileStatus('profile-status', data.error || 'No se pudo cargar el perfil.', '#ff5252');
+            return;
+        }
+
+        _profileSnapshot = data.profile;
+        fillProfileForm(_profileSnapshot);
+        setProfileStatus('profile-status', 'Perfil listo para editar.', '#7f86a7');
+    } catch (e) {
+        setProfileStatus('profile-status', 'Error al cargar tu perfil.', '#ff5252');
+    }
+}
+
+function recargarPerfil() {
+    if (_profileSnapshot) {
+        fillProfileForm(_profileSnapshot);
+        setProfileStatus('profile-status', 'Cambios restablecidos.', '#7f86a7');
+        return;
+    }
+    loadProfilePanel(true);
+}
+
+async function guardarPerfil() {
+    const nombreInput = document.getElementById('profile-nombre');
+    const telefonoInput = document.getElementById('profile-telefono');
+    const correoInput = document.getElementById('profile-correo');
+
+    if (!nombreInput || !telefonoInput || !correoInput) return;
+
+    const nombre = nombreInput.value.trim();
+    const telefono = telefonoInput.value.trim();
+    const correo = correoInput.value.trim();
+
+    if (!nombre || !telefono || !correo) {
+        setProfileStatus('profile-status', 'Completa nombre, teléfono y correo.', '#ff5252');
+        return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+        setProfileStatus('profile-status', 'El correo electrónico no es válido.', '#ff5252');
+        return;
+    }
+
+    setProfileStatus('profile-status', 'Guardando cambios...', '#7f86a7');
+
+    try {
+        const formData = new FormData();
+        formData.append('nombre_completo', nombre);
+        formData.append('telefono', telefono);
+        formData.append('correo_electronico', correo);
+
+        const res = await fetch('radix_api/profile_update.php', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+            setProfileStatus('profile-status', data.error || 'No se pudo actualizar el perfil.', '#ff5252');
+            return;
+        }
+
+        _profileSnapshot = {
+            ...(_profileSnapshot || {}),
+            ...(data.profile || {}),
+            display_name: (data.profile && data.profile.display_name) || nombre,
+        };
+        fillProfileForm(_profileSnapshot);
+        setProfileStatus('profile-status', data.message || 'Perfil actualizado.', '#00e676');
+        mostrarToast('✅ Perfil actualizado correctamente.', '#00e676');
+    } catch (e) {
+        setProfileStatus('profile-status', 'Error al guardar el perfil.', '#ff5252');
+    }
+}
+
+async function cambiarContrasenaPerfil() {
+    const currentInput = document.getElementById('profile-current-password');
+    const newInput = document.getElementById('profile-new-password');
+    const confirmInput = document.getElementById('profile-confirm-password');
+
+    if (!currentInput || !newInput || !confirmInput) return;
+
+    const currentPassword = currentInput.value;
+    const newPassword = newInput.value;
+    const confirmPassword = confirmInput.value;
+
+    if (!newPassword || !confirmPassword) {
+        setProfileStatus('profile-password-status', 'Completa la nueva contraseña y su confirmación.', '#ff5252');
+        return;
+    }
+
+    if (newPassword.length < 8) {
+        setProfileStatus('profile-password-status', 'La nueva contraseña debe tener al menos 8 caracteres.', '#ff5252');
+        return;
+    }
+
+    if (newPassword !== confirmPassword) {
+        setProfileStatus('profile-password-status', 'La confirmación no coincide.', '#ff5252');
+        return;
+    }
+
+    setProfileStatus('profile-password-status', 'Actualizando contraseña...', '#7f86a7');
+
+    try {
+        const formData = new FormData();
+        formData.append('current_password', currentPassword);
+        formData.append('new_password', newPassword);
+        formData.append('confirm_password', confirmPassword);
+
+        const res = await fetch('radix_api/profile_change_password.php', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+            setProfileStatus('profile-password-status', data.error || 'No se pudo cambiar la contraseña.', '#ff5252');
+            return;
+        }
+
+        currentInput.value = '';
+        newInput.value = '';
+        confirmInput.value = '';
+
+        if (_profileSnapshot) {
+            _profileSnapshot.has_password = true;
+            fillProfileForm(_profileSnapshot);
+        }
+
+        setProfileStatus('profile-password-status', data.message || 'Contraseña actualizada.', '#00e676');
+        mostrarToast('🔐 Contraseña actualizada correctamente.', '#00e676');
+    } catch (e) {
+        setProfileStatus('profile-password-status', 'Error al actualizar la contraseña.', '#ff5252');
+    }
+}
+
 async function loadDashboard() {
     try {
         normalizeDashboardCopy();
+        wireProfileTriggers();
         const response = await fetch('radix_api/user_data.php');
         const data     = await response.json();
         if (!data.success) return;
@@ -195,6 +465,7 @@ async function loadDashboard() {
             renderNetworkTree();
             mostrarOnboardingSiNuevo(data);
             actualizarEstadoTelegram(data.user.has_telegram || false);
+            await loadProfilePanel();
         }
 
         // Common components

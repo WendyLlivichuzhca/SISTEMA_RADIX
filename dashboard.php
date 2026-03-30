@@ -263,8 +263,10 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                 <a href="#" class="nav-item" id="nav-auditoria" onclick="switchMasterSection('auditoria')">📜 Registro de Auditoría</a>
             <?php else: ?>
                 <div class="user-dashboard-shell">
+                <a href="#" class="nav-item" onclick="document.getElementById('profile-panel')?.scrollIntoView({behavior:'smooth', block:'start'}); return false;">👤 Mi Perfil</a>
                 <a href="#" class="nav-item" onclick="document.getElementById('team-list')?.closest('.master-card')?.scrollIntoView({behavior:'smooth'}); return false;">👥 Mi Equipo</a>
                 <a href="#" class="nav-item" onclick="document.getElementById('val-clones')?.closest('.sb')?.scrollIntoView({behavior:'smooth'}); return false;">🤖 Mis Agentes IA</a>
+                </div>
             <?php endif; ?>
             <a href="radix_api/session_logout.php" class="nav-item" style="margin-top:auto; color:#ff4444;">🚪 Cerrar Sesión</a>
         </nav>
@@ -274,7 +276,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
     <main>
         <header>
             <div>
-                <h2>Hola, <?php echo htmlspecialchars($nickname); ?></h2>
+                <h2 id="welcome-msg">Hola, <?php echo htmlspecialchars($nickname); ?></h2>
                 <div style="display:flex; align-items:center; gap:10px;">
                     <p id="wallet-address-display" style="color:#666; font-size:0.8rem;"></p>
                     <?php if ($es_master): ?> <span class="master-badge">Modo Tesorería Central</span> <?php endif; ?>
@@ -282,7 +284,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
             </div>
             <div class="user-info">
                 <?php if (!$es_master): ?> <button class="btn-withdraw" id="btn-retiro" onclick="abrirRetiro()">RETIRAR</button> <?php endif; ?>
-                <div class="avatar" id="avatar-circle">?</div>
+                <div class="avatar avatar-profile-trigger" id="avatar-circle" onclick="openProfileModal()" title="Abrir perfil" role="button" tabindex="0">?</div>
             </div>
         </header>
 
@@ -457,6 +459,86 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                         <button onclick="confirmarPago()">VERIFICAR</button>
                     </div>
                     <div style="font-size:0.65rem; color:#555; margin-top:8px; text-align:center;">Puedes encontrar el TXID en el historial de tu billetera TronLink o en <a href="https://tronscan.org" target="_blank" style="color:#00d2ff; text-decoration:none;">TronScan.org</a></div>
+                </div>
+
+                <div id="profile-modal" class="profile-modal" aria-hidden="true">
+                    <div class="profile-modal-backdrop" onclick="closeProfileModal()"></div>
+                    <div class="profile-modal-dialog">
+                <div class="master-card profile-shell" id="profile-panel">
+                    <div class="profile-shell-head">
+                        <h3>Mi Perfil</h3>
+                        <button type="button" class="profile-close-btn" onclick="closeProfileModal()" aria-label="Cerrar perfil">×</button>
+                    </div>
+                    <div class="profile-grid">
+                        <div class="profile-summary-card">
+                            <div class="profile-summary-badge">Cuenta Activa</div>
+                            <div class="profile-summary-avatar" id="profile-summary-avatar">?</div>
+                            <div class="profile-summary-name" id="profile-summary-name"><?php echo htmlspecialchars($nickname); ?></div>
+                            <div class="profile-summary-sub" id="profile-summary-nick">@<?php echo htmlspecialchars($user_info['nickname'] ?? ''); ?></div>
+                            <div class="profile-summary-wallet" id="profile-summary-wallet"><?php echo htmlspecialchars($user_wallet); ?></div>
+                            <div class="profile-summary-note">Administra tus datos de contacto y protege tu acceso sin depender de soporte.</div>
+                        </div>
+
+                        <div class="profile-form-card">
+                            <div class="profile-form-grid">
+                                <div class="profile-field">
+                                    <label for="profile-nickname">Nick de usuario</label>
+                                    <input id="profile-nickname" type="text" readonly>
+                                </div>
+                                <div class="profile-field">
+                                    <label for="profile-wallet">Wallet</label>
+                                    <input id="profile-wallet" type="text" readonly>
+                                </div>
+                                <div class="profile-field">
+                                    <label for="profile-nombre">Nombre completo</label>
+                                    <input id="profile-nombre" type="text" autocomplete="name">
+                                </div>
+                                <div class="profile-field">
+                                    <label for="profile-telefono">Teléfono</label>
+                                    <input id="profile-telefono" type="tel" autocomplete="tel">
+                                </div>
+                                <div class="profile-field profile-field-full">
+                                    <label for="profile-correo">Correo electrónico</label>
+                                    <input id="profile-correo" type="email" autocomplete="email">
+                                </div>
+                            </div>
+                            <div class="profile-actions">
+                                <button type="button" class="btn-master profile-save-btn" onclick="guardarPerfil()">Guardar Cambios</button>
+                                <button type="button" class="profile-secondary-btn" onclick="recargarPerfil()">Restablecer</button>
+                            </div>
+                            <div id="profile-status" class="profile-status"></div>
+                        </div>
+                    </div>
+
+                    <div class="profile-password-card">
+                        <div class="profile-password-head">
+                            <div>
+                                <h4>Seguridad de Acceso</h4>
+                                <p>Cambia tu contraseña cuando lo necesites.</p>
+                            </div>
+                            <span id="profile-password-badge" class="profile-password-badge">Protegido</span>
+                        </div>
+                        <div class="profile-password-grid">
+                            <div class="profile-field">
+                                <label for="profile-current-password">Contraseña actual</label>
+                                <input id="profile-current-password" type="password" autocomplete="current-password">
+                            </div>
+                            <div class="profile-field">
+                                <label for="profile-new-password">Nueva contraseña</label>
+                                <input id="profile-new-password" type="password" autocomplete="new-password">
+                            </div>
+                            <div class="profile-field">
+                                <label for="profile-confirm-password">Confirmar nueva contraseña</label>
+                                <input id="profile-confirm-password" type="password" autocomplete="new-password">
+                            </div>
+                        </div>
+                        <div class="profile-actions">
+                            <button type="button" class="btn-master profile-password-btn" onclick="cambiarContrasenaPerfil()">Actualizar Contraseña</button>
+                        </div>
+                        <div id="profile-password-status" class="profile-status"></div>
+                    </div>
+                </div>
+                    </div>
                 </div>
 
                 <div class="scoreboard scoreboard-user">
