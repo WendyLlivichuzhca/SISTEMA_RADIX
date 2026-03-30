@@ -47,7 +47,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
     <title>RADIX — Panel de Control</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/dashboard.css">
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=<?php echo filemtime(__DIR__ . '/assets/css/dashboard.css'); ?>">
     <style>
         /* RADIX V3.2 — Estilos Premium Restaurados */
         .dashboard-container { max-width: 1100px; margin: 0 auto; }
@@ -259,7 +259,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
             <?php if ($es_master): ?>
                 <a href="#" class="nav-item" id="nav-usuarios" onclick="switchMasterSection('usuarios')">👥 Usuarios Reales</a>
                 <a href="#" class="nav-item" id="nav-retiros" onclick="switchMasterSection('retiros')">💰 Pagos Pendientes</a>
-                <a href="#" class="nav-item" id="nav-clones" onclick="switchMasterSection('clones')">🤖 Control de Clones</a>
+                <a href="#" class="nav-item" id="nav-clones" onclick="switchMasterSection('clones')">🤖 Control de Cuentas Espejo</a>
                 <a href="#" class="nav-item" id="nav-auditoria" onclick="switchMasterSection('auditoria')">📜 Registro de Auditoría</a>
             <?php else: ?>
                 <div class="user-dashboard-shell">
@@ -307,7 +307,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
             <?php if ($es_master): ?>
                 <!-- MASTER V3 LAYOUT -->
                 <div class="widgets-master">
-                    <div class="widget"><h4>Tesorería (Agentes IA)</h4><div id="val-balance" class="value">$0.00</div><div class="trend">💰 Fondo Clones</div></div>
+                    <div class="widget"><h4>Tesorería (Agentes IA)</h4><div id="val-balance" class="value">$0.00</div><div class="trend">💰 Fondo Cuentas Espejo</div></div>
                     <div class="widget"><h4>Reserva Fase 1 (Pool)</h4><div id="val-fase" class="value">$0.00</div><div class="trend">Acumulado Saltos</div></div>
                     <div class="widget"><h4>Usuarios Reales</h4><div id="val-usuarios-reales" class="value">0</div><div class="trend">Crecimiento Orgánico</div></div>
                     <div class="widget"><h4>💰 Ganancia Red</h4><div id="val-master-earnings" class="value">$0.00</div><div class="trend">Distribuido a usuarios</div></div>
@@ -326,7 +326,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                             <div style="margin-bottom:10px;"><div style="display:flex; justify-content:space-between; font-size:0.7rem;"><span>Tablero A</span><span id="dist-a-val">0</span></div><div style="height:4px; background:#222;"><div id="dist-a-bar" style="height:100%; background:#9d00ff; width:0%;"></div></div></div>
                             <div style="margin-bottom:10px;"><div style="display:flex; justify-content:space-between; font-size:0.7rem;"><span>Tablero B</span><span id="dist-b-val">0</span></div><div style="height:4px; background:#222;"><div id="dist-b-bar" style="height:100%; background:#00d2ff; width:0%;"></div></div></div>
                             <div style="margin-bottom:10px;"><div style="display:flex; justify-content:space-between; font-size:0.7rem;"><span>Tablero C</span><span id="dist-c-val">0</span></div><div style="height:4px; background:#222;"><div id="dist-c-bar" style="height:100%; background:#00e676; width:0%;"></div></div></div>
-                            <h4 style="margin-top:20px;">Ratio Reales/Clones</h4>
+                            <h4 style="margin-top:20px;">Ratio Reales/Cuentas Espejo</h4>
                             <div style="height:8px; background:#222; border-radius:4px;"><div id="reales-clones-bar" style="height:100%; background:var(--primary); width:50%;"></div></div>
                         </div>
                         <div class="master-card">
@@ -593,7 +593,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
         <?php endif; ?>
     </main>
 
-    <script src="assets/js/dashboard.js?v=<?php echo time(); ?>"></script>
+    <script src="assets/js/dashboard.js?v=<?php echo filemtime(__DIR__ . '/assets/js/dashboard.js'); ?>"></script>
 </body>
 </html>
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      

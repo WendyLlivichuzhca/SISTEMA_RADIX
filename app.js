@@ -71,6 +71,95 @@ function solicitarDatosContacto(walletAddress) {
     return contactData;
 }
 
+function solicitarDatosContactoModal(walletAddress) {
+    const storageKey = `radix_contact_${walletAddress}`;
+    const saved = localStorage.getItem(storageKey);
+    let localContactData = null;
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            if (parsed.nombre_completo && parsed.telefono && parsed.correo_electronico) {
+                localContactData = parsed;
+            }
+        } catch (e) {}
+    }
+
+    const modal = document.getElementById('contact-modal');
+    const form = document.getElementById('contact-modal-form');
+    const closeBtn = document.getElementById('contact-modal-close');
+    const statusEl = document.getElementById('contact-modal-status');
+    const nombreInput = document.getElementById('contact-nombre');
+    const telefonoInput = document.getElementById('contact-telefono');
+    const correoInput = document.getElementById('contact-correo');
+
+    if (!modal || !form || !closeBtn || !statusEl || !nombreInput || !telefonoInput || !correoInput) {
+        mostrarToastLanding("âŒ Falta el formulario de contacto en la pÃ¡gina.");
+        return Promise.resolve(null);
+    }
+
+    return new Promise((resolve) => {
+        const openModal = () => {
+            nombreInput.value = localContactData?.nombre_completo || '';
+            telefonoInput.value = localContactData?.telefono || '';
+            correoInput.value = localContactData?.correo_electronico || '';
+            statusEl.textContent = '';
+            modal.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+            nombreInput.focus();
+        };
+
+        fetch(`radix_api/check_contact_fields.php?wallet=${encodeURIComponent(walletAddress)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.has_contact_data && data.contact) {
+                    localStorage.setItem(storageKey, JSON.stringify(data.contact));
+                    resolve(data.contact);
+                    return;
+                }
+                openModal();
+            })
+            .catch(() => {
+                openModal();
+            });
+
+        const cleanup = () => {
+            modal.style.display = 'none';
+            form.removeEventListener('submit', handleSubmit);
+            closeBtn.removeEventListener('click', handleClose);
+        };
+
+        const handleClose = () => {
+            cleanup();
+            resolve(null);
+        };
+
+        const handleSubmit = (event) => {
+            event.preventDefault();
+
+            const nombre_completo = nombreInput.value.trim();
+            const telefono = telefonoInput.value.trim();
+            const correo_electronico = correoInput.value.trim();
+
+            if (!nombre_completo || !telefono || !correo_electronico) {
+                statusEl.textContent = 'Todos los campos son obligatorios.';
+                return;
+            }
+
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo_electronico)) {
+                statusEl.textContent = 'Revisa el formato del correo electrÃ³nico.';
+                return;
+            }
+
+            const contactData = { nombre_completo, telefono, correo_electronico };
+            localStorage.setItem(storageKey, JSON.stringify(contactData));
+            cleanup();
+            resolve(contactData);
+        };
+
+        closeBtn.addEventListener('click', handleClose);
+        form.addEventListener('submit', handleSubmit);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const connectBtn = document.getElementById('connect-wallet');
 
@@ -176,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // ─── 4 & 5. Registro / Login unificado vía registro.php ───────
                 // registro.php verifica la firma tanto para usuarios nuevos como
                 // para usuarios existentes, garantizando prueba de ownership.
-                const contactData = solicitarDatosContacto(walletAddress);
+                const contactData = await solicitarDatosContactoModal(walletAddress);
                 if (!contactData) {
                     connectBtn.innerText = "Conectar Billetera";
                     connectBtn.disabled = false;

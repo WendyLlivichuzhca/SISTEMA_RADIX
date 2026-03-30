@@ -87,7 +87,7 @@ if (!empty($_SESSION['radix_admin_id'])) {
         <div id="msg"></div>
 
         <div class="footer-link">
-            <a href="index.html">← Volver al sitio</a>
+            <a href="index.php">← Volver al sitio</a>
         </div>
     </div>
 

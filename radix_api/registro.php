@@ -1,5 +1,6 @@
 <?php
 require_once 'config.php';
+require_once 'tron_signature_verifier.php';
 session_start();
 
 function obtenerCicloActivoUsuario($pdo, $usuario_id) {
@@ -41,6 +42,42 @@ function actualizarDatosContactoUsuario(PDO $pdo, array $contact_columns, int $u
     $stmt->execute($update_values);
 }
 
+function asegurarPagoPendienteRegalo(PDO $pdo, int $emisor_id, int $receptor_id, string $wallet_destino_real): void {
+    $stmt = $pdo->prepare("
+        SELECT id
+        FROM pagos
+        WHERE id_emisor = ?
+          AND tipo = 'regalo'
+          AND estado = 'pendiente'
+        ORDER BY id DESC
+        LIMIT 1
+        FOR UPDATE
+    ");
+    $stmt->execute([$emisor_id]);
+    $pago_pendiente_id = $stmt->fetchColumn();
+
+    if ($pago_pendiente_id) {
+        $stmt = $pdo->prepare("
+            UPDATE pagos
+            SET id_receptor = ?,
+                beneficiario_usuario_id = ?,
+                wallet_destino_real = ?,
+                estado = 'pendiente'
+            WHERE id = ?
+        ");
+        $stmt->execute([$receptor_id, $receptor_id, $wallet_destino_real, $pago_pendiente_id]);
+        return;
+    }
+
+    $stmt = $pdo->prepare("
+        INSERT INTO pagos (
+            id_emisor, id_receptor, beneficiario_usuario_id, wallet_destino_real,
+            tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
+        ) VALUES (?, ?, ?, ?, 'A', 1, 'externo', 10.00, 'regalo', 'pendiente')
+    ");
+    $stmt->execute([$emisor_id, $receptor_id, $receptor_id, $wallet_destino_real]);
+}
+
 // Endpoint para el registro de nuevos usuarios (Radix v2.0)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $wallet              = trim($_POST['wallet'] ?? '');
@@ -66,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         sendResponse(['error' => 'Se requiere firma de wallet para registrarse.'], 400);
     }
 
-    // Verificar que el nonce en el mensaje coincide con el de la sesión
+    // Verificar que el nonce y el mensaje coinciden exactamente con el desafío de la sesión
     $nonce_sesion  = $_SESSION['radix_nonce']        ?? '';
     $wallet_sesion = $_SESSION['radix_nonce_wallet'] ?? '';
     $expira        = $_SESSION['radix_nonce_expira'] ?? 0;
@@ -77,8 +114,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($wallet_sesion !== $wallet) {
         sendResponse(['error' => 'La wallet no coincide con el desafío firmado.'], 401);
     }
-    if (!str_contains($message_signed, $nonce_sesion)) {
-        sendResponse(['error' => 'El mensaje firmado no contiene el nonce correcto.'], 401);
+
+    $mensaje_esperado = radix_expected_nonce_message($nonce_sesion, $wallet);
+    if (radix_normalize_message($message_signed) !== radix_normalize_message($mensaje_esperado)) {
+        sendResponse(['error' => 'El mensaje firmado no coincide con el desafío original.'], 401);
+    }
+
+    if (str_starts_with($wallet, 'T')) {
+        try {
+            $firma_valida = radix_verify_tron_signature($wallet, $message_signed, $signature);
+        } catch (RuntimeException $e) {
+            error_log("RADIX firma TRON ERROR: " . $e->getMessage());
+            sendResponse(['error' => 'No se pudo validar la firma de wallet en el servidor. Intenta de nuevo en unos minutos.'], 503);
+        }
+
+        if (!$firma_valida) {
+            sendResponse(['error' => 'La firma no pertenece a la wallet indicada.'], 401);
+        }
+    } elseif (str_starts_with($wallet, '0x')) {
+        sendResponse(['error' => 'Las wallets EVM no están habilitadas en este flujo seguro por ahora.'], 400);
+    } else {
+        sendResponse(['error' => 'Formato de wallet no soportado.'], 400);
     }
 
     // Invalidar el nonce tras usarlo (evita replay attacks)
@@ -246,14 +302,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     sendResponse(['error' => 'El patrocinador ya no tiene espacios disponibles. Recarga y reintenta.'], 409);
                 }
 
-                // REGISTRAR PAGO/REGALO PENDIENTE ($10 para Tablero A)
-                $stmt = $pdo->prepare("
-                    INSERT INTO pagos (
-                        id_emisor, id_receptor, beneficiario_usuario_id, wallet_destino_real,
-                        tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
-                    ) VALUES (?, ?, ?, ?, 'A', 1, 'externo', 10.00, 'regalo', 'pendiente')
-                ");
-                $stmt->execute([$new_user_id, $patrocinador_id, $patrocinador_id, $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET]);
+                // REGISTRAR o REASIGNAR pago/regalo pendiente ($10 para Tablero A)
+                asegurarPagoPendienteRegalo(
+                    $pdo,
+                    (int)$new_user_id,
+                    (int)$patrocinador_id,
+                    $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET
+                );
 
                 // Registrar en Auditoría (Incluyendo firma para verificación futura)
                 $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address) VALUES (?, 'REGISTRO_CON_FIRMA', 'usuarios', ?, ?)");
@@ -309,13 +364,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
 
                         // Pago pendiente al nuevo patrón (P1/P2/P3), no al original
-                        $stmt = $pdo->prepare("
-                            INSERT INTO pagos (
-                                id_emisor, id_receptor, beneficiario_usuario_id, wallet_destino_real,
-                                tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
-                            ) VALUES (?, ?, ?, ?, 'A', 1, 'externo', 10.00, 'regalo', 'pendiente')
-                        ");
-                        $stmt->execute([$new_user_id, $nuevo_patron_id, $nuevo_patron_id, $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET]);
+                        asegurarPagoPendienteRegalo(
+                            $pdo,
+                            (int)$new_user_id,
+                            (int)$nuevo_patron_id,
+                            $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET
+                        );
 
                         // Auditoría del spillover
                         $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address) VALUES (?, 'REGISTRO_SPILLOVER', 'usuarios', ?, ?)");
@@ -377,13 +431,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
 
                             // Pago pendiente al patrón de nivel 2
-                            $stmt = $pdo->prepare("
-                                INSERT INTO pagos (
-                                    id_emisor, id_receptor, beneficiario_usuario_id, wallet_destino_real,
-                                    tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
-                                ) VALUES (?, ?, ?, ?, 'A', 1, 'externo', 10.00, 'regalo', 'pendiente')
-                            ");
-                            $stmt->execute([$new_user_id, $nuevo_patron_id, $nuevo_patron_id, $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET]);
+                            asegurarPagoPendienteRegalo(
+                                $pdo,
+                                (int)$new_user_id,
+                                (int)$nuevo_patron_id,
+                                $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET
+                            );
 
                             // Auditoría del spillover nivel 2
                             $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address) VALUES (?, 'REGISTRO_SPILLOVER_N2', 'usuarios', ?, ?)");
@@ -414,14 +467,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Su pago se dirige a RADIX_MASTER (la billetera central de la plataforma).
             // Esto garantiza que la tesorería recibe su primer ingreso desde el inicio.
             if ($master_user) {
-                // Crear pago pendiente del fundador hacia RADIX_MASTER
-                $stmt = $pdo->prepare("
-                    INSERT INTO pagos (
-                        id_emisor, id_receptor, beneficiario_usuario_id, wallet_destino_real,
-                        tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
-                    ) VALUES (?, ?, ?, ?, 'A', 1, 'externo', 10.00, 'regalo', 'pendiente')
-                ");
-                $stmt->execute([$new_user_id, $master_user['id'], $master_user['id'], $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET]);
+                // Crear o reutilizar pago pendiente del fundador hacia RADIX_MASTER
+                asegurarPagoPendienteRegalo(
+                    $pdo,
+                    (int)$new_user_id,
+                    (int)$master_user['id'],
+                    $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET
+                );
 
                 // Registrar en Auditoría
                 $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address) VALUES (?, 'REGISTRO_FUNDADOR', 'usuarios', ?, ?)");

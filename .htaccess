@@ -1,3 +1,5 @@
+DirectoryIndex index.php index.html
+
 # ============================================================
 # RADIX — Reglas de seguridad Apache
 # ============================================================
@@ -30,6 +32,8 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteRule ^radix_api/migrations/ - [F,L]
+    RewriteRule ^radix_api/vendor/ - [F,L]
+    RewriteRule ^radix_api/verify_tron_signature\.cjs$ - [F,L]
 </IfModule>
 <IfModule !mod_rewrite.c>
     # Fallback si mod_rewrite no está disponible

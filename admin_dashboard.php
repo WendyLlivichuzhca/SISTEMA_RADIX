@@ -125,7 +125,7 @@ elseif (!empty($_SESSION['radix_admin_id'])) {
         <div class="card">
             <h4>TESORERÍA (AGENTES IA)</h4>
             <div class="value" id="stat-tesoreria">$0.00</div>
-            <div class="sub">Fondos para inyectar clones</div>
+            <div class="sub">Fondos para inyectar cuentas espejo</div>
         </div>
         <div class="card">
             <h4>POOL FASE 1</h4>
@@ -176,10 +176,10 @@ elseif (!empty($_SESSION['radix_admin_id'])) {
 
             <hr style="border:none; border-top:1px solid var(--border); margin:20px 0;">
 
-            <h3>Ratio Reales / Clones</h3>
+            <h3>Ratio Reales / Cuentas Espejo</h3>
             <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:8px;">
                 <span style="color:var(--accent);">👤 Reales: <strong id="stat-reales">0</strong></span>
-                <span style="color:var(--primary);">🤖 Clones: <strong id="stat-clones">0</strong></span>
+                <span style="color:var(--primary);">🤖 Cuentas Espejo: <strong id="stat-clones">0</strong></span>
             </div>
             <div style="height:8px;width:100%;background:#222;border-radius:10px;overflow:hidden;">
                 <div id="reales-bar" style="height:100%;background:var(--gold);width:50%;transition:width 0.5s;"></div>

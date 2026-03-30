@@ -235,6 +235,46 @@ button {
     border-left: 18px solid #ffffff;
 }
 
+.support-float {
+    position: fixed;
+    right: 28px;
+    bottom: 28px;
+    z-index: 1200;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 68px;
+    height: 68px;
+    border-radius: 999px;
+    color: #ffffff;
+    text-decoration: none;
+    background: linear-gradient(135deg, #25d366, #128c4a);
+    box-shadow: 0 18px 36px rgba(18, 140, 74, 0.32);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.support-float::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: inherit;
+    border: 1px solid rgba(37, 211, 102, 0.28);
+    pointer-events: none;
+}
+
+.support-float:hover {
+    transform: translateY(-4px) scale(1.03);
+    box-shadow: 0 24px 46px rgba(18, 140, 74, 0.38);
+}
+
+.support-float svg {
+    position: relative;
+    z-index: 1;
+    width: 34px;
+    height: 34px;
+    fill: currentColor;
+}
+
 button:hover {
     transform: translateY(-3px);
     opacity: 0.9;
@@ -1024,4 +1064,18 @@ footer {
 
 .modal-app-link:hover {
     background: rgba(255,255,255,0.08);
+}
+
+@media (max-width: 768px) {
+    .support-float {
+        right: 18px;
+        bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+        width: 60px;
+        height: 60px;
+    }
+
+    .support-float svg {
+        width: 30px;
+        height: 30px;
+    }
 }

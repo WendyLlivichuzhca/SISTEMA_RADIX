@@ -15,6 +15,6 @@ if ($es_ajax) {
     header('Content-Type: application/json');
     echo json_encode(['success' => true]);
 } else {
-    header('Location: ../index.html');
+    header('Location: ../index.php');
 }
 exit;

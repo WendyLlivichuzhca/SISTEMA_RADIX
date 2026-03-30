@@ -28,9 +28,6 @@ if ($verificada !== $wallet || !$ventana_valida) {
     sendResponse(['error' => 'Verificación de billetera requerida. Por favor, reconecta tu wallet.'], 401);
 }
 
-// Consumir el flag (un solo uso, evita reutilización)
-unset($_SESSION['radix_wallet_verificada'], $_SESSION['radix_verificada_at']);
-
 try {
     $stmt_cols = $pdo->prepare("
         SELECT COUNT(*)
@@ -67,6 +64,9 @@ try {
     $_SESSION['radix_user_id']  = $user['id'];
     $_SESSION['radix_nickname'] = $user['display_name'] ?: $user['nickname'];
     $_SESSION['tipo_usuario']   = $user['tipo_usuario'];
+
+    // Consumir el flag solo después de iniciar sesión correctamente.
+    unset($_SESSION['radix_wallet_verificada'], $_SESSION['radix_verificada_at']);
 
     sendResponse(['success' => true]);
 
