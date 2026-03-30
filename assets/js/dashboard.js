@@ -56,6 +56,27 @@ let _masterAuditoria    = [];
 let _chartInstance      = null;
 let _lastEventTimestamp = Math.floor(Date.now() / 1000);
 
+function getDisplayName(entity) {
+    if (!entity) return '';
+    return entity.display_name || entity.nombre_completo || entity.nickname || '';
+}
+
+function getDisplayInitials(entity) {
+    const label = getDisplayName(entity).trim();
+    if (!label) return '?';
+
+    const parts = label
+        .split(/[\s_-]+/)
+        .map(part => part.trim())
+        .filter(Boolean);
+
+    if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+
+    return label.substring(0, 2).toUpperCase();
+}
+
 function normalizeDashboardCopy() {
     const userHeroTitle = document.querySelector('.user-hero-copy h3');
     const userHeroText = document.querySelector('.user-hero-copy p');
@@ -410,7 +431,7 @@ function renderUserTeam(refs, equipoCiclo = null, reservas = null, tablero = nul
                                                         '<span style="color:#666;">Sin pago</span>';
         const nivel = r.nivel_actual ? ` · Tablero ${r.nivel_actual}` : '';
         return `<div style="padding:10px 0; border-bottom:1px solid #1a1a28; display:flex; justify-content:space-between; align-items:center;">
-            <strong style="color:#ddd;">${r.nickname}</strong>
+            <strong style="color:#ddd;">${r.display_name || r.nickname}</strong>
             <span style="font-size:0.78rem;">${estado}${nivel}</span>
         </div>`;
     }).join('') : '<div style="color:#444; text-align:center; padding:10px;">Sin equipo aún.</div>';
@@ -537,24 +558,32 @@ async function renderNetworkTree() {
         // Convertir árbol plano a jerarquía D3
         const root = d3.hierarchy(data.arbol, d => d.hijos && d.hijos.length ? d.hijos : null);
         const isMobile = window.innerWidth <= 768;
-        const nodeCount = root.descendants().length;
         const leafCount = Math.max(root.leaves().length, 1);
+        const branchCount = Math.max(root.children ? root.children.length : 0, leafCount, 1);
         const depthCount = Math.max(root.height + 1, 1);
+        const rootRadius = isMobile ? 20 : 24;
+        const childRadius = isMobile ? 15 : 18;
+        const verticalGap = isMobile ? 120 : 150;
+        const horizontalPadding = isMobile ? 26 : 40;
 
         container.innerHTML = '';
         container.style.overflowX = 'auto';
-        container.style.padding   = isMobile ? '10px 6px' : '20px 10px';
+        container.style.padding   = isMobile ? '14px 8px' : '24px 18px';
 
         const baseWidth = container.clientWidth || container.offsetWidth || 320;
         const W = isMobile
-            ? Math.max(baseWidth - 12, Math.min(leafCount * 120, 560))
-            : Math.max(baseWidth, leafCount * 140, 500);
-        const H = isMobile
-            ? Math.max(220, Math.min(260 + (depthCount - 1) * 18, 320))
-            : Math.max(280, 240 + (depthCount - 1) * 22);
+            ? Math.max(baseWidth - 12, Math.min(branchCount * 150, 620))
+            : Math.max(baseWidth, branchCount * 220, 760);
+        const H = Math.max(isMobile ? 280 : 360, depthCount * verticalGap + (isMobile ? 120 : 150));
 
-        const treeLayout = d3.tree().size([Math.max(W - 60, 220), Math.max(H - 90, 150)]);
+        const treeLayout = d3.tree().size([
+            Math.max(W - horizontalPadding * 2, 240),
+            Math.max(H - 140, 170)
+        ]);
         treeLayout(root);
+        root.each(d => {
+            d.y = d.depth * verticalGap;
+        });
 
         const svg = d3.select(container)
             .append('svg')
@@ -565,28 +594,79 @@ async function renderNetworkTree() {
             .style('min-width', `${W}px`)
             .style('overflow', 'visible');
 
-        const g = svg.append('g').attr('transform', 'translate(30, 40)');
+        const g = svg.append('g').attr('transform', `translate(${horizontalPadding}, 48)`);
 
         // Degradado de líneas
         const defs = svg.append('defs');
         const grad = defs.append('linearGradient')
             .attr('id', 'linkGrad').attr('x1','0%').attr('y1','0%').attr('x2','100%').attr('y2','0%');
-        grad.append('stop').attr('offset','0%').attr('stop-color','#9d00ff').attr('stop-opacity', 0.6);
-        grad.append('stop').attr('offset','100%').attr('stop-color','#00d2ff').attr('stop-opacity', 0.6);
+        grad.append('stop').attr('offset','0%').attr('stop-color','#9d00ff').attr('stop-opacity', 0.78);
+        grad.append('stop').attr('offset','100%').attr('stop-color','#00d2ff').attr('stop-opacity', 0.78);
 
         // Links (líneas)
-        g.selectAll('.link')
-            .data(root.links())
+        const nodeRadius = (nodeData) => nodeData.data.es_raiz ? rootRadius : childRadius;
+        const linkSegments = [];
+
+        root.descendants().forEach(parent => {
+            const children = parent.children || [];
+            if (!children.length) return;
+
+            const parentBottomY = parent.y + nodeRadius(parent) + 2;
+            const childTopYs = children.map(child => child.y - nodeRadius(child) - 8);
+
+            if (children.length === 1) {
+                linkSegments.push({
+                    x1: parent.x,
+                    y1: parentBottomY,
+                    x2: children[0].x,
+                    y2: childTopYs[0]
+                });
+                return;
+            }
+
+            let branchY = parentBottomY + (isMobile ? 16 : 20);
+            const highestChildTop = Math.min(...childTopYs);
+
+            if (branchY > highestChildTop - 18) {
+                branchY = parentBottomY + Math.max(10, (highestChildTop - parentBottomY) * 0.35);
+            }
+
+            const childXs = children.map(child => child.x);
+
+            linkSegments.push({
+                x1: parent.x,
+                y1: parentBottomY,
+                x2: parent.x,
+                y2: branchY
+            });
+
+            linkSegments.push({
+                x1: Math.min(...childXs),
+                y1: branchY,
+                x2: Math.max(...childXs),
+                y2: branchY
+            });
+
+            children.forEach((child, index) => {
+                linkSegments.push({
+                    x1: child.x,
+                    y1: branchY,
+                    x2: child.x,
+                    y2: childTopYs[index]
+                });
+            });
+        });
+
+        g.selectAll('.link-segment')
+            .data(linkSegments)
             .enter().append('path')
-            .attr('class', 'link')
-            .attr('d', d3.linkVertical().x(d => d.x).y(d => d.y))
+            .attr('class', 'link-segment')
+            .attr('d', d => `M${d.x1},${d.y1} L${d.x2},${d.y2}`)
             .attr('fill', 'none')
             .attr('stroke', 'url(#linkGrad)')
-            .attr('stroke-width', 2)
-            .attr('stroke-dasharray', function() { return this.getTotalLength(); })
-            .attr('stroke-dashoffset', function() { return this.getTotalLength(); })
-            .transition().duration(800).delay((d, i) => i * 150)
-            .attr('stroke-dashoffset', 0);
+            .attr('stroke-width', isMobile ? 2.4 : 2.8)
+            .attr('stroke-linecap', 'round')
+            .attr('opacity', 0.96);
 
         // Nodos
         const node = g.selectAll('.node')
@@ -610,28 +690,28 @@ async function renderNetworkTree() {
             .attr('fill', d => getColor(d))
             .attr('stroke', '#0a0a12')
             .attr('stroke-width', 2)
-            .style('filter', d => `drop-shadow(0 0 6px ${getColor(d)})`)
+            .style('filter', d => `drop-shadow(0 0 10px ${getColor(d)})`)
             .transition().duration(500).delay((d, i) => i * 120)
-            .attr('r', d => d.data.es_raiz ? (isMobile ? 20 : 22) : (isMobile ? 14 : 16));
+            .attr('r', d => nodeRadius(d));
 
         // Inicial del nickname dentro del círculo
         node.append('text')
             .attr('text-anchor', 'middle')
             .attr('dy', '0.35em')
-            .attr('font-size', d => d.data.es_raiz ? (isMobile ? '9px' : '10px') : (isMobile ? '7px' : '8px'))
+            .attr('font-size', d => d.data.es_raiz ? (isMobile ? '8px' : '9px') : (isMobile ? '7px' : '8px'))
             .attr('font-weight', '800')
             .attr('fill', '#000')
-            .text(d => (d.data.nickname || '?').substring(0, 4));
+            .text(d => getDisplayInitials(d.data));
 
         // Nickname debajo del nodo
         node.append('text')
             .attr('text-anchor', 'middle')
-            .attr('dy', d => d.data.es_raiz ? '38px' : '30px')
-            .attr('font-size', isMobile ? '8px' : '9px')
-            .attr('fill', '#aaa')
+            .attr('dy', d => d.data.es_raiz ? '44px' : '36px')
+            .attr('font-size', isMobile ? '8px' : '10px')
+            .attr('fill', '#c7ccda')
             .text(d => {
-                const nick = d.data.nickname || '';
-                const maxLen = isMobile ? 8 : 10;
+                const nick = getDisplayName(d.data);
+                const maxLen = isMobile ? 11 : 14;
                 return nick.length > maxLen ? nick.substring(0, maxLen) + '…' : nick;
             });
 
@@ -640,10 +720,10 @@ async function renderNetworkTree() {
             const tableroLabel = root.data.tablero_actual === 'FASE0_COMPLETADA'
                 ? '✅ Fase 0 Completa'
                 : `Tablero ${root.data.tablero_actual}`;
-            g.select('.node:first-child')
+            g.select('.node')
              .append('text')
              .attr('text-anchor', 'middle')
-             .attr('dy', isMobile ? '-26px' : '-30px')
+             .attr('dy', isMobile ? '-30px' : '-34px')
              .attr('font-size', isMobile ? '8px' : '9px')
              .attr('fill', '#9d00ff')
              .text(tableroLabel);
@@ -659,7 +739,9 @@ async function renderNetworkTree() {
         ];
         const legendItems = isMobile ? leyenda.slice(0, 4) : leyenda;
         const legendSpacing = isMobile ? 76 : 90;
-        const legG = svg.append('g').attr('transform', `translate(10, ${H - 20})`);
+        const legendWidth = Math.max((legendItems.length - 1) * legendSpacing + 72, 120);
+        const legendX = Math.max((W - legendWidth) / 2, 12);
+        const legG = svg.append('g').attr('transform', `translate(${legendX}, ${H - 24})`);
         legendItems.forEach((l, i) => {
             legG.append('circle').attr('cx', i * legendSpacing).attr('cy', 0).attr('r', isMobile ? 4.5 : 5).attr('fill', l.color);
             legG.append('text')

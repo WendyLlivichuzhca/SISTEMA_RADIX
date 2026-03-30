@@ -7,6 +7,22 @@
 require_once 'config.php';
 session_start();
 
+function networkTreeDisplayNameExpr(PDO $pdo, string $alias = ''): string
+{
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'usuarios'
+          AND COLUMN_NAME = 'nombre_completo'
+    ");
+    $stmt->execute();
+    $prefix = $alias !== '' ? $alias . '.' : '';
+    return ((int)$stmt->fetchColumn() > 0)
+        ? "COALESCE(NULLIF({$prefix}nombre_completo, ''), {$prefix}nickname)"
+        : "{$prefix}nickname";
+}
+
 if (empty($_SESSION['radix_wallet'])) {
     sendResponse(['error' => 'No autorizado'], 401);
 }
@@ -15,7 +31,8 @@ $wallet = $_SESSION['radix_wallet'];
 
 try {
     // Obtener el usuario raíz
-    $stmt = $pdo->prepare("SELECT id, nickname, wallet_address, tipo_usuario FROM usuarios WHERE wallet_address = ?");
+    $rootDisplayNameSelect = networkTreeDisplayNameExpr($pdo) . " AS display_name";
+    $stmt = $pdo->prepare("SELECT id, nickname, {$rootDisplayNameSelect}, wallet_address, tipo_usuario FROM usuarios WHERE wallet_address = ?");
     $stmt->execute([$wallet]);
     $root = $stmt->fetch();
     if (!$root) sendResponse(['error' => 'Usuario no encontrado'], 404);
@@ -38,7 +55,7 @@ try {
         if ($depth >= $maxDepth) return [];
 
         $stmt = $pdo->prepare("
-            SELECT u.id, u.nickname, u.wallet_address, u.tipo_usuario,
+            SELECT u.id, u.nickname, " . networkTreeDisplayNameExpr($pdo, 'u') . " AS display_name, u.wallet_address, u.tipo_usuario,
                    r.posicion,
                    r.ciclo,
                    (SELECT tablero_tipo FROM tableros_progreso
@@ -76,6 +93,7 @@ try {
     $arbol = [
         'id'            => $user_id,
         'nickname'      => $root['nickname'],
+        'display_name'  => $root['display_name'] ?: $root['nickname'],
         'wallet_address'=> $root['wallet_address'],
         'tipo_usuario'  => $root['tipo_usuario'],
         'tablero_actual'=> $nivel,

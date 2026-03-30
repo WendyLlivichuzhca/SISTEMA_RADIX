@@ -4,6 +4,7 @@
  */
 
 const WALLET_SETUP_MODAL_KEY = 'radix_wallet_setup_modal_dismissed';
+const PASSWORD_MIN_LENGTH = 8;
 
 function openWalletSetupModal() {
     if (localStorage.getItem(WALLET_SETUP_MODAL_KEY) === '1') return;
@@ -91,29 +92,60 @@ function solicitarDatosContactoModal(walletAddress) {
     const nombreInput = document.getElementById('contact-nombre');
     const telefonoInput = document.getElementById('contact-telefono');
     const correoInput = document.getElementById('contact-correo');
+    const passwordWrap = document.getElementById('contact-password-wrap');
+    const passwordConfirmWrap = document.getElementById('contact-password-confirm-wrap');
+    const passwordHint = document.getElementById('contact-password-hint');
+    const passwordInput = document.getElementById('contact-password');
+    const passwordConfirmInput = document.getElementById('contact-password-confirm');
 
-    if (!modal || !form || !closeBtn || !statusEl || !nombreInput || !telefonoInput || !correoInput) {
+    if (!modal || !form || !closeBtn || !statusEl || !nombreInput || !telefonoInput || !correoInput || !passwordWrap || !passwordConfirmWrap || !passwordHint || !passwordInput || !passwordConfirmInput) {
         mostrarToastLanding("âŒ Falta el formulario de contacto en la pÃ¡gina.");
         return Promise.resolve(null);
     }
 
     return new Promise((resolve) => {
+        let requiresPassword = true;
+
+        const setPasswordVisibility = (visible) => {
+            passwordWrap.style.display = visible ? 'block' : 'none';
+            passwordConfirmWrap.style.display = visible ? 'block' : 'none';
+            passwordHint.style.display = visible ? 'block' : 'none';
+            passwordInput.required = visible;
+            passwordConfirmInput.required = visible;
+            if (!visible) {
+                passwordInput.value = '';
+                passwordConfirmInput.value = '';
+            }
+        };
+
         const openModal = () => {
             nombreInput.value = localContactData?.nombre_completo || '';
             telefonoInput.value = localContactData?.telefono || '';
             correoInput.value = localContactData?.correo_electronico || '';
             statusEl.textContent = '';
+            setPasswordVisibility(requiresPassword);
             modal.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
-            nombreInput.focus();
+            if (requiresPassword && localContactData?.nombre_completo) {
+                passwordInput.focus();
+            } else {
+                nombreInput.focus();
+            }
         };
 
         fetch(`radix_api/check_contact_fields.php?wallet=${encodeURIComponent(walletAddress)}`)
             .then(res => res.json())
             .then(data => {
-                if (data.success && data.has_contact_data && data.contact) {
-                    localStorage.setItem(storageKey, JSON.stringify(data.contact));
-                    resolve(data.contact);
-                    return;
+                if (data.success) {
+                    if (data.contact) {
+                        localContactData = data.contact;
+                        localStorage.setItem(storageKey, JSON.stringify(data.contact));
+                    }
+                    const supportsPasswordLogin = !!data.supports_password_login;
+                    if (data.has_contact_data && (!supportsPasswordLogin || data.has_password) && data.contact) {
+                        resolve(data.contact);
+                        return;
+                    }
+                    requiresPassword = supportsPasswordLogin && !data.has_password;
                 }
                 openModal();
             })
@@ -138,6 +170,8 @@ function solicitarDatosContactoModal(walletAddress) {
             const nombre_completo = nombreInput.value.trim();
             const telefono = telefonoInput.value.trim();
             const correo_electronico = correoInput.value.trim();
+            const password = passwordInput.value;
+            const passwordConfirm = passwordConfirmInput.value;
 
             if (!nombre_completo || !telefono || !correo_electronico) {
                 statusEl.textContent = 'Todos los campos son obligatorios.';
@@ -149,10 +183,21 @@ function solicitarDatosContactoModal(walletAddress) {
                 return;
             }
 
+            if (requiresPassword) {
+                if (password.length < PASSWORD_MIN_LENGTH) {
+                    statusEl.textContent = 'Tu contraseÃ±a debe tener al menos 8 caracteres.';
+                    return;
+                }
+                if (password !== passwordConfirm) {
+                    statusEl.textContent = 'Las contraseÃ±as no coinciden.';
+                    return;
+                }
+            }
+
             const contactData = { nombre_completo, telefono, correo_electronico };
             localStorage.setItem(storageKey, JSON.stringify(contactData));
             cleanup();
-            resolve(contactData);
+            resolve(requiresPassword ? { ...contactData, password } : contactData);
         };
 
         closeBtn.addEventListener('click', handleClose);
@@ -160,8 +205,77 @@ function solicitarDatosContactoModal(walletAddress) {
     });
 }
 
+function inicializarLoginUsuario() {
+    const openBtn = document.getElementById('open-login-modal');
+    const modal = document.getElementById('user-login-modal');
+    const closeBtn = document.getElementById('user-login-close');
+    const form = document.getElementById('user-login-form');
+    const statusEl = document.getElementById('user-login-status');
+    const loginInput = document.getElementById('user-login-identifier');
+    const passwordInput = document.getElementById('user-login-password');
+
+    if (!openBtn || !modal || !closeBtn || !form || !statusEl || !loginInput || !passwordInput) {
+        return;
+    }
+
+    const openModal = () => {
+        form.reset();
+        statusEl.textContent = '';
+        statusEl.style.color = '#888';
+        modal.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+        loginInput.focus();
+    };
+
+    const closeModal = () => {
+        modal.style.display = 'none';
+        statusEl.textContent = '';
+    };
+
+    openBtn.addEventListener('click', openModal);
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closeModal();
+        }
+    });
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        statusEl.style.color = '#888';
+        statusEl.textContent = 'Validando acceso...';
+
+        const formData = new FormData();
+        formData.append('login', loginInput.value.trim());
+        formData.append('password', passwordInput.value);
+
+        try {
+            const res = await fetch('radix_api/user_login.php', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+
+            if (!data.success) {
+                statusEl.style.color = '#ff6b6b';
+                statusEl.textContent = data.error || 'No se pudo iniciar sesiÃ³n.';
+                return;
+            }
+
+            statusEl.style.color = '#00e676';
+            statusEl.textContent = 'Acceso concedido. Redirigiendo...';
+            setTimeout(() => {
+                window.location.href = 'dashboard.php';
+            }, 500);
+        } catch (error) {
+            statusEl.style.color = '#ff6b6b';
+            statusEl.textContent = 'Error de conexiÃ³n con el servidor.';
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const connectBtn = document.getElementById('connect-wallet');
+    inicializarLoginUsuario();
 
     if (connectBtn && !connectBtn.dataset.listenerAttached) {
         connectBtn.dataset.listenerAttached = 'true';
@@ -280,6 +394,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 formData.append('nombre_completo', contactData.nombre_completo);
                 formData.append('telefono', contactData.telefono);
                 formData.append('correo_electronico', contactData.correo_electronico);
+                if (contactData.password) {
+                    formData.append('password', contactData.password);
+                }
 
                 const urlParams = new URLSearchParams(window.location.search);
                 const ref = urlParams.get('ref');

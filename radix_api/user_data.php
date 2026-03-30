@@ -15,6 +15,14 @@ function userDataHasColumn(PDO $pdo, string $column): bool
     return (int)$stmt->fetchColumn() > 0;
 }
 
+function userDataDisplayNameExpr(PDO $pdo, string $alias = ''): string
+{
+    $prefix = $alias !== '' ? $alias . '.' : '';
+    return userDataHasColumn($pdo, 'nombre_completo')
+        ? "COALESCE(NULLIF({$prefix}nombre_completo, ''), {$prefix}nickname)"
+        : "{$prefix}nickname";
+}
+
 // Endpoint para obtener información detallada del usuario para el Dashboard Premium
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // Seguridad: solo se permite si hay sesión activa
@@ -31,9 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
     try {
         // 1. Datos básicos del usuario
-        $displayNameSelect = userDataHasColumn($pdo, 'nombre_completo')
-            ? "COALESCE(NULLIF(nombre_completo, ''), nickname) AS display_name"
-            : "nickname AS display_name";
+        $displayNameSelect = userDataDisplayNameExpr($pdo) . " AS display_name";
 
         $stmt = $pdo->prepare("SELECT id, nickname, {$displayNameSelect}, wallet_address, tipo_usuario, telegram_chat_id, fecha_registro FROM usuarios WHERE wallet_address = ?");
         $stmt->execute([$wallet]);
@@ -71,10 +77,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $clones_count = (int)($stmt->fetch()['total'] ?? 0);
 
         // 4. Referidos directos (Humanos) del ciclo actual con estado de pago y su tablero actual
+        $referidoDisplayNameSelect = userDataDisplayNameExpr($pdo, 'u') . " AS display_name";
+
         $stmt = $pdo->prepare("
             SELECT
                 u.id,
                 u.nickname,
+                {$referidoDisplayNameSelect},
                 u.wallet_address AS wallet,
                 u.tipo_usuario AS tipo,
                 r.posicion,

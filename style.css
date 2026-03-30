@@ -55,6 +55,7 @@ nav ul {
     list-style: none;
     display: flex;
     gap: 2rem;
+    align-items: center;
 }
 
 nav ul li a {
@@ -62,6 +63,10 @@ nav ul li a {
     color: var(--text-dim);
     font-weight: 600;
     transition: color 0.3s;
+}
+
+nav ul li button {
+    font-family: inherit;
 }
 
 nav ul li a:hover {
@@ -102,6 +107,38 @@ nav ul li a:hover {
     padding: 0.5rem 1.2rem;
     border-radius: 50px;
     font-size: 0.9rem;
+}
+
+.nav-login-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0.5rem 1.1rem;
+    border-radius: 50px;
+    border: 1px solid rgba(0, 210, 255, 0.35);
+    background: linear-gradient(135deg, rgba(0, 210, 255, 0.18), rgba(36, 118, 255, 0.22));
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: 0 12px 24px rgba(0, 120, 255, 0.16);
+    transition: transform 0.2s, border-color 0.2s, background 0.2s, color 0.2s, opacity 0.2s;
+}
+
+.nav-login-btn:hover {
+    border-color: rgba(0, 210, 255, 0.52);
+    background: linear-gradient(135deg, rgba(0, 210, 255, 0.28), rgba(36, 118, 255, 0.34));
+    color: #ffffff;
+    box-shadow: 0 16px 28px rgba(0, 120, 255, 0.22);
+}
+
+nav ul li:nth-child(4) {
+    order: 5;
+}
+
+nav ul li:nth-child(5) {
+    order: 4;
 }
 
 .mobile-dapp-notice {
@@ -176,6 +213,26 @@ nav ul li a:hover {
     display: flex;
     gap: 1rem;
     flex-wrap: wrap;
+}
+
+.login-shortcut {
+    display: none;
+}
+
+.login-link-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: #25d366;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.login-link-btn:hover {
+    transform: none;
+    opacity: 1;
+    text-decoration: underline;
 }
 
 button {
@@ -719,7 +776,8 @@ footer {
         gap: 0.8rem 1rem;
     }
 
-    nav ul li a {
+    nav ul li a,
+    nav ul li button {
         font-size: 0.9rem;
         /* Área mínima táctil de 44px para accesibilidad móvil */
         display: inline-flex;
@@ -728,7 +786,8 @@ footer {
         padding: 0 4px;
     }
 
-    .nav-btn {
+    .nav-btn,
+    .nav-login-btn {
         padding: 0.55rem 1rem;
         min-height: 44px;
     }
@@ -1077,5 +1136,9 @@ footer {
     .support-float svg {
         width: 30px;
         height: 30px;
+    }
+
+    .login-shortcut {
+        justify-content: center;
     }
 }

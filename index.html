@@ -33,6 +33,7 @@
                 <li><a href="#home">Inicio</a></li>
                 <li><a href="#how-it-works">Cómo funciona</a></li>
                 <li><a href="#benefits">Beneficios</a></li>
+                <li><button id="open-login-modal" type="button" class="nav-login-btn">Iniciar Sesión</button></li>
                 <li><a href="https://t.me/+jxoT_lB6Wm82Njgx" target="_blank" class="nav-btn">Comunidad</a></li>
             </ul>
         </nav>
@@ -51,6 +52,10 @@
                     <button id="connect-wallet" class="primary-btn">Conectar Billetera</button>
                     <button class="secondary-btn">Saber más</button>
                     <a href="https://www.youtube.com/@RADIX.MASTER" target="_blank" rel="noopener noreferrer" class="secondary-btn media-cta" aria-label="Ver videos en YouTube"></a>
+                </div>
+                <div class="login-shortcut">
+                    <span>Â¿Ya estÃ¡s registrado?</span>
+                    <button id="open-login-modal-hero" type="button" class="login-link-btn">Ingresar</button>
                 </div>
             </div>
             <div class="hero-image">
@@ -251,6 +256,15 @@
                     <label for="contact-correo" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Correo electrónico</label>
                     <input id="contact-correo" name="correo_electronico" type="email" autocomplete="email" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
                 </div>
+                <div id="contact-password-wrap">
+                    <label for="contact-password" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">ContraseÃ±a de acceso</label>
+                    <input id="contact-password" name="password" type="password" autocomplete="new-password" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
+                </div>
+                <div id="contact-password-confirm-wrap">
+                    <label for="contact-password-confirm" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Confirmar contraseÃ±a</label>
+                    <input id="contact-password-confirm" type="password" autocomplete="new-password" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
+                </div>
+                <div id="contact-password-hint" style="margin-top:-4px;color:#777;font-size:0.76rem;line-height:1.5;">Esta contraseÃ±a te servirÃ¡ para volver a entrar con tu correo, telÃ©fono o wallet sin firmar de nuevo.</div>
                 <div id="contact-modal-status" style="min-height:18px;color:#ff6b6b;font-size:0.78rem;"></div>
                 <button type="submit" style="width:100%;padding:14px;border-radius:14px;background:linear-gradient(135deg,#9d00ff,#7000cc);border:none;color:#fff;font-size:0.95rem;font-weight:700;cursor:pointer;">
                     Guardar y continuar
@@ -260,6 +274,32 @@
     </div>
 
     <!-- ── MODAL: BILLETERA INSTALADA PERO SIN CONFIGURAR ────────────── -->
+    <div id="user-login-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="background:linear-gradient(145deg,#111118,#0d0d14);border:1px solid rgba(0,210,255,0.28);border-radius:24px;padding:32px 28px;max-width:470px;width:100%;position:relative;box-shadow:0 0 60px rgba(0,210,255,0.14),0 30px 60px rgba(0,0,0,0.7);">
+            <button id="user-login-close" type="button" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#888;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;">✕</button>
+            <div style="text-align:center;margin-bottom:22px;">
+                <div style="display:inline-block;background:rgba(0,210,255,0.12);border:1px solid rgba(0,210,255,0.35);color:#00d2ff;font-size:0.72rem;font-weight:700;padding:4px 14px;border-radius:20px;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px;">Acceso</div>
+                <h3 style="font-size:1.35rem;font-weight:800;color:#fff;margin-bottom:8px;">Ingresa a tu cuenta</h3>
+                <p style="color:#888;font-size:0.86rem;line-height:1.6;margin:0;">Si ya te registraste, entra con tu correo, telÃ©fono o wallet y tu contraseÃ±a.</p>
+            </div>
+
+            <form id="user-login-form" style="display:flex;flex-direction:column;gap:14px;">
+                <div>
+                    <label for="user-login-identifier" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Correo, telÃ©fono o wallet</label>
+                    <input id="user-login-identifier" name="login" type="text" autocomplete="username" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
+                </div>
+                <div>
+                    <label for="user-login-password" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">ContraseÃ±a</label>
+                    <input id="user-login-password" name="password" type="password" autocomplete="current-password" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
+                </div>
+                <div id="user-login-status" style="min-height:18px;color:#888;font-size:0.78rem;"></div>
+                <button type="submit" style="width:100%;padding:14px;border-radius:14px;background:linear-gradient(135deg,#00d2ff,#2476ff);border:none;color:#fff;font-size:0.95rem;font-weight:700;cursor:pointer;">
+                    Ingresar ahora
+                </button>
+            </form>
+        </div>
+    </div>
+
     <div id="wallet-setup-modal" class="modal-overlay" style="display:none;">
         <div class="modal-content" style="background:linear-gradient(145deg,#111118,#0d0d14);border:1px solid rgba(157,0,255,0.4);border-radius:24px;padding:32px 28px;max-width:460px;width:100%;position:relative;box-shadow:0 0 60px rgba(157,0,255,0.2),0 30px 60px rgba(0,0,0,0.7);">
             <button onclick="localStorage.setItem('radix_wallet_setup_modal_dismissed','1');document.getElementById('wallet-setup-modal').style.display='none';" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#888;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;">✕</button>
@@ -374,5 +414,18 @@
 
         </div>
     </div>
+    <a
+        href="https://wha.link/bk8PEd"
+        class="support-float"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Abrir WhatsApp de soporte"
+        title="WhatsApp"
+    >
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M19.11 17.21c-.29-.15-1.71-.84-1.97-.94-.26-.1-.45-.15-.64.15-.19.29-.74.94-.91 1.13-.17.19-.34.22-.63.08-.29-.15-1.23-.45-2.34-1.44-.86-.77-1.44-1.71-1.61-2-.17-.29-.02-.45.13-.6.13-.13.29-.34.44-.5.15-.17.19-.29.29-.48.1-.19.05-.36-.02-.5-.07-.15-.64-1.55-.88-2.12-.23-.55-.47-.48-.64-.49l-.55-.01c-.19 0-.5.07-.76.36-.26.29-1 1-.97 2.43.03 1.43 1.03 2.81 1.17 3.01.15.19 2.01 3.08 4.88 4.32.68.29 1.22.46 1.64.59.69.22 1.32.19 1.82.12.56-.08 1.71-.7 1.95-1.37.24-.67.24-1.24.17-1.36-.07-.12-.26-.19-.55-.34Z"></path>
+            <path d="M27.27 4.73A15.89 15.89 0 0 0 16 0C7.16 0 0 7.16 0 16c0 2.82.74 5.58 2.15 8L0 32l8.2-2.11A15.93 15.93 0 0 0 16 32c8.84 0 16-7.16 16-16 0-4.27-1.66-8.29-4.73-11.27ZM16 29.2a13.1 13.1 0 0 1-6.68-1.82l-.48-.28-4.87 1.25 1.3-4.75-.31-.49A13.13 13.13 0 0 1 2.8 16C2.8 8.72 8.72 2.8 16 2.8c3.52 0 6.83 1.37 9.32 3.87A13.08 13.08 0 0 1 29.2 16c0 7.28-5.92 13.2-13.2 13.2Z"></path>
+        </svg>
+    </a>
 </body>
 </html>

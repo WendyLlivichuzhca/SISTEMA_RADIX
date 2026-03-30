@@ -16,7 +16,7 @@ function obtenerCicloActivoUsuario($pdo, $usuario_id) {
     return $ciclo ? (int)$ciclo : 1;
 }
 
-function actualizarDatosContactoUsuario(PDO $pdo, array $contact_columns, int $user_id, string $nombre_completo, string $telefono, string $correo_electronico): void {
+function actualizarDatosContactoUsuario(PDO $pdo, array $contact_columns, int $user_id, string $nombre_completo, string $telefono, string $correo_electronico, string $password = ''): void {
     $update_fields = [];
     $update_values = [];
 
@@ -31,6 +31,10 @@ function actualizarDatosContactoUsuario(PDO $pdo, array $contact_columns, int $u
     if (!empty($correo_electronico) && !empty($contact_columns['correo_electronico'])) {
         $update_fields[] = "correo_electronico = ?";
         $update_values[] = $correo_electronico;
+    }
+    if ($password !== '' && !empty($contact_columns['password_hash'])) {
+        $update_fields[] = "password_hash = ?";
+        $update_values[] = password_hash($password, PASSWORD_DEFAULT);
     }
 
     if (empty($update_fields)) {
@@ -85,13 +89,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nombre_completo     = trim($_POST['nombre_completo'] ?? '');
     $telefono            = trim($_POST['telefono'] ?? '');
     $correo_electronico  = trim($_POST['correo_electronico'] ?? '');
+    $password            = (string)($_POST['password'] ?? '');
     $patrocinador_wallet = $_POST['patrocinador'] ?? null;
     $signature           = trim($_POST['signature'] ?? '');
     $message_signed      = trim($_POST['message'] ?? '');
     $ip_address          = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    $password_min_length = 8;
 
     if (empty($wallet)) {
         sendResponse(['error' => 'La billetera es obligatoria'], 400);
+    }
+
+    if ($password !== '' && strlen($password) < $password_min_length) {
+        sendResponse(['error' => 'La contraseÃ±a debe tener al menos 8 caracteres'], 400);
     }
 
     if (!empty($correo_electronico) && !filter_var($correo_electronico, FILTER_VALIDATE_EMAIL)) {
@@ -153,25 +163,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = DATABASE()
               AND TABLE_NAME = 'usuarios'
-              AND COLUMN_NAME IN ('nombre_completo', 'telefono', 'correo_electronico')
+              AND COLUMN_NAME IN ('nombre_completo', 'telefono', 'correo_electronico', 'password_hash')
         ");
         $contact_columns = array_fill_keys($stmt->fetchAll(PDO::FETCH_COLUMN), true);
 
         // 1. Verificar si la billetera ya existe (Idempotencia / Login)
-        $stmt = $pdo->prepare("SELECT id, patrocinador_id, tipo_usuario FROM usuarios WHERE wallet_address = ?");
+        $passwordSelect = !empty($contact_columns['password_hash']) ? ", password_hash" : ", '' AS password_hash";
+        $stmt = $pdo->prepare("SELECT id, patrocinador_id, tipo_usuario{$passwordSelect} FROM usuarios WHERE wallet_address = ?");
         $stmt->execute([$wallet]);
         $existing_user = $stmt->fetch();
+        $password_required = !empty($contact_columns['password_hash']) && (!$existing_user || empty((string)($existing_user['password_hash'] ?? '')));
+
+        if ($password_required && $password === '') {
+            $pdo->rollBack();
+            sendResponse(['error' => 'Debes crear una contraseÃ±a para completar tu acceso.'], 400);
+        }
 
         // Cuentas master/sistema: login directo, NUNCA generan pagos
         if ($existing_user && in_array($existing_user['tipo_usuario'], ['master', 'sistema'])) {
-            actualizarDatosContactoUsuario($pdo, $contact_columns, (int)$existing_user['id'], $nombre_completo, $telefono, $correo_electronico);
+            actualizarDatosContactoUsuario($pdo, $contact_columns, (int)$existing_user['id'], $nombre_completo, $telefono, $correo_electronico, $password);
             $pdo->commit();
             sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
         }
 
         // Usuario real existente con patrocinador: login directo
         if ($existing_user && $existing_user['patrocinador_id'] !== null) {
-            actualizarDatosContactoUsuario($pdo, $contact_columns, (int)$existing_user['id'], $nombre_completo, $telefono, $correo_electronico);
+            actualizarDatosContactoUsuario($pdo, $contact_columns, (int)$existing_user['id'], $nombre_completo, $telefono, $correo_electronico, $password);
             $pdo->commit();
             sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
         }
@@ -190,13 +207,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($pago_existente) {
                 // Pago ya completado → no se puede reasignar, login directo
                 if ($pago_existente['estado'] === 'completado') {
-                    actualizarDatosContactoUsuario($pdo, $contact_columns, (int)$existing_user['id'], $nombre_completo, $telefono, $correo_electronico);
+                    actualizarDatosContactoUsuario($pdo, $contact_columns, (int)$existing_user['id'], $nombre_completo, $telefono, $correo_electronico, $password);
                     $pdo->commit();
                     sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
                 }
                 // Pago pendiente sin link de referido → login directo
                 if ($pago_existente['estado'] === 'pendiente' && empty($patrocinador_wallet)) {
-                    actualizarDatosContactoUsuario($pdo, $contact_columns, (int)$existing_user['id'], $nombre_completo, $telefono, $correo_electronico);
+                    actualizarDatosContactoUsuario($pdo, $contact_columns, (int)$existing_user['id'], $nombre_completo, $telefono, $correo_electronico, $password);
                     $pdo->commit();
                     sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
                 }
@@ -243,6 +260,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $update_fields[] = "correo_electronico = ?";
                 $update_values[] = $correo_electronico;
             }
+            if ($password !== '' && !empty($contact_columns['password_hash'])) {
+                $update_fields[] = "password_hash = ?";
+                $update_values[] = password_hash($password, PASSWORD_DEFAULT);
+            }
 
             $update_values[] = $new_user_id;
             $stmt = $pdo->prepare("UPDATE usuarios SET " . implode(', ', $update_fields) . " WHERE id = ?");
@@ -265,6 +286,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!empty($contact_columns['correo_electronico'])) {
                 $insert_fields[] = 'correo_electronico';
                 $insert_values[] = $correo_electronico;
+                $insert_marks[] = '?';
+            }
+            if (!empty($contact_columns['password_hash'])) {
+                $insert_fields[] = 'password_hash';
+                $insert_values[] = $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null;
                 $insert_marks[] = '?';
             }
 

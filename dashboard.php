@@ -5,7 +5,7 @@ session_start();
 require_once 'radix_api/config.php';
 
 if (empty($_SESSION['radix_wallet'])) {
-    header("Location: index.html");
+    header("Location: index.php");
     exit;
 }
 $user_wallet = $_SESSION['radix_wallet'];

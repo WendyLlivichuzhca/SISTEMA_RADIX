@@ -20,26 +20,38 @@ if ($nonceWallet !== $wallet || $nonceExpira < time()) {
 }
 
 try {
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*)
+    $stmt = $pdo->query("
+        SELECT COLUMN_NAME
         FROM INFORMATION_SCHEMA.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
           AND TABLE_NAME = 'usuarios'
-          AND COLUMN_NAME IN ('nombre_completo', 'telefono', 'correo_electronico')
+          AND COLUMN_NAME IN ('nombre_completo', 'telefono', 'correo_electronico', 'password_hash')
     ");
-    $stmt->execute();
-    $column_count = (int)$stmt->fetchColumn();
+    $columns = array_fill_keys($stmt->fetchAll(PDO::FETCH_COLUMN), true);
 
-    if ($column_count < 3) {
+    $has_contact_columns = !empty($columns['nombre_completo']) && !empty($columns['telefono']) && !empty($columns['correo_electronico']);
+    $has_password_column = !empty($columns['password_hash']);
+
+    if (!$has_contact_columns && !$has_password_column) {
         sendResponse([
             'success' => true,
             'has_contact_data' => false,
+            'has_password' => false,
+            'supports_password_login' => false,
             'contact' => null,
         ]);
     }
 
+    $selectParts = [];
+    $selectParts[] = $has_contact_columns
+        ? "nombre_completo, telefono, correo_electronico"
+        : "'' AS nombre_completo, '' AS telefono, '' AS correo_electronico";
+    $selectParts[] = $has_password_column
+        ? "CASE WHEN password_hash IS NOT NULL AND password_hash <> '' THEN 1 ELSE 0 END AS has_password"
+        : "0 AS has_password";
+
     $stmt = $pdo->prepare("
-        SELECT nombre_completo, telefono, correo_electronico
+        SELECT " . implode(', ', $selectParts) . "
         FROM usuarios
         WHERE wallet_address = ?
         LIMIT 1
@@ -51,6 +63,8 @@ try {
         sendResponse([
             'success' => true,
             'has_contact_data' => false,
+            'has_password' => false,
+            'supports_password_login' => $has_password_column,
             'contact' => null,
         ]);
     }
@@ -60,10 +74,13 @@ try {
     $correo = trim((string)($user['correo_electronico'] ?? ''));
 
     $has_contact_data = ($nombre !== '' && $telefono !== '' && $correo !== '');
+    $has_password = !empty($user['has_password']);
 
     sendResponse([
         'success' => true,
         'has_contact_data' => $has_contact_data,
+        'has_password' => $has_password,
+        'supports_password_login' => $has_password_column,
         'contact' => $has_contact_data ? [
             'nombre_completo' => $nombre,
             'telefono' => $telefono,
