@@ -10,13 +10,27 @@ if (empty($_SESSION['radix_wallet'])) {
 }
 $user_wallet = $_SESSION['radix_wallet'];
 
+// Hacer tolerante el dashboard si la migración de nombre_completo aún no existe
+$stmt_cols = $pdo->prepare("
+    SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'usuarios'
+      AND COLUMN_NAME = 'nombre_completo'
+");
+$stmt_cols->execute();
+$has_nombre_completo = (bool)$stmt_cols->fetchColumn();
+$displayNameSelect = $has_nombre_completo
+    ? "COALESCE(NULLIF(nombre_completo, ''), nickname) AS display_name"
+    : "nickname AS display_name";
+
 // Obtener datos del usuario
 $stmt = $pdo->prepare("
     SELECT
         id,
         tipo_usuario,
         nickname,
-        COALESCE(NULLIF(nombre_completo, ''), nickname) AS display_name
+        {$displayNameSelect}
     FROM usuarios
     WHERE wallet_address = ?
 ");

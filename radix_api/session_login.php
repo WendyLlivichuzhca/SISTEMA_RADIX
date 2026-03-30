@@ -32,11 +32,25 @@ if ($verificada !== $wallet || !$ventana_valida) {
 unset($_SESSION['radix_wallet_verificada'], $_SESSION['radix_verificada_at']);
 
 try {
+    $stmt_cols = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'usuarios'
+          AND COLUMN_NAME = 'nombre_completo'
+    ");
+    $stmt_cols->execute();
+    $has_nombre_completo = (bool)$stmt_cols->fetchColumn();
+
+    $displayNameSelect = $has_nombre_completo
+        ? "COALESCE(NULLIF(nombre_completo, ''), nickname) AS display_name"
+        : "nickname AS display_name";
+
     $stmt = $pdo->prepare("
         SELECT
             id,
             nickname,
-            COALESCE(NULLIF(nombre_completo, ''), nickname) AS display_name,
+            {$displayNameSelect},
             tipo_usuario
         FROM usuarios
         WHERE wallet_address = ?
