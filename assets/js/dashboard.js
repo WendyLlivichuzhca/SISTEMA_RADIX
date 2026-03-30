@@ -326,7 +326,27 @@ function switchMasterSection(tabName) {
 function renderMasterUsers() {
     const body = document.getElementById('master-users-body');
     if (!body) return;
-    body.innerHTML = _masterUserList.map(u => `<tr><td>#${u.id}</td><td style="color:#fff; font-weight:700;">${u.nickname}</td><td style="font-family:monospace; color:#888;">${u.wallet_address}</td></tr>`).join('');
+    const paymentBadge = (estado) => {
+        if (estado === 'completado') {
+            return '<span style="color:#00e676; font-weight:800;">✓ Pagado</span>';
+        }
+        if (estado === 'pendiente') {
+            return '<span style="color:#ffb300; font-weight:800;">⏳ Pendiente</span>';
+        }
+        return '<span style="color:#666;">Sin registro</span>';
+    };
+
+    body.innerHTML = _masterUserList.map(u => `
+        <tr>
+            <td>#${u.id}</td>
+            <td style="color:#fff; font-weight:700;">${u.nombre_completo || 'Sin dato'}</td>
+            <td style="color:#ddd; font-weight:700;">${u.nickname || 'Sin dato'}</td>
+            <td style="color:#bbb;">${u.telefono || 'Sin dato'}</td>
+            <td style="color:#bbb;">${u.correo_electronico || 'Sin dato'}</td>
+            <td>${paymentBadge(u.pago_estado)}</td>
+            <td style="font-family:monospace; color:#888;">${u.wallet_address}</td>
+        </tr>
+    `).join('');
 }
 
 function renderMasterRetirosFull() {

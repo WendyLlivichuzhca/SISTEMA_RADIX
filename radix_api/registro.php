@@ -15,6 +15,32 @@ function obtenerCicloActivoUsuario($pdo, $usuario_id) {
     return $ciclo ? (int)$ciclo : 1;
 }
 
+function actualizarDatosContactoUsuario(PDO $pdo, array $contact_columns, int $user_id, string $nombre_completo, string $telefono, string $correo_electronico): void {
+    $update_fields = [];
+    $update_values = [];
+
+    if (!empty($nombre_completo) && !empty($contact_columns['nombre_completo'])) {
+        $update_fields[] = "nombre_completo = ?";
+        $update_values[] = $nombre_completo;
+    }
+    if (!empty($telefono) && !empty($contact_columns['telefono'])) {
+        $update_fields[] = "telefono = ?";
+        $update_values[] = $telefono;
+    }
+    if (!empty($correo_electronico) && !empty($contact_columns['correo_electronico'])) {
+        $update_fields[] = "correo_electronico = ?";
+        $update_values[] = $correo_electronico;
+    }
+
+    if (empty($update_fields)) {
+        return;
+    }
+
+    $update_values[] = $user_id;
+    $stmt = $pdo->prepare("UPDATE usuarios SET " . implode(', ', $update_fields) . " WHERE id = ?");
+    $stmt->execute($update_values);
+}
+
 // Endpoint para el registro de nuevos usuarios (Radix v2.0)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $wallet              = trim($_POST['wallet'] ?? '');
@@ -82,12 +108,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Cuentas master/sistema: login directo, NUNCA generan pagos
         if ($existing_user && in_array($existing_user['tipo_usuario'], ['master', 'sistema'])) {
+            actualizarDatosContactoUsuario($pdo, $contact_columns, (int)$existing_user['id'], $nombre_completo, $telefono, $correo_electronico);
             $pdo->commit();
             sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
         }
 
         // Usuario real existente con patrocinador: login directo
         if ($existing_user && $existing_user['patrocinador_id'] !== null) {
+            actualizarDatosContactoUsuario($pdo, $contact_columns, (int)$existing_user['id'], $nombre_completo, $telefono, $correo_electronico);
             $pdo->commit();
             sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
         }
@@ -106,11 +134,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($pago_existente) {
                 // Pago ya completado → no se puede reasignar, login directo
                 if ($pago_existente['estado'] === 'completado') {
+                    actualizarDatosContactoUsuario($pdo, $contact_columns, (int)$existing_user['id'], $nombre_completo, $telefono, $correo_electronico);
                     $pdo->commit();
                     sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
                 }
                 // Pago pendiente sin link de referido → login directo
                 if ($pago_existente['estado'] === 'pendiente' && empty($patrocinador_wallet)) {
+                    actualizarDatosContactoUsuario($pdo, $contact_columns, (int)$existing_user['id'], $nombre_completo, $telefono, $correo_electronico);
                     $pdo->commit();
                     sendResponse(['success' => true, 'user_id' => $existing_user['id'], 'message' => 'Login exitoso']);
                 }

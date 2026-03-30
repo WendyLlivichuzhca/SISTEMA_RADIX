@@ -586,7 +586,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
 
         <?php if ($es_master): ?>
             <!-- SPA SECTIONS FOR MASTER -->
-            <div id="section-usuarios" class="master-section"><div class="master-card"><h4>👥 Gestión Usuarios</h4><table class="master-table"><thead><tr><th>ID</th><th>Nick</th><th>Wallet</th></tr></thead><tbody id="master-users-body"></tbody></table></div></div>
+            <div id="section-usuarios" class="master-section"><div class="master-card"><h4>👥 Gestión Usuarios</h4><table class="master-table"><thead><tr><th>ID</th><th>Nombre</th><th>Nick</th><th>Teléfono</th><th>Correo</th><th>Estado de pago</th><th>Wallet</th></tr></thead><tbody id="master-users-body"></tbody></table></div></div>
             <div id="section-clones" class="master-section"><div class="master-card"><h4>🤖 Todos los Agentes</h4><table class="master-table"><thead><tr><th>ID</th><th>Beneficiario</th><th>Fecha</th></tr></thead><tbody id="master-clones-full-body"></tbody></table></div></div>
             <div id="section-retiros" class="master-section"><div class="master-card"><h4>💰 Retiros Full</h4><div id="master-retiros-full-list"></div></div></div>
             <div id="section-auditoria" class="master-section"><div class="master-card"><h4>📜 Auditoría Completa</h4><table class="master-table"><thead><tr><th>Acción</th><th>Fecha</th></tr></thead><tbody id="master-auditoria-full-body"></tbody></table></div></div>
