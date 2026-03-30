@@ -32,7 +32,15 @@ if ($verificada !== $wallet || !$ventana_valida) {
 unset($_SESSION['radix_wallet_verificada'], $_SESSION['radix_verificada_at']);
 
 try {
-    $stmt = $pdo->prepare("SELECT id, nickname, tipo_usuario FROM usuarios WHERE wallet_address = ?");
+    $stmt = $pdo->prepare("
+        SELECT
+            id,
+            nickname,
+            COALESCE(NULLIF(nombre_completo, ''), nickname) AS display_name,
+            tipo_usuario
+        FROM usuarios
+        WHERE wallet_address = ?
+    ");
     $stmt->execute([$wallet]);
     $user = $stmt->fetch();
 
@@ -43,7 +51,7 @@ try {
     // Guardar en sesión (nunca en URL)
     $_SESSION['radix_wallet']   = $wallet;
     $_SESSION['radix_user_id']  = $user['id'];
-    $_SESSION['radix_nickname'] = $user['nickname'];
+    $_SESSION['radix_nickname'] = $user['display_name'] ?: $user['nickname'];
     $_SESSION['tipo_usuario']   = $user['tipo_usuario'];
 
     sendResponse(['success' => true]);

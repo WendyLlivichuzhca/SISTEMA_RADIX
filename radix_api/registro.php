@@ -19,6 +19,9 @@ function obtenerCicloActivoUsuario($pdo, $usuario_id) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $wallet              = trim($_POST['wallet'] ?? '');
     $nickname            = trim($_POST['nickname'] ?? '');
+    $nombre_completo     = trim($_POST['nombre_completo'] ?? '');
+    $telefono            = trim($_POST['telefono'] ?? '');
+    $correo_electronico  = trim($_POST['correo_electronico'] ?? '');
     $patrocinador_wallet = $_POST['patrocinador'] ?? null;
     $signature           = trim($_POST['signature'] ?? '');
     $message_signed      = trim($_POST['message'] ?? '');
@@ -26,6 +29,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($wallet)) {
         sendResponse(['error' => 'La billetera es obligatoria'], 400);
+    }
+
+    if (!empty($correo_electronico) && !filter_var($correo_electronico, FILTER_VALIDATE_EMAIL)) {
+        sendResponse(['error' => 'El correo electrónico no es válido'], 400);
     }
 
     // ── Verificar firma del nonce (prueba de ownership de wallet) ──────────
@@ -58,6 +65,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $pdo->beginTransaction();
+
+        $stmt = $pdo->query("
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'usuarios'
+              AND COLUMN_NAME IN ('nombre_completo', 'telefono', 'correo_electronico')
+        ");
+        $contact_columns = array_fill_keys($stmt->fetchAll(PDO::FETCH_COLUMN), true);
 
         // 1. Verificar si la billetera ya existe (Idempotencia / Login)
         $stmt = $pdo->prepare("SELECT id, patrocinador_id, tipo_usuario FROM usuarios WHERE wallet_address = ?");
@@ -126,11 +142,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // 3. Insertar o Actualizar usuario con patrocinador
         if ($new_user_id) {
-            $stmt = $pdo->prepare("UPDATE usuarios SET patrocinador_id = ? WHERE id = ?");
-            $stmt->execute([$patrocinador_id, $new_user_id]);
+            $update_fields = ["patrocinador_id = ?"];
+            $update_values = [$patrocinador_id];
+
+            if (!empty($nombre_completo) && !empty($contact_columns['nombre_completo'])) {
+                $update_fields[] = "nombre_completo = ?";
+                $update_values[] = $nombre_completo;
+            }
+            if (!empty($telefono) && !empty($contact_columns['telefono'])) {
+                $update_fields[] = "telefono = ?";
+                $update_values[] = $telefono;
+            }
+            if (!empty($correo_electronico) && !empty($contact_columns['correo_electronico'])) {
+                $update_fields[] = "correo_electronico = ?";
+                $update_values[] = $correo_electronico;
+            }
+
+            $update_values[] = $new_user_id;
+            $stmt = $pdo->prepare("UPDATE usuarios SET " . implode(', ', $update_fields) . " WHERE id = ?");
+            $stmt->execute($update_values);
         } else {
-            $stmt = $pdo->prepare("INSERT INTO usuarios (wallet_address, nickname, patrocinador_id, ip_registro) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$wallet, $nickname, $patrocinador_id, $ip_address]);
+            $insert_fields = ['wallet_address', 'nickname', 'patrocinador_id', 'ip_registro'];
+            $insert_values = [$wallet, $nickname, $patrocinador_id, $ip_address];
+            $insert_marks = ['?', '?', '?', '?'];
+
+            if (!empty($contact_columns['nombre_completo'])) {
+                $insert_fields[] = 'nombre_completo';
+                $insert_values[] = $nombre_completo;
+                $insert_marks[] = '?';
+            }
+            if (!empty($contact_columns['telefono'])) {
+                $insert_fields[] = 'telefono';
+                $insert_values[] = $telefono;
+                $insert_marks[] = '?';
+            }
+            if (!empty($contact_columns['correo_electronico'])) {
+                $insert_fields[] = 'correo_electronico';
+                $insert_values[] = $correo_electronico;
+                $insert_marks[] = '?';
+            }
+
+            $stmt = $pdo->prepare(
+                "INSERT INTO usuarios (" . implode(', ', $insert_fields) . ") VALUES (" . implode(', ', $insert_marks) . ")"
+            );
+            $stmt->execute($insert_values);
             $new_user_id = $pdo->lastInsertId();
 
             // 4. Inicializar progreso en Tablero A (solo usuarios reales, nunca master/sistema)
@@ -182,9 +237,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 require_once 'matrix_logic.php';
                 verificarAvanceTablero($patrocinador_id, $pdo);
 
-                // INTENTAR ACTIVAR CLONES CON FONDOS DE TESORERÍA (Si hay disponibles)
-                require_once 'clon_logic.php';
-                intentarActivarClon($pdo);
+                // MODO MANUAL:
+                // Los clones no se activan automáticamente desde registro.
+                // La tesorería se acumula y el admin decide cuándo dispararlos.
 
             } else {
                 // ── SPILLOVER AUTOMÁTICO ──────────────────────────────────────────
@@ -244,9 +299,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         require_once 'matrix_logic.php';
                         verificarAvanceTablero($nuevo_patron_id, $pdo);
 
-                        // Intentar activar clones
-                        require_once 'clon_logic.php';
-                        intentarActivarClon($pdo);
+                        // MODO MANUAL:
+                        // Los clones no se activan automáticamente desde registro.
 
                     } else {
                         $pdo->rollBack();
@@ -311,8 +365,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             require_once 'matrix_logic.php';
                             verificarAvanceTablero($nuevo_patron_id, $pdo);
 
-                            require_once 'clon_logic.php';
-                            intentarActivarClon($pdo);
+                            // MODO MANUAL:
+                            // Los clones no se activan automáticamente desde registro.
 
                         } else {
                             $pdo->rollBack();

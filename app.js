@@ -3,6 +3,74 @@
  * Gestiona la conexión real de MetaMask/SafePal, el registro automático y el acceso.
  */
 
+const WALLET_SETUP_MODAL_KEY = 'radix_wallet_setup_modal_dismissed';
+
+function openWalletSetupModal() {
+    if (localStorage.getItem(WALLET_SETUP_MODAL_KEY) === '1') return;
+    const setupModal = document.getElementById('wallet-setup-modal');
+    if (setupModal) {
+        setupModal.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+    }
+}
+
+function closeWalletSetupModal(remember = true) {
+    const setupModal = document.getElementById('wallet-setup-modal');
+    if (setupModal) {
+        setupModal.style.display = 'none';
+    }
+    if (remember) {
+        localStorage.setItem(WALLET_SETUP_MODAL_KEY, '1');
+    }
+}
+
+window.closeWalletSetupModal = closeWalletSetupModal;
+
+function solicitarDatosContacto(walletAddress) {
+    const storageKey = `radix_contact_${walletAddress}`;
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            if (parsed.nombre_completo && parsed.telefono && parsed.correo_electronico) {
+                return parsed;
+            }
+        } catch (e) {}
+    }
+
+    const pedir = (label, validator = null) => {
+        while (true) {
+            const value = window.prompt(label);
+            if (value === null) return null;
+            const clean = value.trim();
+            if (!clean) {
+                mostrarToastLanding("❌ Este dato es obligatorio para completar tu registro.");
+                continue;
+            }
+            if (validator && !validator(clean)) {
+                mostrarToastLanding("❌ Revisa el formato e inténtalo de nuevo.");
+                continue;
+            }
+            return clean;
+        }
+    };
+
+    const nombre_completo = pedir("Ingresa tu nombre completo:");
+    if (!nombre_completo) return null;
+
+    const telefono = pedir("Ingresa tu número de teléfono:");
+    if (!telefono) return null;
+
+    const correo_electronico = pedir(
+        "Ingresa tu correo electrónico:",
+        (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+    );
+    if (!correo_electronico) return null;
+
+    const contactData = { nombre_completo, telefono, correo_electronico };
+    localStorage.setItem(storageKey, JSON.stringify(contactData));
+    return contactData;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const connectBtn = document.getElementById('connect-wallet');
 
@@ -34,8 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         connectBtn.disabled = false;
                         const msg = (initErr?.message || '').toLowerCase();
                         if (msg === 'timeout' || msg.includes('at least one account') || msg.includes('no account')) {
-                            const setupModal = document.getElementById('wallet-setup-modal');
-                            if (setupModal) setupModal.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+                            openWalletSetupModal();
                         } else {
                             mostrarToastLanding("❌ SafePal no respondió. Desbloquea la extensión e intenta de nuevo.");
                         }
@@ -61,8 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             connectBtn.innerText = "Conectar Billetera";
                             connectBtn.disabled = false;
                             if (msg === 'timeout' || msg.includes('at least one account') || msg.includes('no account')) {
-                                const setupModal = document.getElementById('wallet-setup-modal');
-                                if (setupModal) setupModal.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+                                openWalletSetupModal();
                                 return;
                             }
                             throw new Error("SafePal no pudo conectarse. Desbloquea la extensión e intenta de nuevo.");
@@ -76,8 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!walletAddress) {
                     connectBtn.innerText = "Conectar Billetera";
                     connectBtn.disabled = false;
-                    const setupModal = document.getElementById('wallet-setup-modal');
-                    if (setupModal) setupModal.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+                    openWalletSetupModal();
                     return;
                 }
 
@@ -111,11 +176,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 // ─── 4 & 5. Registro / Login unificado vía registro.php ───────
                 // registro.php verifica la firma tanto para usuarios nuevos como
                 // para usuarios existentes, garantizando prueba de ownership.
+                const contactData = solicitarDatosContacto(walletAddress);
+                if (!contactData) {
+                    connectBtn.innerText = "Conectar Billetera";
+                    connectBtn.disabled = false;
+                    return;
+                }
+
                 const formData = new FormData();
                 formData.append('wallet',    walletAddress);
                 formData.append('nickname',  "TRON_" + walletAddress.substring(0, 4));
                 formData.append('signature', firma);
                 formData.append('message',   nonceData.mensaje);
+                formData.append('nombre_completo', contactData.nombre_completo);
+                formData.append('telefono', contactData.telefono);
+                formData.append('correo_electronico', contactData.correo_electronico);
 
                 const urlParams = new URLSearchParams(window.location.search);
                 const ref = urlParams.get('ref');

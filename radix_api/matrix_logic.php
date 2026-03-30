@@ -295,8 +295,9 @@ function verificarAvanceTablero($usuario_id, $pdo) {
             // Notificar al usuario (fuera de la transacción para no bloquear si Telegram falla)
             notificarAvanceTablero($pdo, $usuario_id, $tipo_actual, $monto_usuario);
 
-            // Intentar activar clones con fondos de tesorería (después del commit)
-            intentarActivarClon($pdo);
+            // MODO MANUAL:
+            // Los clones no se activan automáticamente al completar tableros.
+            // La tesorería se acumula y el admin los activa desde el panel.
         }
 
     } catch (Exception $e) {

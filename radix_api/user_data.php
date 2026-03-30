@@ -2,6 +2,19 @@
 require_once 'config.php';
 session_start();
 
+function userDataHasColumn(PDO $pdo, string $column): bool
+{
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'usuarios'
+          AND COLUMN_NAME = ?
+    ");
+    $stmt->execute([$column]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
 // Endpoint para obtener información detallada del usuario para el Dashboard Premium
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // Seguridad: solo se permite si hay sesión activa
@@ -18,7 +31,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
     try {
         // 1. Datos básicos del usuario
-        $stmt = $pdo->prepare("SELECT id, nickname, wallet_address, tipo_usuario, telegram_chat_id, fecha_registro FROM usuarios WHERE wallet_address = ?");
+        $displayNameSelect = userDataHasColumn($pdo, 'nombre_completo')
+            ? "COALESCE(NULLIF(nombre_completo, ''), nickname) AS display_name"
+            : "nickname AS display_name";
+
+        $stmt = $pdo->prepare("SELECT id, nickname, {$displayNameSelect}, wallet_address, tipo_usuario, telegram_chat_id, fecha_registro FROM usuarios WHERE wallet_address = ?");
         $stmt->execute([$wallet]);
         $user = $stmt->fetch();
 
@@ -235,6 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'user'          => [
                 'id'             => (int)$user['id'],
                 'nickname'       => $user['nickname'],
+                'display_name'   => $user['display_name'] ?: $user['nickname'],
                 'wallet'         => $user['wallet_address'],
                 'tipo_usuario'   => $user['tipo_usuario'],
                 'nivel'          => $nivel_actual,

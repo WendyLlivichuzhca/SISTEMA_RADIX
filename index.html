@@ -33,7 +33,7 @@
                 <li><a href="#home">Inicio</a></li>
                 <li><a href="#how-it-works">Cómo funciona</a></li>
                 <li><a href="#benefits">Beneficios</a></li>
-                <li><a href="https://discord.com" target="_blank" class="nav-btn">Comunidad</a></li>
+                <li><a href="https://t.me/+jxoT_lB6Wm82Njgx" target="_blank" class="nav-btn">Comunidad</a></li>
             </ul>
         </nav>
     </header>
@@ -50,6 +50,7 @@
                 <div class="cta-group">
                     <button id="connect-wallet" class="primary-btn">Conectar Billetera</button>
                     <button class="secondary-btn">Saber más</button>
+                    <a href="https://www.youtube.com/@RADIX.MASTER" target="_blank" rel="noopener noreferrer" class="secondary-btn media-cta" aria-label="Ver videos en YouTube"></a>
                 </div>
             </div>
             <div class="hero-image">
@@ -230,7 +231,7 @@
     <!-- ── MODAL: BILLETERA INSTALADA PERO SIN CONFIGURAR ────────────── -->
     <div id="wallet-setup-modal" class="modal-overlay" style="display:none;">
         <div class="modal-content" style="background:linear-gradient(145deg,#111118,#0d0d14);border:1px solid rgba(157,0,255,0.4);border-radius:24px;padding:32px 28px;max-width:460px;width:100%;position:relative;box-shadow:0 0 60px rgba(157,0,255,0.2),0 30px 60px rgba(0,0,0,0.7);">
-            <button onclick="document.getElementById('wallet-setup-modal').style.display='none'" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#888;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;">✕</button>
+            <button onclick="localStorage.setItem('radix_wallet_setup_modal_dismissed','1');document.getElementById('wallet-setup-modal').style.display='none';" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#888;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;">✕</button>
 
             <div style="text-align:center;margin-bottom:24px;">
                 <div style="font-size:2.5rem;margin-bottom:12px;">🟡</div>
@@ -263,7 +264,7 @@
                 </div>
             </div>
 
-            <button onclick="document.getElementById('wallet-setup-modal').style.display='none'" style="width:100%;padding:14px;border-radius:14px;background:linear-gradient(135deg,#9d00ff,#7000cc);border:none;color:#fff;font-size:0.95rem;font-weight:700;cursor:pointer;">
+            <button onclick="localStorage.setItem('radix_wallet_setup_modal_dismissed','1');document.getElementById('wallet-setup-modal').style.display='none';" style="width:100%;padding:14px;border-radius:14px;background:linear-gradient(135deg,#9d00ff,#7000cc);border:none;color:#fff;font-size:0.95rem;font-weight:700;cursor:pointer;">
                 ✅ Ya configuré mi wallet
             </button>
         </div>

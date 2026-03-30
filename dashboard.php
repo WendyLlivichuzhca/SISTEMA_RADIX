@@ -1,5 +1,6 @@
 <?php
 // dashboard.php — RADIX Phase 0
+header('Content-Type: text/html; charset=UTF-8');
 session_start();
 require_once 'radix_api/config.php';
 
@@ -10,11 +11,19 @@ if (empty($_SESSION['radix_wallet'])) {
 $user_wallet = $_SESSION['radix_wallet'];
 
 // Obtener datos del usuario
-$stmt = $pdo->prepare("SELECT id, tipo_usuario, nickname FROM usuarios WHERE wallet_address = ?");
+$stmt = $pdo->prepare("
+    SELECT
+        id,
+        tipo_usuario,
+        nickname,
+        COALESCE(NULLIF(nombre_completo, ''), nickname) AS display_name
+    FROM usuarios
+    WHERE wallet_address = ?
+");
 $stmt->execute([$user_wallet]);
 $user_info = $stmt->fetch();
 $es_master = ($user_info && $user_info['tipo_usuario'] === 'master');
-$nickname = $user_info ? $user_info['nickname'] : 'Socio';
+$nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) : 'Socio';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -193,11 +202,6 @@ $nickname = $user_info ? $user_info['nickname'] : 'Socio';
                             <div style="color:#00e676; font-weight:800; font-size:0.95rem;">+$40 USDT neto</div>
                         </div>
                     </div>
-                </div>
-                <!-- Total -->
-                <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(157,0,255,0.08); border:1px solid rgba(157,0,255,0.2); border-radius:10px; padding:10px 14px; margin-top:10px;">
-                    <span style="color:#aaa; font-size:0.82rem;">💰 Ganancia total por ciclo</span>
-                    <span style="color:#fff; font-weight:900; font-size:1rem;">$70 USDT</span>
                 </div>
                 <p style="text-align:center; color:#555; font-size:0.75rem; margin-top:10px;">🤖 El sistema activa Agentes IA si hay huecos en tu red.</p>
             </div>

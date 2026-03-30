@@ -1,6 +1,19 @@
 <?php
 require_once 'config.php';
 require_once 'admin_auth.php';
+
+function userColumnExists(PDO $pdo, string $column): bool
+{
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'usuarios'
+          AND COLUMN_NAME = ?
+    ");
+    $stmt->execute([$column]);
+    return (int)$stmt->fetchColumn() > 0;
+}
 requireAdminSession(); // 🔒 Solo admins autenticados
 
 // admin_global_stats.php - API exclusiva para la dueña (RADIX Master Control)
@@ -90,7 +103,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         // 5b. Total físico recibido en blockchain (TODOS los pagos de entrada van a RADIX_MASTER wallet on-chain)
         //     Incluye pagos donde id_receptor es cualquier usuario (ej: TKqT recibe comisión de TQ2R)
         //     pero el USDT físico siempre llega a la billetera central TDLFwy5swL2B8stX6tgUgQr2BjB1DFdwoU
-        $stmt = $pdo->query("SELECT COALESCE(SUM(monto_pagado), 0) as total FROM pagos WHERE tipo = 'regalo' AND estado = 'completado'");
+        $stmt = $pdo->query("
+            SELECT COALESCE(SUM(monto_pagado), 0) as total
+            FROM pagos
+            WHERE tipo = 'regalo'
+              AND estado = 'completado'
+              AND origen_fondos = 'externo'
+        ");
         $total_blockchain = (float)($stmt->fetch()['total'] ?? 0);
 
         // 5c. Total pendiente de distribuir = entradas blockchain - fondos ya asignados internamente.
@@ -154,11 +173,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         } catch (Exception $e) { }
 
         // 10. Lista completa de usuarios reales
+        $select_nombre = userColumnExists($pdo, 'nombre_completo')
+            ? 'u.nombre_completo'
+            : "'' AS nombre_completo";
+        $select_telefono = userColumnExists($pdo, 'telefono')
+            ? 'u.telefono'
+            : "'' AS telefono";
+        $select_correo = userColumnExists($pdo, 'correo_electronico')
+            ? 'u.correo_electronico'
+            : "'' AS correo_electronico";
+
         $stmt = $pdo->query("
-            SELECT id, nickname, wallet_address, tipo_usuario, fecha_registro
-            FROM usuarios
-            WHERE tipo_usuario IN ('real', 'master')
-            ORDER BY id ASC
+            SELECT
+                u.id,
+                u.nickname,
+                u.wallet_address,
+                u.tipo_usuario,
+                u.fecha_registro,
+                {$select_nombre},
+                {$select_telefono},
+                {$select_correo},
+                (
+                    SELECT p.estado
+                    FROM pagos p
+                    WHERE p.id_emisor = u.id
+                      AND p.tipo = 'regalo'
+                    ORDER BY p.id DESC
+                    LIMIT 1
+                ) AS pago_estado
+            FROM usuarios u
+            WHERE u.tipo_usuario IN ('real', 'master')
+            ORDER BY u.id ASC
         ");
         $lista_usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

@@ -12,6 +12,7 @@ if (php_sapi_name() !== 'cli') {
     header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
     header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
     header("Vary: Origin");
+    header('Content-Type: text/html; charset=UTF-8');
 }
 
 if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
@@ -47,15 +48,16 @@ $db_user = $_ENV['DB_USER'] ?? '';
 $db_pass = $_ENV['DB_PASS'] ?? '';
 
 try {
-    $pdo = new PDO("mysql:host=$db_host;dbname=$db_name;charset=utf8", $db_user, $db_pass);
+    $pdo = new PDO("mysql:host=$db_host;dbname=$db_name;charset=utf8mb4", $db_user, $db_pass);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    $pdo->exec("SET NAMES utf8mb4");
 } catch (PDOException $e) {
     // SEGURIDAD: NUNCA exponer el mensaje completo de PDO al cliente.
     // Puede contener host, usuario, nombre de DB o credenciales.
     error_log("RADIX DB connection error: " . $e->getMessage()); // Solo en logs del servidor
     if (php_sapi_name() !== 'cli') {
-        header('Content-Type: application/json');
+        header('Content-Type: application/json; charset=UTF-8');
         http_response_code(500);
     }
     echo json_encode(['error' => 'Error de conexión al servidor. Por favor intenta más tarde.']);
@@ -66,7 +68,7 @@ try {
 function sendResponse(array $data, int $status = 200): void
 {
     if (php_sapi_name() !== 'cli') {
-        header('Content-Type: application/json');
+        header('Content-Type: application/json; charset=UTF-8');
         http_response_code($status);
     }
     echo json_encode($data, JSON_UNESCAPED_UNICODE);

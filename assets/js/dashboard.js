@@ -56,16 +56,47 @@ let _masterAuditoria    = [];
 let _chartInstance      = null;
 let _lastEventTimestamp = Math.floor(Date.now() / 1000);
 
+function normalizeDashboardCopy() {
+    const userHeroTitle = document.querySelector('.user-hero-copy h3');
+    const userHeroText = document.querySelector('.user-hero-copy p');
+    const userHeroBadges = document.querySelectorAll('.user-hero-badge');
+
+    if (userHeroTitle) {
+        userHeroTitle.textContent = 'Tu panel ya está listo para operar y crecer dentro de la red.';
+    }
+
+    if (userHeroText) {
+        userHeroText.textContent = 'Desde aquí puedes seguir tu activación, revisar tu tablero actual, monitorear tu equipo y entender visualmente en qué parte del ciclo te encuentras.';
+    }
+
+    userHeroBadges.forEach((badge) => {
+        const label = badge.querySelector('.user-hero-badge-label')?.textContent?.trim();
+        const value = badge.querySelector('strong');
+        if (!value) return;
+
+        if (label === 'Wallet Real') {
+            value.textContent = 'RADIX_MASTER';
+        }
+
+        if (label === 'Modelo') {
+            value.textContent = 'Red 3x1 por ciclos';
+        }
+    });
+}
+
 async function loadDashboard() {
     try {
+        normalizeDashboardCopy();
         const response = await fetch('radix_api/user_data.php');
         const data     = await response.json();
         if (!data.success) return;
 
         // 1. Basic Info
-        if(document.getElementById('welcome-msg')) document.getElementById('welcome-msg').innerText = `Hola, ${data.user.nickname} 👋`;
+        const displayName = data.user.display_name || data.user.nickname;
+        if(document.getElementById('welcome-msg')) document.getElementById('welcome-msg').innerText = `Hola, ${displayName} 👋`;
         if(document.getElementById('wallet-address-display')) document.getElementById('wallet-address-display').innerText = data.user.wallet;
-        if(document.getElementById('avatar-circle')) document.getElementById('avatar-circle').innerText = data.user.nickname.substring(0, 2).toUpperCase();
+        if(document.getElementById('avatar-circle')) document.getElementById('avatar-circle').innerText = displayName.substring(0, 2).toUpperCase();
+        if(document.getElementById('sidebar-nickname-text')) document.getElementById('sidebar-nickname-text').innerText = displayName;
         // V4 — sidebar wallet short display
         updateSidebarWallet(data.user.wallet);
 

@@ -233,6 +233,13 @@ elseif (!empty($_SESSION['radix_admin_id'])) {
         </table>
     </div>
 
+    <div class="section-box">
+        <h3>Contactos de Usuarios</h3>
+        <div id="contactos-list">
+            <p style="color:#444;font-size:0.8rem;text-align:center;padding:20px 0;">Cargando contactos...</p>
+        </div>
+    </div>
+
 </main>
 
 <script>
@@ -354,6 +361,35 @@ async function loadAdminStats() {
             `).join('');
         } else {
             logsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#444;">No hay actividad reciente</td></tr>';
+        }
+
+        const contactosEl = document.getElementById('contactos-list');
+        if (data.lista_usuarios && data.lista_usuarios.length > 0) {
+            contactosEl.innerHTML = data.lista_usuarios.map(user => {
+                const nombre = user.nombre_completo || 'Sin nombre registrado';
+                const telefono = user.telefono || 'Sin teléfono';
+                const correo = user.correo_electronico || 'Sin correo';
+                const pago = user.pago_estado === 'completado'
+                    ? '<span class="ok">PAGÓ</span>'
+                    : '<span class="pend">PENDIENTE</span>';
+
+                return `
+                    <div style="display:flex;justify-content:space-between;gap:14px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <div style="flex:1;">
+                            <div style="font-size:0.88rem;color:#fff;font-weight:800;">${nombre}</div>
+                            <div style="font-size:0.78rem;color:#aaa;margin-top:4px;">${user.nickname || 'Sin nickname'} · ID ${user.id}</div>
+                            <div style="font-size:0.72rem;color:#666;margin-top:6px;word-break:break-all;">${user.wallet_address}</div>
+                        </div>
+                        <div style="flex:1;">
+                            <div style="font-size:0.78rem;color:#ddd;">Tel: ${telefono}</div>
+                            <div style="font-size:0.78rem;color:#ddd;margin-top:4px;">Correo: ${correo}</div>
+                            <div style="font-size:0.75rem;margin-top:8px;">${pago}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            contactosEl.innerHTML = '<p style="color:#444;font-size:0.8rem;text-align:center;padding:20px 0;">No hay usuarios para mostrar.</p>';
         }
 
     } catch (error) {
