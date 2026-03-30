@@ -263,23 +263,6 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                 <a href="#" class="nav-item" id="nav-auditoria" onclick="switchMasterSection('auditoria')">📜 Registro de Auditoría</a>
             <?php else: ?>
                 <div class="user-dashboard-shell">
-                <section class="user-hero-card">
-                    <div class="user-hero-copy">
-                        <span class="user-hero-eyebrow">RADIX PHASE 0</span>
-                        <h3>Tu panel ya estÃ¡ listo para operar y crecer dentro de la red.</h3>
-                        <p>Desde aquÃ­ puedes seguir tu activaciÃ³n, revisar tu tablero actual, monitorear tu equipo y entender visualmente en quÃ© parte del ciclo te encuentras.</p>
-                    </div>
-                    <div class="user-hero-badges">
-                        <div class="user-hero-badge">
-                            <span class="user-hero-badge-label">Wallet Real</span>
-                            <strong>RADIX_MASTER</strong>
-                        </div>
-                        <div class="user-hero-badge">
-                            <span class="user-hero-badge-label">Modelo</span>
-                            <strong>Red 3Ã—1 por ciclos</strong>
-                        </div>
-                    </div>
-                </section>
                 <a href="#" class="nav-item" onclick="document.getElementById('team-list')?.closest('.master-card')?.scrollIntoView({behavior:'smooth'}); return false;">👥 Mi Equipo</a>
                 <a href="#" class="nav-item" onclick="document.getElementById('val-clones')?.closest('.sb')?.scrollIntoView({behavior:'smooth'}); return false;">🤖 Mis Agentes IA</a>
             <?php endif; ?>

@@ -597,11 +597,18 @@ async function renderNetworkTree() {
         const g = svg.append('g').attr('transform', `translate(${horizontalPadding}, 48)`);
 
         // Degradado de líneas
+        // IMPORTANTE: usar gradientUnits="userSpaceOnUse" con coordenadas absolutas.
+        // El default "objectBoundingBox" hace invisible las líneas verticales porque
+        // su bounding box tiene ancho=0, lo que degenera el gradiente a transparente.
         const defs = svg.append('defs');
+        const gradId = 'linkGrad_' + Date.now(); // ID único para evitar conflictos entre renders
         const grad = defs.append('linearGradient')
-            .attr('id', 'linkGrad').attr('x1','0%').attr('y1','0%').attr('x2','100%').attr('y2','0%');
-        grad.append('stop').attr('offset','0%').attr('stop-color','#9d00ff').attr('stop-opacity', 0.78);
-        grad.append('stop').attr('offset','100%').attr('stop-color','#00d2ff').attr('stop-opacity', 0.78);
+            .attr('id', gradId)
+            .attr('gradientUnits', 'userSpaceOnUse')
+            .attr('x1', 0).attr('y1', 0)
+            .attr('x2', 0).attr('y2', H); // de arriba (púrpura) hacia abajo (cyan)
+        grad.append('stop').attr('offset','0%').attr('stop-color','#9d00ff').attr('stop-opacity', 0.9);
+        grad.append('stop').attr('offset','100%').attr('stop-color','#00d2ff').attr('stop-opacity', 0.9);
 
         // Links (líneas)
         const nodeRadius = (nodeData) => nodeData.data.es_raiz ? rootRadius : childRadius;
@@ -663,7 +670,7 @@ async function renderNetworkTree() {
             .attr('class', 'link-segment')
             .attr('d', d => `M${d.x1},${d.y1} L${d.x2},${d.y2}`)
             .attr('fill', 'none')
-            .attr('stroke', 'url(#linkGrad)')
+            .attr('stroke', () => `url(#${gradId})`)
             .attr('stroke-width', isMobile ? 2.4 : 2.8)
             .attr('stroke-linecap', 'round')
             .attr('opacity', 0.96);
