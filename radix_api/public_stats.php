@@ -6,20 +6,39 @@
  */
 require_once 'config.php';
 
+function publicStatsDisplayNameExpr(PDO $pdo): string
+{
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'usuarios'
+          AND COLUMN_NAME = 'nombre_completo'
+    ");
+    $stmt->execute();
+    $hasNombre = (bool)$stmt->fetchColumn();
+
+    return $hasNombre
+        ? "COALESCE(NULLIF(nombre_completo, ''), nickname)"
+        : "nickname";
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     sendResponse(['error' => 'Método no permitido'], 405);
 }
 
 try {
-    // ── Si viene ?ref_wallet= devolver solo el nickname del referidor ──
+    // ── Si viene ?ref_wallet= devolver el nombre visible del referidor ──
     $ref_wallet = trim($_GET['ref_wallet'] ?? '');
     if (!empty($ref_wallet)) {
-        $stmt = $pdo->prepare("SELECT nickname FROM usuarios WHERE wallet_address = ? AND tipo_usuario = 'real' LIMIT 1");
+        $displayExpr = publicStatsDisplayNameExpr($pdo) . " AS display_name";
+        $stmt = $pdo->prepare("SELECT nickname, {$displayExpr} FROM usuarios WHERE wallet_address = ? AND tipo_usuario = 'real' LIMIT 1");
         $stmt->execute([$ref_wallet]);
         $row = $stmt->fetch();
         sendResponse([
-            'success'  => true,
-            'nickname' => $row ? $row['nickname'] : null,
+            'success'      => true,
+            'nickname'     => $row ? $row['nickname'] : null,
+            'display_name' => $row ? ($row['display_name'] ?: $row['nickname']) : null,
         ]);
     }
 

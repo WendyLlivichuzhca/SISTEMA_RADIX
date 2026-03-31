@@ -512,8 +512,8 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
         const res  = await fetch(`radix_api/public_stats.php?ref_wallet=${encodeURIComponent(refWallet)}`);
         const data = await res.json();
-        if (data.nickname) {
-            nickEl.innerText = data.nickname;
+        if (data.display_name || data.nickname) {
+            nickEl.innerText = data.display_name || data.nickname;
         }
     } catch(e) { /* silencioso — ya se muestra la wallet truncada */ }
 })();

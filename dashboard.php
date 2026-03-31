@@ -298,6 +298,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                     <div class="widget"><h4>💰 Ganancia Red</h4><div id="val-master-earnings" class="value">$0.00</div><div class="trend">Distribuido a usuarios</div></div>
                     <div class="widget" style="border-left: 3px solid #00d2ff;"><h4>💎 Total Blockchain</h4><div id="val-total-blockchain" class="value">$0.00</div><div class="trend">Recibido en tu wallet</div></div>
                     <div class="widget" style="border-left: 3px solid #ffab00;"><h4>⏳ Por Distribuir</h4><div id="val-pendiente-dist" class="value">$0.00</div><div class="trend">Comisiones red pendientes</div></div>
+                    <div class="widget" style="border-left: 3px solid #39d98a;"><h4>🧾 Créditos Excedente</h4><div id="val-creditos-excedente" class="value">$0.00</div><div class="trend">Saldo a favor de usuarios</div></div>
                 </div>
 
                 <div class="master-grid-top">

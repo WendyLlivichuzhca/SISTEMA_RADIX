@@ -112,8 +112,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ");
         $total_blockchain = (float)($stmt->fetch()['total'] ?? 0);
 
-        // 5c. Total pendiente de distribuir = entradas blockchain - fondos ya asignados internamente.
-        //     Se descuentan ganancias ya pagadas, tesoreria, reservas usadas, fondo Fase 1 y re-entradas.
+        // 5c. Créditos por excedente: pagos superiores al monto esperado ya abonados
+        //     a usuarios específicos. No deben confundirse con fondos "libres por distribuir".
+        $stmt = $pdo->query("
+            SELECT COALESCE(SUM(credito_saldo), 0) as total
+            FROM usuarios
+            WHERE tipo_usuario = 'real'
+        ");
+        $creditos_excedente = (float)($stmt->fetch()['total'] ?? 0);
+
+        // 5d. Total pendiente de distribuir = entradas blockchain - fondos ya asignados internamente.
+        //     Se descuentan ganancias ya pagadas, tesoreria, reservas usadas, fondo Fase 1,
+        //     re-entradas y créditos excedentes ya comprometidos a usuarios.
         $pendiente_distribuir = max(
             0,
             $total_blockchain
@@ -122,6 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             - $reservas_aplicadas
             - $fase1_pool
             - $reentrada_pool
+            - $creditos_excedente
         );
 
         // 6. Distribución de usuarios por tablero actual
@@ -224,6 +235,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'reservas_pendientes'   => (float)$reservas_pendientes,
             'master_id1_earnings'   => (float)$master_earnings,
             'total_blockchain'      => (float)$total_blockchain,
+            'creditos_excedente'    => (float)$creditos_excedente,
             'pendiente_distribuir'  => (float)$pendiente_distribuir,
             'usuarios' => [
                 'reales' => (int)$total_reales,

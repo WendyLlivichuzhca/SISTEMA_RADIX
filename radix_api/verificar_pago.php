@@ -155,14 +155,14 @@ try {
             $detalle_log .= " | Excedente acreditado: $" . number_format($excedente, 2);
         }
 
-        // Activar el tablero A solo cuando el pago de entrada queda confirmado.
-        // Si el usuario ya tiene un tablero activo/completado, no duplicamos registros.
-        $stmt = $pdo->prepare("SELECT id FROM tableros_progreso WHERE usuario_id = ? LIMIT 1");
+        // Activar el tablero A de Fase 0 solo cuando el pago de entrada queda confirmado.
+        // Si el usuario ya tiene un tablero activo/completado en Fase 0, no duplicamos registros.
+        $stmt = $pdo->prepare("SELECT id FROM tableros_progreso WHERE usuario_id = ? AND fase_numero = 0 LIMIT 1");
         $stmt->execute([$pago['id_emisor']]);
         if (!$stmt->fetch()) {
             $stmt = $pdo->prepare("
-                INSERT INTO tableros_progreso (usuario_id, tablero_tipo, ciclo, estado)
-                VALUES (?, 'A', 1, 'en_progreso')
+                INSERT INTO tableros_progreso (usuario_id, fase_numero, tablero_tipo, ciclo, estado)
+                VALUES (?, 0, 'A', 1, 'en_progreso')
             ");
             $stmt->execute([$pago['id_emisor']]);
         }

@@ -484,6 +484,7 @@ async function loadMasterAdvancedData() {
         animateValue(document.getElementById('val-master-earnings'),    data.master_id1_earnings || 0,   '$', '', true);
         animateValue(document.getElementById('val-total-blockchain'),  data.total_blockchain || 0,      '$', '', true);
         animateValue(document.getElementById('val-pendiente-dist'),    data.pendiente_distribuir || 0,  '$', '', true);
+        animateValue(document.getElementById('val-creditos-excedente'), data.creditos_excedente || 0,  '$', '', true);
         animateValue(document.getElementById('val-usuarios-reales'),   data.usuarios?.reales || 0,      '',  '', false);
         animateValue(document.getElementById('val-balance'),           data.tesoreria || 0,             '$', '', true);
         animateValue(document.getElementById('val-fase'),              data.fase1_pool || 0,            '$', '', true);
@@ -830,42 +831,59 @@ async function renderNetworkTree() {
         const root = d3.hierarchy(data.arbol, d => d.hijos && d.hijos.length ? d.hijos : null);
         const isMobile = window.innerWidth <= 768;
         const leafCount = Math.max(root.leaves().length, 1);
-        const branchCount = Math.max(root.children ? root.children.length : 0, leafCount, 1);
         const depthCount = Math.max(root.height + 1, 1);
-        const rootRadius = isMobile ? 20 : 24;
-        const childRadius = isMobile ? 15 : 18;
-        const verticalGap = isMobile ? 120 : 150;
-        const horizontalPadding = isMobile ? 26 : 40;
+        const compactMode = leafCount >= 5;
+        const rootRadius = isMobile ? 20 : (compactMode ? 22 : 24);
+        const childRadius = isMobile ? 14 : (compactMode ? 16 : 18);
+        const verticalGap = isMobile ? 150 : (compactMode ? 165 : 185);
+        const horizontalPadding = isMobile ? 18 : (compactMode ? 28 : 40);
+        const topMargin = isMobile ? 78 : 96;
+        const bottomMargin = isMobile ? 120 : 138;
+        const allowHorizontalScroll = isMobile;
 
         container.innerHTML = '';
-        container.style.overflowX = 'auto';
-        container.style.padding   = isMobile ? '14px 8px' : '24px 18px';
+        container.style.display = 'block';
+        container.style.alignItems = 'stretch';
+        container.style.justifyContent = 'flex-start';
+        container.style.overflow = 'hidden';
+        container.style.padding = '0';
 
-        const baseWidth = container.clientWidth || container.offsetWidth || 320;
-        const W = isMobile
-            ? Math.max(baseWidth - 12, Math.min(branchCount * 150, 620))
-            : Math.max(baseWidth, branchCount * 220, 760);
-        const H = Math.max(isMobile ? 280 : 360, depthCount * verticalGap + (isMobile ? 120 : 150));
+        const scroller = document.createElement('div');
+        scroller.className = 'network-tree-scroller';
+        scroller.style.overflowX = allowHorizontalScroll ? 'auto' : 'hidden';
+        scroller.style.overflowY = 'hidden';
+        scroller.style.width = '100%';
+        scroller.style.padding = isMobile ? '14px 10px 18px' : '20px 18px 22px';
+        scroller.style.boxSizing = 'border-box';
+        container.appendChild(scroller);
 
-        const treeLayout = d3.tree().size([
-            Math.max(W - horizontalPadding * 2, 240),
-            Math.max(H - 140, 170)
-        ]);
+        const baseWidth = scroller.clientWidth || container.clientWidth || 320;
+        const innerWidth = allowHorizontalScroll
+            ? Math.max(baseWidth - 6, leafCount * 120)
+            : Math.max(baseWidth - horizontalPadding * 2, 280);
+        const innerHeight = Math.max((depthCount - 1) * verticalGap, isMobile ? 220 : 270);
+
+        const treeLayout = d3.tree().size([innerWidth, innerHeight]);
         treeLayout(root);
-        root.each(d => {
-            d.y = d.depth * verticalGap;
-        });
 
-        const svg = d3.select(container)
+        const W = allowHorizontalScroll
+            ? innerWidth + horizontalPadding * 2
+            : baseWidth;
+        const H = innerHeight + topMargin + bottomMargin;
+        const offsetX = horizontalPadding;
+        const offsetY = topMargin;
+
+        const svg = d3.select(scroller)
             .append('svg')
             .attr('width', W)
             .attr('height', H)
             .attr('viewBox', `0 0 ${W} ${H}`)
-            .style('width', `${W}px`)
-            .style('min-width', `${W}px`)
+            .style('width', allowHorizontalScroll ? `${W}px` : '100%')
+            .style('min-width', allowHorizontalScroll ? `${W}px` : '100%')
+            .style('display', 'block')
             .style('overflow', 'visible');
 
-        const g = svg.append('g').attr('transform', `translate(${horizontalPadding}, 48)`);
+        const g = svg.append('g').attr('transform', `translate(${offsetX}, ${offsetY})`);
 
         // Degradado de líneas
         // IMPORTANTE: usar gradientUnits="userSpaceOnUse" con coordenadas absolutas.
@@ -1019,7 +1037,7 @@ async function renderNetworkTree() {
         const legendSpacing = isMobile ? 76 : 90;
         const legendWidth = Math.max((legendItems.length - 1) * legendSpacing + 72, 120);
         const legendX = Math.max((W - legendWidth) / 2, 12);
-        const legG = svg.append('g').attr('transform', `translate(${legendX}, ${H - 24})`);
+        const legG = svg.append('g').attr('transform', `translate(${legendX}, ${H - (isMobile ? 24 : 28)})`);
         legendItems.forEach((l, i) => {
             legG.append('circle').attr('cx', i * legendSpacing).attr('cy', 0).attr('r', isMobile ? 4.5 : 5).attr('fill', l.color);
             legG.append('text')
