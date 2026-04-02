@@ -6,6 +6,7 @@ $_ENV['TELEGRAM_BOT_TOKEN'] = '';
 putenv('TELEGRAM_BOT_TOKEN=');
 
 require_once __DIR__ . '/radix_api/matrix_logic.php';
+require_once __DIR__ . '/radix_api/network_placement.php';
 
 function simObtenerCicloActivoUsuario(PDO $pdo, int $usuario_id): int
 {
@@ -13,6 +14,7 @@ function simObtenerCicloActivoUsuario(PDO $pdo, int $usuario_id): int
         SELECT ciclo
         FROM tableros_progreso
         WHERE usuario_id = ?
+          AND fase_numero = 0
         ORDER BY (estado = 'en_progreso') DESC, ciclo DESC, id DESC
         LIMIT 1
     ");
@@ -31,78 +33,18 @@ function simObtenerWalletMaster(PDO $pdo): string
 function simResolverUbicacion(PDO $pdo, int $patrocinador_id): array
 {
     $ciclo_red = simObtenerCicloActivoUsuario($pdo, $patrocinador_id);
-
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM referidos WHERE id_padre = ? AND ciclo = ?");
-    $stmt->execute([$patrocinador_id, $ciclo_red]);
-    $cuenta = (int)$stmt->fetchColumn();
-
-    if ($cuenta < 3) {
-        return [
-            'padre_real_id' => $patrocinador_id,
-            'ciclo_red' => $ciclo_red,
-            'nivel' => 'directo',
-        ];
+    $ubicacion = radixFindAvailablePlacement($pdo, $patrocinador_id, 0, $ciclo_red);
+    if (!$ubicacion) {
+        throw new RuntimeException('La red activa de Fase 0 ya no tiene espacios disponibles para este ciclo.');
     }
 
-    $stmt = $pdo->prepare("
-        SELECT r.id_hijo AS nuevo_patron_id
-        FROM referidos r
-        JOIN usuarios u ON r.id_hijo = u.id
-        WHERE r.id_padre = ?
-          AND r.ciclo = ?
-          AND u.tipo_usuario = 'real'
-          AND (
-                SELECT COUNT(*)
-                FROM referidos r2
-                WHERE r2.id_padre = r.id_hijo
-                  AND r2.ciclo = ?
-          ) < 3
-        ORDER BY r.posicion ASC
-        LIMIT 1
-    ");
-    $stmt->execute([$patrocinador_id, $ciclo_red, $ciclo_red]);
-    $nuevo_patron_id = $stmt->fetchColumn();
-
-    if ($nuevo_patron_id) {
-        return [
-            'padre_real_id' => (int)$nuevo_patron_id,
-            'ciclo_red' => $ciclo_red,
-            'nivel' => 'spillover_n1',
-        ];
-    }
-
-    $stmt = $pdo->prepare("
-        SELECT r2.id_hijo AS nuevo_patron_id
-        FROM referidos r1
-        JOIN referidos r2 ON r2.id_padre = r1.id_hijo
-        JOIN usuarios u1 ON r1.id_hijo = u1.id
-        JOIN usuarios u2 ON r2.id_hijo = u2.id
-        WHERE r1.id_padre = ?
-          AND r1.ciclo = ?
-          AND r2.ciclo = ?
-          AND u1.tipo_usuario = 'real'
-          AND u2.tipo_usuario = 'real'
-          AND (
-                SELECT COUNT(*)
-                FROM referidos r3
-                WHERE r3.id_padre = r2.id_hijo
-                  AND r3.ciclo = ?
-          ) < 3
-        ORDER BY r1.posicion ASC, r2.posicion ASC
-        LIMIT 1
-    ");
-    $stmt->execute([$patrocinador_id, $ciclo_red, $ciclo_red, $ciclo_red]);
-    $nuevo_patron_n2 = $stmt->fetchColumn();
-
-    if ($nuevo_patron_n2) {
-        return [
-            'padre_real_id' => (int)$nuevo_patron_n2,
-            'ciclo_red' => $ciclo_red,
-            'nivel' => 'spillover_n2',
-        ];
-    }
-
-    throw new RuntimeException('La red del patrocinador ya esta llena en niveles 1 y 2 para este ciclo.');
+    return [
+        'padre_real_id' => (int)$ubicacion['padre_id'],
+        'ciclo_red' => (int)$ubicacion['ciclo'],
+        'fase_numero' => (int)$ubicacion['fase_numero'],
+        'nivel' => (string)$ubicacion['modo'],
+        'profundidad' => (int)$ubicacion['depth'],
+    ];
 }
 
 function simCrearUsuarioPagado(PDO $pdo, int $patrocinador_id, string $tag, int $indice): array
@@ -110,6 +52,7 @@ function simCrearUsuarioPagado(PDO $pdo, int $patrocinador_id, string $tag, int 
     $resolucion = simResolverUbicacion($pdo, $patrocinador_id);
     $padre_real_id = $resolucion['padre_real_id'];
     $ciclo_red = $resolucion['ciclo_red'];
+    $fase_numero = $resolucion['fase_numero'];
 
     $wallet_master = simObtenerWalletMaster($pdo);
     $wallet = sprintf('SIM_%s_%02d_%s', strtoupper($tag), $indice, substr(strtoupper(bin2hex(random_bytes(6))), 0, 12));
@@ -128,34 +71,40 @@ function simCrearUsuarioPagado(PDO $pdo, int $patrocinador_id, string $tag, int 
         $stmt->execute([$wallet, $nickname, $patrocinador_id]);
         $nuevo_usuario_id = (int)$pdo->lastInsertId();
 
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM referidos WHERE id_padre = ? AND ciclo = ?");
-        $stmt->execute([$padre_real_id, $ciclo_red]);
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*)
+            FROM referidos
+            WHERE id_padre = ?
+              AND fase_numero = ?
+              AND ciclo = ?
+        ");
+        $stmt->execute([$padre_real_id, $fase_numero, $ciclo_red]);
         $posicion = (int)$stmt->fetchColumn() + 1;
 
         $stmt = $pdo->prepare("
-            INSERT INTO referidos (id_padre, id_hijo, posicion, nivel_en_red, ciclo)
-            VALUES (?, ?, ?, 1, ?)
+            INSERT INTO referidos (id_padre, id_hijo, fase_numero, posicion, nivel_en_red, ciclo)
+            VALUES (?, ?, ?, ?, 1, ?)
         ");
-        $stmt->execute([$padre_real_id, $nuevo_usuario_id, $posicion, $ciclo_red]);
+        $stmt->execute([$padre_real_id, $nuevo_usuario_id, $fase_numero, $posicion, $ciclo_red]);
 
         $stmt = $pdo->prepare("
             INSERT INTO pagos (
-                id_emisor, id_receptor, beneficiario_usuario_id, wallet_destino_real,
+                id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, wallet_destino_real,
                 tablero_tipo, ciclo, origen_fondos, monto, monto_pagado,
                 hash_transaccion, tipo, estado, tx_hash, tx_hash_2,
                 fecha_confirmacion, fecha_pago
             ) VALUES (
-                ?, ?, ?, ?, 'A', 1, 'externo', 10.00, 10.00,
+                ?, ?, ?, ?, ?, 'A', ?, 'externo', 10.00, 10.00,
                 NULL, 'regalo', 'completado', ?, NULL, NOW(), NOW()
             )
         ");
-        $stmt->execute([$nuevo_usuario_id, $padre_real_id, $padre_real_id, $wallet_master, $tx_hash]);
+        $stmt->execute([$nuevo_usuario_id, $padre_real_id, $padre_real_id, $fase_numero, $wallet_master, $ciclo_red, $tx_hash]);
 
         $stmt = $pdo->prepare("
-            INSERT INTO tableros_progreso (usuario_id, tablero_tipo, ciclo, estado)
-            VALUES (?, 'A', 1, 'en_progreso')
+            INSERT INTO tableros_progreso (usuario_id, fase_numero, tablero_tipo, ciclo, estado)
+            VALUES (?, ?, 'A', ?, 'en_progreso')
         ");
-        $stmt->execute([$nuevo_usuario_id]);
+        $stmt->execute([$nuevo_usuario_id, $fase_numero, $ciclo_red]);
 
         $stmt = $pdo->prepare("
             INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address)
@@ -163,7 +112,7 @@ function simCrearUsuarioPagado(PDO $pdo, int $patrocinador_id, string $tag, int 
         ");
         $stmt->execute([
             $nuevo_usuario_id,
-            "Simulado: root={$patrocinador_id}, padre_real={$padre_real_id}, nivel={$resolucion['nivel']}, tx={$tx_hash}"
+            "Simulado: root={$patrocinador_id}, padre_real={$padre_real_id}, fase={$fase_numero}, nivel={$resolucion['nivel']}, profundidad={$resolucion['profundidad']}, tx={$tx_hash}"
         ]);
 
         $pdo->commit();
@@ -174,7 +123,7 @@ function simCrearUsuarioPagado(PDO $pdo, int $patrocinador_id, string $tag, int 
         throw $e;
     }
 
-    verificarAvanceTablero($padre_real_id, $pdo);
+    verificarAvanceTablero($padre_real_id, $pdo, false, $fase_numero, $ciclo_red);
 
     return [
         'nuevo_usuario_id' => $nuevo_usuario_id,
@@ -183,6 +132,7 @@ function simCrearUsuarioPagado(PDO $pdo, int $patrocinador_id, string $tag, int 
         'padre_link_id' => $patrocinador_id,
         'padre_real_id' => $padre_real_id,
         'nivel' => $resolucion['nivel'],
+        'profundidad' => $resolucion['profundidad'],
         'ciclo_red' => $ciclo_red,
         'tx_hash' => $tx_hash,
     ];
@@ -194,6 +144,7 @@ function simResumenUsuario(PDO $pdo, int $usuario_id): array
         SELECT tablero_tipo, ciclo, estado
         FROM tableros_progreso
         WHERE usuario_id = ?
+          AND fase_numero = 0
         ORDER BY (estado = 'en_progreso') DESC, ciclo DESC, id DESC
         LIMIT 3
     ");
@@ -205,6 +156,7 @@ function simResumenUsuario(PDO $pdo, int $usuario_id): array
         FROM referidos r
         JOIN usuarios u ON u.id = r.id_hijo
         WHERE r.id_padre = ?
+          AND r.fase_numero = 0
         ORDER BY r.ciclo DESC, r.posicion ASC
         LIMIT 12
     ");
@@ -214,7 +166,8 @@ function simResumenUsuario(PDO $pdo, int $usuario_id): array
     $stmt = $pdo->prepare("
         SELECT tipo, monto, tablero_tipo, ciclo, estado, fecha_pago
         FROM pagos
-        WHERE id_emisor = ? OR beneficiario_usuario_id = ?
+        WHERE (id_emisor = ? OR beneficiario_usuario_id = ?)
+          AND fase_numero = 0
         ORDER BY id DESC
         LIMIT 12
     ");

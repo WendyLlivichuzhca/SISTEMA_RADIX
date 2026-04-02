@@ -132,8 +132,8 @@ function intentarActivarClon($pdo)
         }
 
         notificarClonActivado($pdo, $padre_id, (float)$monto_clon);
-        verificarAvanceTablero($padre_id, $pdo);
-        verificarCadenaAscendente($padre_id, $pdo);
+        verificarAvanceTablero($padre_id, $pdo, false, $fase_actual, $ciclo_actual);
+        verificarCadenaAscendente($padre_id, $pdo, 10, $fase_actual, $ciclo_actual);
 
         return "Clon $clon_nickname activado para usuario ID $padre_id (\$$monto_clon USDT).";
     } catch (Exception $e) {

@@ -44,6 +44,7 @@ try {
         SELECT ciclo
         FROM tableros_progreso
         WHERE usuario_id = ?
+          AND fase_numero = 0
         ORDER BY (estado = 'en_progreso') DESC, ciclo DESC, id DESC
         LIMIT 1
     ");
@@ -59,9 +60,9 @@ try {
                    r.posicion,
                    r.ciclo,
                    (SELECT tablero_tipo FROM tableros_progreso
-                    WHERE usuario_id = u.id AND estado = 'en_progreso'
-                    ORDER BY id DESC LIMIT 1) as tablero_actual,
-                   (SELECT estado FROM pagos WHERE id_emisor = u.id AND tipo = 'regalo' ORDER BY id DESC LIMIT 1) as pago_estado
+                    WHERE usuario_id = u.id AND fase_numero = 0 AND estado = 'en_progreso'
+                    ORDER BY ciclo DESC, id DESC LIMIT 1) as tablero_actual,
+                   (SELECT estado FROM pagos WHERE id_emisor = u.id AND fase_numero = 0 AND tipo = 'regalo' ORDER BY id DESC LIMIT 1) as pago_estado
             FROM referidos r
             JOIN usuarios u ON r.id_hijo = u.id
             WHERE r.id_padre = ?
@@ -78,14 +79,14 @@ try {
     }
 
     $nivel = null;
-    $stmt2 = $pdo->prepare("SELECT tablero_tipo FROM tableros_progreso WHERE usuario_id = ? AND estado = 'en_progreso' ORDER BY id DESC LIMIT 1");
+    $stmt2 = $pdo->prepare("SELECT tablero_tipo FROM tableros_progreso WHERE usuario_id = ? AND fase_numero = 0 AND estado = 'en_progreso' ORDER BY ciclo DESC, id DESC LIMIT 1");
     $stmt2->execute([$user_id]);
     $t = $stmt2->fetch();
     if ($t) {
         $nivel = $t['tablero_tipo'];
     } else {
         // Verificar si ya completó Fase 0 (Tablero C completado)
-        $stmt_check = $pdo->prepare("SELECT id FROM tableros_progreso WHERE usuario_id = ? AND tablero_tipo = 'C' AND estado = 'completado' LIMIT 1");
+        $stmt_check = $pdo->prepare("SELECT id FROM tableros_progreso WHERE usuario_id = ? AND fase_numero = 0 AND tablero_tipo = 'C' AND estado = 'completado' LIMIT 1");
         $stmt_check->execute([$user_id]);
         $nivel = $stmt_check->fetch() ? 'FASE0_COMPLETADA' : 'A';
     }

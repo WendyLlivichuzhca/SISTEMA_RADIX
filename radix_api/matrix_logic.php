@@ -3,6 +3,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/phase_config.php';
 require_once __DIR__ . '/clon_logic.php';       // Compatibilidad con el flujo actual
 require_once __DIR__ . '/notificaciones.php';   // MEJORA #6: Notificaciones Telegram
+require_once __DIR__ . '/network_placement.php';
 
 function obtenerMasterRadix(PDO $pdo): array
 {
@@ -25,6 +26,234 @@ function obtenerMasterRadix(PDO $pdo): array
     return [
         'id' => 1,
         'wallet_address' => RADIX_CENTRAL_WALLET,
+    ];
+}
+
+function obtenerTableroEnProgresoUsuario(PDO $pdo, int $usuario_id, ?int $fase_numero = null, ?int $ciclo = null): ?array
+{
+    $conditions = ["usuario_id = ?", "estado = 'en_progreso'"];
+    $params = [$usuario_id];
+
+    if ($fase_numero !== null) {
+        $conditions[] = "fase_numero = ?";
+        $params[] = $fase_numero;
+    }
+
+    if ($ciclo !== null) {
+        $conditions[] = "ciclo = ?";
+        $params[] = $ciclo;
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id, tablero_tipo, ciclo, fase_numero
+        FROM tableros_progreso
+        WHERE " . implode(' AND ', $conditions) . "
+        ORDER BY fase_numero DESC, ciclo DESC, id DESC
+        LIMIT 1
+    ");
+    $stmt->execute($params);
+
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+function obtenerCicloActivoUsuarioEnFase(PDO $pdo, int $usuario_id, int $fase_numero): int
+{
+    $stmt = $pdo->prepare("
+        SELECT ciclo
+        FROM tableros_progreso
+        WHERE usuario_id = ?
+          AND fase_numero = ?
+        ORDER BY (estado = 'en_progreso') DESC, ciclo DESC, id DESC
+        LIMIT 1
+    ");
+    $stmt->execute([$usuario_id, $fase_numero]);
+    $ciclo = $stmt->fetchColumn();
+
+    return $ciclo ? (int)$ciclo : 1;
+}
+
+function obtenerWalletUsuarioPorId(PDO $pdo, int $usuario_id): ?string
+{
+    $stmt = $pdo->prepare("SELECT wallet_address FROM usuarios WHERE id = ? LIMIT 1");
+    $stmt->execute([$usuario_id]);
+    $wallet = $stmt->fetchColumn();
+
+    return $wallet !== false ? (string)$wallet : null;
+}
+
+function matrixSchemaSoportaReferidosParalelos(PDO $pdo): bool
+{
+    static $cache = null;
+
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $stmt = $pdo->query("
+        SELECT INDEX_NAME, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS columnas
+        FROM INFORMATION_SCHEMA.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'referidos'
+          AND NON_UNIQUE = 0
+        GROUP BY INDEX_NAME
+    ");
+
+    $uniqueIndexes = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $uniqueIndexes[] = $row['columnas'];
+    }
+
+    $cache = in_array('id_padre,id_hijo,fase_numero,ciclo', $uniqueIndexes, true)
+        && in_array('id_padre,fase_numero,ciclo,posicion', $uniqueIndexes, true);
+
+    return $cache;
+}
+
+function resolverUbicacionRedFase(PDO $pdo, int $patrocinador_id, int $fase_numero): ?array
+{
+    $ciclo_red = obtenerCicloActivoUsuarioEnFase($pdo, $patrocinador_id, $fase_numero);
+    return radixFindAvailablePlacement($pdo, $patrocinador_id, $fase_numero, $ciclo_red);
+}
+
+function activarSiguienteFaseParalela(PDO $pdo, int $usuario_id, ?int $patrocinador_id, int $fase_destino, float $monto_entrada): array
+{
+    if ($fase_destino <= 0) {
+        return ['status' => 'skipped', 'message' => 'No hay una fase siguiente operativa configurada.'];
+    }
+
+    $fase_cfg = getPhaseConfig($pdo, $fase_destino);
+    if ((int)($fase_cfg['activa'] ?? 0) !== 1) {
+        return ['status' => 'skipped', 'message' => "La Fase $fase_destino aun no esta activa."];
+    }
+
+    if (!matrixSchemaSoportaReferidosParalelos($pdo)) {
+        return ['status' => 'skipped', 'message' => 'La base de datos aun no tiene las llaves de referidos compatibles con paralelo.'];
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id
+        FROM tableros_progreso
+        WHERE usuario_id = ?
+          AND fase_numero = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$usuario_id, $fase_destino]);
+    if ($stmt->fetchColumn()) {
+        return ['status' => 'skipped', 'message' => "El usuario ya tiene historial en Fase $fase_destino."];
+    }
+
+    if (!$patrocinador_id) {
+        $stmt = $pdo->prepare("
+            INSERT INTO tableros_progreso (usuario_id, fase_numero, tablero_tipo, ciclo, estado)
+            VALUES (?, ?, 'A', 1, 'en_progreso')
+        ");
+        $stmt->execute([$usuario_id, $fase_destino]);
+
+        return ['status' => 'success', 'message' => "Fase $fase_destino activada como raiz.", 'ciclo' => 1];
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id, tipo_usuario
+        FROM usuarios
+        WHERE id = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$patrocinador_id]);
+    $patrocinador = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$patrocinador || ($patrocinador['tipo_usuario'] ?? '') !== 'real') {
+        $stmt = $pdo->prepare("
+            INSERT INTO tableros_progreso (usuario_id, fase_numero, tablero_tipo, ciclo, estado)
+            VALUES (?, ?, 'A', 1, 'en_progreso')
+        ");
+        $stmt->execute([$usuario_id, $fase_destino]);
+
+        return ['status' => 'success', 'message' => "Fase $fase_destino activada sin patrocinador operativo.", 'ciclo' => 1];
+    }
+
+    $ubicacion = resolverUbicacionRedFase($pdo, (int)$patrocinador['id'], $fase_destino);
+    if (!$ubicacion) {
+        throw new RuntimeException("No se encontro una ubicacion disponible en la red de Fase $fase_destino.");
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) as cuenta
+        FROM referidos
+        WHERE id_padre = ?
+          AND fase_numero = ?
+          AND ciclo = ?
+        FOR UPDATE
+    ");
+    $stmt->execute([
+        (int)$ubicacion['padre_id'],
+        $fase_destino,
+        (int)$ubicacion['ciclo'],
+    ]);
+    $cuenta_actual = (int)($stmt->fetch()['cuenta'] ?? 0);
+
+    if ($cuenta_actual >= 3) {
+        throw new RuntimeException("La ubicacion operativa elegida para Fase $fase_destino acaba de llenarse. Reintenta el cierre.");
+    }
+
+    $ubicacion['posicion'] = $cuenta_actual + 1;
+    $wallet_destino = obtenerWalletUsuarioPorId($pdo, (int)$ubicacion['padre_id']);
+
+    $stmt = $pdo->prepare("
+        INSERT INTO tableros_progreso (usuario_id, fase_numero, tablero_tipo, ciclo, estado)
+        VALUES (?, ?, 'A', ?, 'en_progreso')
+    ");
+    $stmt->execute([$usuario_id, $fase_destino, (int)$ubicacion['ciclo']]);
+
+    $stmt = $pdo->prepare("
+        INSERT INTO referidos (id_padre, id_hijo, fase_numero, posicion, nivel_en_red, ciclo)
+        VALUES (?, ?, ?, ?, 1, ?)
+    ");
+    $stmt->execute([
+        (int)$ubicacion['padre_id'],
+        $usuario_id,
+        $fase_destino,
+        (int)$ubicacion['posicion'],
+        (int)$ubicacion['ciclo'],
+    ]);
+
+    $stmt = $pdo->prepare("
+        INSERT INTO pagos (
+            id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, propietario_flujo,
+            wallet_destino_real, tablero_tipo, ciclo, origen_fondos, monto, monto_pagado,
+            tipo, estado, fecha_confirmacion
+        ) VALUES (?, ?, ?, ?, 'usuario', ?, 'A', ?, 'reserva_interna', ?, ?, 'regalo', 'completado', NOW())
+    ");
+    $stmt->execute([
+        $usuario_id,
+        (int)$ubicacion['padre_id'],
+        (int)$ubicacion['padre_id'],
+        $fase_destino,
+        $wallet_destino,
+        (int)$ubicacion['ciclo'],
+        $monto_entrada,
+        $monto_entrada,
+    ]);
+
+    $stmt = $pdo->prepare("
+        INSERT INTO auditoria_logs (usuario_id, fase_numero, accion, tabla_afectada, detalles)
+        VALUES (?, ?, 'ACTIVACION_FASE_PARALELA', 'tableros_progreso', ?)
+    ");
+    $stmt->execute([
+        $usuario_id,
+        $fase_destino,
+        "Ingreso interno a Fase $fase_destino. Padre: {$ubicacion['padre_id']} | Ciclo: {$ubicacion['ciclo']} | Posicion: {$ubicacion['posicion']} | Modo: {$ubicacion['modo']}",
+    ]);
+
+    verificarAvanceTablero((int)$ubicacion['padre_id'], $pdo, false, $fase_destino, (int)$ubicacion['ciclo']);
+    verificarCadenaAscendente((int)$ubicacion['padre_id'], $pdo, 10, $fase_destino, (int)$ubicacion['ciclo']);
+
+    return [
+        'status' => 'success',
+        'message' => "Fase $fase_destino activada en paralelo.",
+        'padre_id' => (int)$ubicacion['padre_id'],
+        'ciclo' => (int)$ubicacion['ciclo'],
+        'posicion' => (int)$ubicacion['posicion'],
     ];
 }
 
@@ -88,7 +317,7 @@ function asegurarReservaTableroActual($pdo, $usuario_id, $tipo_actual, $ciclo_ac
  * Funcion para verificar y avanzar a un usuario de tablero.
  * Por ahora mantiene intacta la operacion real de Fase 0, pero ya guardando fase_numero.
  */
-function verificarAvanceTablero($usuario_id, $pdo, $strict = false)
+function verificarAvanceTablero($usuario_id, $pdo, $strict = false, ?int $fase_objetivo = null, ?int $ciclo_objetivo = null)
 {
     try {
         $stmt = $pdo->prepare("SELECT tipo_usuario, patrocinador_id FROM usuarios WHERE id = ?");
@@ -99,16 +328,14 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false)
             return false;
         }
 
-        // Obtener tablero actual priorizando la fase mas alta.
-        $stmt = $pdo->prepare("
-            SELECT id, tablero_tipo, ciclo, fase_numero
-            FROM tableros_progreso
-            WHERE usuario_id = ? AND estado = 'en_progreso'
-            ORDER BY fase_numero DESC, id DESC
-            LIMIT 1
-        ");
-        $stmt->execute([$usuario_id]);
-        $tablero = $stmt->fetch();
+        // Cuando la llamada conoce fase/ciclo, debemos evaluar ese flujo exacto.
+        // Si no se especifica, mantenemos el fallback historico al tablero activo mas alto.
+        $tablero = obtenerTableroEnProgresoUsuario(
+            $pdo,
+            (int)$usuario_id,
+            $fase_objetivo,
+            $ciclo_objetivo
+        );
 
         if (!$tablero) {
             return false;
@@ -261,7 +488,6 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false)
             $monto_reentrada = (float)($cfg_actual['monto_reentrada'] ?? 0.00);
             $tipo_salto = getPhaseSeedPaymentType($fase_actual);
 
-            // Por ahora solo el cierre automatico de Fase 0 queda habilitado de punta a punta.
             if ($tipo_salto === null) {
                 throw new RuntimeException("El cierre automatico de la Fase $fase_actual aun no esta habilitado en pagos.tipo.");
             }
@@ -335,6 +561,34 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false)
                 ");
                 $stmt->execute([$usuario_id, $fase_actual, $nuevo_ciclo]);
             }
+
+            // Apertura paralela: la siguiente fase se activa sin detener la fase actual.
+            // Se protege con SAVEPOINT para no romper el cierre vigente si la fase nueva aun no esta lista.
+            if ($monto_semilla > 0) {
+                $activation_info = ['status' => 'skipped', 'message' => 'Sin cambios'];
+
+                try {
+                    $pdo->exec("SAVEPOINT fase_paralela");
+                    $activation_info = activarSiguienteFaseParalela(
+                        $pdo,
+                        (int)$usuario_id,
+                        isset($user_data['patrocinador_id']) ? (int)$user_data['patrocinador_id'] : null,
+                        $fase_siguiente,
+                        $monto_semilla
+                    );
+                } catch (Throwable $activationError) {
+                    $pdo->exec("ROLLBACK TO SAVEPOINT fase_paralela");
+                    $activation_info = [
+                        'status' => 'error',
+                        'message' => $activationError->getMessage(),
+                    ];
+                    error_log("RADIX matrix_logic phase activation ERROR (usuario $usuario_id, fase $fase_siguiente): " . $activationError->getMessage());
+                }
+
+                if (($activation_info['status'] ?? '') !== 'success') {
+                    error_log("RADIX phase activation skipped (usuario $usuario_id, fase $fase_siguiente): " . ($activation_info['message'] ?? 'sin detalle'));
+                }
+            }
         }
 
         $accion_log = $nuevo_tipo
@@ -371,11 +625,13 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false)
     return true;
 }
 
-function verificarCadenaAscendente($usuario_id, $pdo, $max_niveles = 10)
+function verificarCadenaAscendente($usuario_id, $pdo, $max_niveles = 10, ?int $fase_objetivo = null, ?int $ciclo_objetivo = null)
 {
     try {
         $usuario_actual = (int)$usuario_id;
         $visitados = [];
+        $fase_cadena = $fase_objetivo;
+        $ciclo_cadena = $ciclo_objetivo;
 
         for ($nivel = 0; $nivel < $max_niveles; $nivel++) {
             if ($usuario_actual <= 0 || isset($visitados[$usuario_actual])) {
@@ -384,19 +640,19 @@ function verificarCadenaAscendente($usuario_id, $pdo, $max_niveles = 10)
 
             $visitados[$usuario_actual] = true;
 
-            $stmt = $pdo->prepare("
-                SELECT fase_numero, ciclo
-                FROM tableros_progreso
-                WHERE usuario_id = ? AND estado = 'en_progreso'
-                ORDER BY fase_numero DESC, id DESC
-                LIMIT 1
-            ");
-            $stmt->execute([$usuario_actual]);
-            $tablero_actual = $stmt->fetch();
+            $tablero_actual = obtenerTableroEnProgresoUsuario(
+                $pdo,
+                $usuario_actual,
+                $fase_cadena,
+                $ciclo_cadena
+            );
 
             if (!$tablero_actual) {
                 break;
             }
+
+            $fase_cadena = (int)$tablero_actual['fase_numero'];
+            $ciclo_cadena = (int)$tablero_actual['ciclo'];
 
             $stmt = $pdo->prepare("
                 SELECT id_padre
@@ -409,8 +665,8 @@ function verificarCadenaAscendente($usuario_id, $pdo, $max_niveles = 10)
             ");
             $stmt->execute([
                 $usuario_actual,
-                (int)$tablero_actual['fase_numero'],
-                (int)$tablero_actual['ciclo'],
+                $fase_cadena,
+                $ciclo_cadena,
             ]);
             $padre_id = (int)($stmt->fetchColumn() ?: 0);
 
@@ -418,7 +674,7 @@ function verificarCadenaAscendente($usuario_id, $pdo, $max_niveles = 10)
                 break;
             }
 
-            verificarAvanceTablero($padre_id, $pdo);
+            verificarAvanceTablero($padre_id, $pdo, false, $fase_cadena, $ciclo_cadena);
             $usuario_actual = $padre_id;
         }
 

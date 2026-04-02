@@ -1,5 +1,6 @@
 <?php
 require_once 'config.php';
+require_once 'network_placement.php';
 session_start();
 
 function obtenerCicloActivoUsuario(PDO $pdo, int $usuario_id): int
@@ -8,6 +9,7 @@ function obtenerCicloActivoUsuario(PDO $pdo, int $usuario_id): int
         SELECT ciclo
         FROM tableros_progreso
         WHERE usuario_id = ?
+          AND fase_numero = 0
         ORDER BY (estado = 'en_progreso') DESC, ciclo DESC, id DESC
         LIMIT 1
     ");
@@ -430,170 +432,65 @@ try {
         }
 
         $ciclo_red = obtenerCicloActivoUsuario($pdo, $patrocinador_id);
+        $ubicacion = radixFindAvailablePlacement($pdo, $patrocinador_id, 0, $ciclo_red);
 
-        $stmt = $pdo->prepare("SELECT COUNT(*) as cuenta FROM referidos WHERE id_padre = ? AND ciclo = ? FOR UPDATE");
-        $stmt->execute([$patrocinador_id, $ciclo_red]);
-        $cuenta = (int)$stmt->fetch()['cuenta'];
-
-        if ($cuenta < 3) {
-            $posicion = $cuenta + 1;
-            try {
-                $stmt = $pdo->prepare("INSERT INTO referidos (id_padre, id_hijo, posicion, nivel_en_red, ciclo) VALUES (?, ?, ?, 1, ?)");
-                $stmt->execute([$patrocinador_id, $new_user_id, $posicion, $ciclo_red]);
-            } catch (PDOException $e) {
-                $pdo->rollBack();
-                sendResponse(['error' => 'El patrocinador ya no tiene espacios disponibles. Recarga y reintenta.'], 409);
-            }
-
-            asegurarPagoPendienteRegalo(
-                $pdo,
-                $new_user_id,
-                $patrocinador_id,
-                $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET
-            );
-
-            $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address) VALUES (?, 'REGISTRO_CON_FIRMA', 'usuarios', ?, ?)");
-            $stmt->execute([
-                $new_user_id,
-                "Registro TRON sin firma. Wallet: $wallet | Patrocinador ID: $patrocinador_id | Posicion: $posicion",
-                $ip_address,
-            ]);
-
-            require_once 'notificaciones.php';
-            notificarNuevoReferido($pdo, $patrocinador_id, $nickname);
-
-            require_once 'matrix_logic.php';
-            verificarAvanceTablero($patrocinador_id, $pdo);
-        } else {
-            $stmt = $pdo->prepare("
-                SELECT r.id_hijo AS nuevo_patron_id
-                FROM referidos r
-                JOIN usuarios u ON r.id_hijo = u.id
-                WHERE r.id_padre = ?
-                  AND r.ciclo = ?
-                  AND u.tipo_usuario = 'real'
-                  AND (
-                      SELECT COUNT(*)
-                      FROM referidos r2
-                      WHERE r2.id_padre = r.id_hijo
-                        AND r2.ciclo = ?
-                  ) < 3
-                ORDER BY r.posicion ASC
-                LIMIT 1
-            ");
-            $stmt->execute([$patrocinador_id, $ciclo_red, $ciclo_red]);
-            $spillover = $stmt->fetch();
-
-            if ($spillover) {
-                $nuevo_patron_id = (int)$spillover['nuevo_patron_id'];
-
-                $stmt = $pdo->prepare("SELECT COUNT(*) as cuenta FROM referidos WHERE id_padre = ? AND ciclo = ? FOR UPDATE");
-                $stmt->execute([$nuevo_patron_id, $ciclo_red]);
-                $cuenta_nuevo = (int)$stmt->fetch()['cuenta'];
-
-                if ($cuenta_nuevo < 3) {
-                    $posicion_nueva = $cuenta_nuevo + 1;
-                    try {
-                        $stmt = $pdo->prepare("INSERT INTO referidos (id_padre, id_hijo, posicion, nivel_en_red, ciclo) VALUES (?, ?, ?, 1, ?)");
-                        $stmt->execute([$nuevo_patron_id, $new_user_id, $posicion_nueva, $ciclo_red]);
-                    } catch (PDOException $e) {
-                        $pdo->rollBack();
-                        sendResponse(['error' => 'Posicion ocupada simultaneamente. Recarga e intenta de nuevo.'], 409);
-                    }
-
-                    asegurarPagoPendienteRegalo(
-                        $pdo,
-                        $new_user_id,
-                        $nuevo_patron_id,
-                        $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET
-                    );
-
-                    $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address) VALUES (?, 'REGISTRO_SPILLOVER', 'usuarios', ?, ?)");
-                    $stmt->execute([
-                        $new_user_id,
-                        "Spillover: Patron original ID $patrocinador_id lleno. Asignado a ID $nuevo_patron_id (posicion $posicion_nueva). Wallet: $wallet",
-                        $ip_address,
-                    ]);
-
-                    require_once 'notificaciones.php';
-                    notificarNuevoReferido($pdo, $nuevo_patron_id, $nickname);
-
-                    require_once 'matrix_logic.php';
-                    verificarAvanceTablero($nuevo_patron_id, $pdo);
-                } else {
-                    $pdo->rollBack();
-                    sendResponse(['error' => 'La red de tu patrocinador esta llena en este nivel. Contacta a tu patrocinador para obtener un link directo de uno de sus referidos.'], 409);
-                }
-            } else {
-                $stmt = $pdo->prepare("
-                    SELECT r2.id_hijo AS nuevo_patron_id
-                    FROM referidos r1
-                    JOIN referidos r2 ON r2.id_padre = r1.id_hijo
-                    JOIN usuarios u1 ON r1.id_hijo = u1.id
-                    JOIN usuarios u2 ON r2.id_hijo = u2.id
-                    WHERE r1.id_padre = ?
-                      AND r1.ciclo = ?
-                      AND r2.ciclo = ?
-                      AND u1.tipo_usuario = 'real'
-                      AND u2.tipo_usuario = 'real'
-                      AND (
-                          SELECT COUNT(*)
-                          FROM referidos r3
-                          WHERE r3.id_padre = r2.id_hijo
-                            AND r3.ciclo = ?
-                      ) < 3
-                    ORDER BY r1.posicion ASC, r2.posicion ASC
-                    LIMIT 1
-                ");
-                $stmt->execute([$patrocinador_id, $ciclo_red, $ciclo_red, $ciclo_red]);
-                $spillover_n2 = $stmt->fetch();
-
-                if ($spillover_n2) {
-                    $nuevo_patron_id = (int)$spillover_n2['nuevo_patron_id'];
-
-                    $stmt = $pdo->prepare("SELECT COUNT(*) as cuenta FROM referidos WHERE id_padre = ? AND ciclo = ? FOR UPDATE");
-                    $stmt->execute([$nuevo_patron_id, $ciclo_red]);
-                    $cuenta_n2 = (int)$stmt->fetch()['cuenta'];
-
-                    if ($cuenta_n2 < 3) {
-                        $posicion_n2 = $cuenta_n2 + 1;
-                        try {
-                            $stmt = $pdo->prepare("INSERT INTO referidos (id_padre, id_hijo, posicion, nivel_en_red, ciclo) VALUES (?, ?, ?, 1, ?)");
-                            $stmt->execute([$nuevo_patron_id, $new_user_id, $posicion_n2, $ciclo_red]);
-                        } catch (PDOException $e) {
-                            $pdo->rollBack();
-                            sendResponse(['error' => 'Posicion ocupada simultaneamente. Recarga e intenta de nuevo.'], 409);
-                        }
-
-                        asegurarPagoPendienteRegalo(
-                            $pdo,
-                            $new_user_id,
-                            $nuevo_patron_id,
-                            $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET
-                        );
-
-                        $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address) VALUES (?, 'REGISTRO_SPILLOVER_N2', 'usuarios', ?, ?)");
-                        $stmt->execute([
-                            $new_user_id,
-                            "Spillover N2: Patron original ID $patrocinador_id lleno. Asignado a ID $nuevo_patron_id (posicion $posicion_n2). Wallet: $wallet",
-                            $ip_address,
-                        ]);
-
-                        require_once 'notificaciones.php';
-                        notificarNuevoReferido($pdo, $nuevo_patron_id, $nickname);
-
-                        require_once 'matrix_logic.php';
-                        verificarAvanceTablero($nuevo_patron_id, $pdo);
-                    } else {
-                        $pdo->rollBack();
-                        sendResponse(['error' => 'Todos los espacios de nivel 2 estan ocupados. Contacta a tu patrocinador para obtener un link disponible.'], 409);
-                    }
-                } else {
-                    $pdo->rollBack();
-                    sendResponse(['error' => 'Tu patrocinador tiene la red completa en niveles 1 y 2. Pide el link de uno de sus referidos directos para unirte.'], 409);
-                }
-            }
+        if (!$ubicacion) {
+            $pdo->rollBack();
+            sendResponse(['error' => 'Tu patrocinador ya no tiene espacios disponibles en la red activa. Pide el link de uno de sus referidos directos para unirte.'], 409);
         }
+
+        $padre_operativo_id = (int)$ubicacion['padre_id'];
+
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) as cuenta
+            FROM referidos
+            WHERE id_padre = ?
+              AND fase_numero = 0
+              AND ciclo = ?
+            FOR UPDATE
+        ");
+        $stmt->execute([$padre_operativo_id, $ciclo_red]);
+        $cuenta_operativa = (int)($stmt->fetch()['cuenta'] ?? 0);
+
+        if ($cuenta_operativa >= 3) {
+            $pdo->rollBack();
+            sendResponse(['error' => 'Un espacio se ocupo mientras se procesaba tu registro. Recarga e intenta de nuevo.'], 409);
+        }
+
+        $posicion_operativa = $cuenta_operativa + 1;
+
+        try {
+            $stmt = $pdo->prepare("
+                INSERT INTO referidos (id_padre, id_hijo, fase_numero, posicion, nivel_en_red, ciclo)
+                VALUES (?, ?, 0, ?, 1, ?)
+            ");
+            $stmt->execute([$padre_operativo_id, $new_user_id, $posicion_operativa, $ciclo_red]);
+        } catch (PDOException $e) {
+            $pdo->rollBack();
+            sendResponse(['error' => 'Posicion ocupada simultaneamente. Recarga e intenta de nuevo.'], 409);
+        }
+
+        asegurarPagoPendienteRegalo(
+            $pdo,
+            $new_user_id,
+            $padre_operativo_id,
+            $master_user['wallet_address'] ?? RADIX_CENTRAL_WALLET
+        );
+
+        $accion_auditoria = ((int)$ubicacion['depth'] === 0) ? 'REGISTRO_CON_FIRMA' : 'REGISTRO_SPILLOVER';
+        $detalle_auditoria = "Registro TRON sin firma. Wallet: $wallet | Patrocinador original ID: $patrocinador_id | Padre operativo ID: $padre_operativo_id | Posicion: $posicion_operativa | Modo: {$ubicacion['modo']}";
+
+        $stmt = $pdo->prepare("
+            INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles, ip_address)
+            VALUES (?, ?, 'usuarios', ?, ?)
+        ");
+        $stmt->execute([$new_user_id, $accion_auditoria, $detalle_auditoria, $ip_address]);
+
+        require_once 'notificaciones.php';
+        notificarNuevoReferido($pdo, $padre_operativo_id, $nickname);
+
+        require_once 'matrix_logic.php';
+        verificarAvanceTablero($padre_operativo_id, $pdo, false, 0, $ciclo_red);
     } else {
         $stmt = $pdo->prepare("
             SELECT id

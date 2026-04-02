@@ -12,6 +12,7 @@ function srGetActiveCycle(PDO $pdo, int $userId): int
         SELECT ciclo
         FROM tableros_progreso
         WHERE usuario_id = ?
+          AND fase_numero = 0
         ORDER BY (estado = 'en_progreso') DESC, ciclo DESC, id DESC
         LIMIT 1
     ");
@@ -26,6 +27,7 @@ function srGetCurrentBoard(PDO $pdo, int $userId): ?array
         SELECT id, tablero_tipo, ciclo, estado, fecha_inicio, fecha_fin
         FROM tableros_progreso
         WHERE usuario_id = ?
+          AND fase_numero = 0
         ORDER BY (estado = 'en_progreso') DESC, ciclo DESC, id DESC
         LIMIT 1
     ");
@@ -39,14 +41,14 @@ function srEnsureBoard(PDO $pdo, int $userId, string $board, int $cycle): void
     $stmt = $pdo->prepare("
         SELECT id
         FROM tableros_progreso
-        WHERE usuario_id = ? AND tablero_tipo = ? AND ciclo = ?
+        WHERE usuario_id = ? AND fase_numero = 0 AND tablero_tipo = ? AND ciclo = ?
         LIMIT 1
     ");
     $stmt->execute([$userId, $board, $cycle]);
     if (!$stmt->fetchColumn()) {
         $stmt = $pdo->prepare("
-            INSERT INTO tableros_progreso (usuario_id, tablero_tipo, ciclo, estado)
-            VALUES (?, ?, ?, 'en_progreso')
+            INSERT INTO tableros_progreso (usuario_id, fase_numero, tablero_tipo, ciclo, estado)
+            VALUES (?, 0, ?, ?, 'en_progreso')
         ");
         $stmt->execute([$userId, $board, $cycle]);
     }
@@ -58,7 +60,7 @@ function srGetChildren(PDO $pdo, int $parentId, int $cycle): array
         SELECT r.id_hijo, r.posicion, u.nickname, u.tipo_usuario
         FROM referidos r
         JOIN usuarios u ON u.id = r.id_hijo
-        WHERE r.id_padre = ? AND r.ciclo = ?
+        WHERE r.id_padre = ? AND r.fase_numero = 0 AND r.ciclo = ?
         ORDER BY r.posicion ASC
     ");
     $stmt->execute([$parentId, $cycle]);
@@ -94,17 +96,17 @@ function srCreatePaidChild(PDO $pdo, int $parentId, string $tag, int $index): ar
         $childId = (int)$pdo->lastInsertId();
 
         $stmt = $pdo->prepare("
-            INSERT INTO referidos (id_padre, id_hijo, posicion, nivel_en_red, ciclo)
-            VALUES (?, ?, ?, 1, ?)
+            INSERT INTO referidos (id_padre, id_hijo, fase_numero, posicion, nivel_en_red, ciclo)
+            VALUES (?, ?, 0, ?, 1, ?)
         ");
         $stmt->execute([$parentId, $childId, $position, $cycle]);
 
         $stmt = $pdo->prepare("
             INSERT INTO pagos (
-                id_emisor, id_receptor, beneficiario_usuario_id, wallet_destino_real,
+                id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, wallet_destino_real,
                 tablero_tipo, ciclo, origen_fondos, monto, monto_pagado,
                 tipo, estado, tx_hash, fecha_confirmacion, fecha_pago
-            ) VALUES (?, ?, ?, ?, 'A', ?, 'externo', 10.00, 10.00, 'regalo', 'completado', ?, NOW(), NOW())
+            ) VALUES (?, ?, ?, 0, ?, 'A', ?, 'externo', 10.00, 10.00, 'regalo', 'completado', ?, NOW(), NOW())
         ");
         $stmt->execute([$childId, $parentId, $parentId, $walletMaster, $cycle, $txHash]);
 
@@ -124,7 +126,7 @@ function srCreatePaidChild(PDO $pdo, int $parentId, string $tag, int $index): ar
         throw $e;
     }
 
-    verificarAvanceTablero($parentId, $pdo);
+    verificarAvanceTablero($parentId, $pdo, false, 0, $cycle);
 
     return [
         'child_id' => $childId,
@@ -148,8 +150,8 @@ function srGrowUserToB(PDO $pdo, int $userId, string $tag, array &$log): void
         $children = srGetChildren($pdo, $userId, $cycle);
     }
 
-    verificarAvanceTablero($userId, $pdo);
-    verificarAvanceTablero($userId, $pdo);
+    verificarAvanceTablero($userId, $pdo, false, 0, $cycle);
+    verificarAvanceTablero($userId, $pdo, false, 0, $cycle);
 }
 
 function srPromoteLeaderToC(PDO $pdo, int $leaderId, string $tag, array &$log): void
@@ -173,8 +175,8 @@ function srPromoteLeaderToC(PDO $pdo, int $leaderId, string $tag, array &$log): 
         srGrowUserToB($pdo, (int)$child['id_hijo'], "{$tag}_GC", $log);
     }
 
-    verificarAvanceTablero($leaderId, $pdo);
-    verificarAvanceTablero($leaderId, $pdo);
+    verificarAvanceTablero($leaderId, $pdo, false, 0, $cycle);
+    verificarAvanceTablero($leaderId, $pdo, false, 0, $cycle);
 }
 
 function srSummaries(PDO $pdo, int $rootId): array
@@ -183,6 +185,7 @@ function srSummaries(PDO $pdo, int $rootId): array
         SELECT id, tablero_tipo, ciclo, estado, fecha_inicio, fecha_fin
         FROM tableros_progreso
         WHERE usuario_id = ?
+          AND fase_numero = 0
         ORDER BY id DESC
         LIMIT 20
     ");
@@ -192,7 +195,8 @@ function srSummaries(PDO $pdo, int $rootId): array
     $stmt = $pdo->prepare("
         SELECT tipo, monto, tablero_tipo, ciclo, estado, fecha_pago
         FROM pagos
-        WHERE id_emisor = ? OR beneficiario_usuario_id = ?
+        WHERE (id_emisor = ? OR beneficiario_usuario_id = ?)
+          AND fase_numero = 0
         ORDER BY id DESC
         LIMIT 30
     ");
@@ -203,6 +207,7 @@ function srSummaries(PDO $pdo, int $rootId): array
         SELECT desde_tablero, hacia_destino, ciclo_origen, ciclo_destino, monto, estado, fecha_uso
         FROM reservas_tablero
         WHERE usuario_id = ?
+          AND fase_numero = 0
         ORDER BY id DESC
         LIMIT 30
     ");
@@ -238,15 +243,19 @@ function srPromoteRootTowardReentry(PDO $pdo, int $rootId): array
             $log[] = "Líder {$leaderId}: " . ($leaderBoard['tablero_tipo'] ?? '?') . " ciclo " . ($leaderBoard['ciclo'] ?? '?') . " estado " . ($leaderBoard['estado'] ?? '?') . ".";
         }
 
-        verificarAvanceTablero($rootId, $pdo);
-        verificarAvanceTablero($rootId, $pdo);
+        verificarAvanceTablero($rootId, $pdo, false, 0, $rootCycle);
+        verificarAvanceTablero($rootId, $pdo, false, 0, $rootCycle);
         $rootBoard = srGetCurrentBoard($pdo, $rootId);
         $log[] = "Root {$rootId}: " . ($rootBoard['tablero_tipo'] ?? '?') . " ciclo " . ($rootBoard['ciclo'] ?? '?') . " estado " . ($rootBoard['estado'] ?? '?') . ".";
 
         $stmt = $pdo->prepare("
             SELECT COUNT(*)
             FROM tableros_progreso
-            WHERE usuario_id = ? AND tablero_tipo = 'A' AND ciclo >= 2 AND estado = 'en_progreso'
+            WHERE usuario_id = ?
+              AND fase_numero = 0
+              AND tablero_tipo = 'A'
+              AND ciclo >= 2
+              AND estado = 'en_progreso'
         ");
         $stmt->execute([$rootId]);
         if ((int)$stmt->fetchColumn() > 0) {

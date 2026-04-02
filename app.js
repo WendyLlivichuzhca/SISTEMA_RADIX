@@ -421,7 +421,7 @@ function closeUserLoginModal() {
     if (statusEl) statusEl.textContent = '';
 }
 
-async function procesarRegistro(formValues, statusEl) {
+async function procesarRegistro(formValues, passwordConfirm, statusEl) {
     statusEl.style.color = '#888';
     statusEl.textContent = 'Validando datos del registro...';
 
@@ -434,6 +434,7 @@ async function procesarRegistro(formValues, statusEl) {
     formData.append('correo_electronico', formValues.correo_electronico);
     formData.append('telegram_username', formValues.telegram_username);
     formData.append('password', formValues.password);
+    formData.append('password_confirm', passwordConfirm);
 
     const sponsorWallet = formValues.patrocinador || getReferralWallet();
     if (sponsorWallet) {
@@ -582,7 +583,7 @@ function inicializarRegistroUsuario() {
         saveRegisterDraft(formValues);
 
         try {
-            await procesarRegistro(formValues, statusEl);
+            await procesarRegistro(formValues, passwordConfirm, statusEl);
         } catch (error) {
             statusEl.style.color = '#ff6b6b';
             statusEl.textContent = error.message || 'No se pudo completar el registro.';

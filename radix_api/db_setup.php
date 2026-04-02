@@ -1,9 +1,9 @@
 <?php
 require_once 'config.php';
 
-// Script de configuración inicial de Base de Datos para RADIX Phase 0
+// Script de configuracion inicial de Base de Datos para RADIX.
 try {
-    // 1. Crear tabla de configuración del sistema (Tesorería)
+    // 1. Crear tabla de configuracion del sistema (tesoreria)
     $pdo->exec("CREATE TABLE IF NOT EXISTS sistema_config (
         id INT AUTO_INCREMENT PRIMARY KEY,
         clave VARCHAR(50) UNIQUE NOT NULL,
@@ -12,25 +12,24 @@ try {
         ultima_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )");
 
-    // Inicializar balance de tesorería si no existe
+    // Inicializar balance de tesoreria si no existe
     $pdo->exec("INSERT IGNORE INTO sistema_config (clave, valor_decimal) VALUES ('tesoreria_balance', 0.00)");
 
-    // 2. Modificar tabla usuarios para soportar Clones
-    // Intentar añadir la columna tipo_usuario
+    // 2. Modificar tabla usuarios para soportar clones
     try {
         $pdo->exec("ALTER TABLE usuarios ADD COLUMN tipo_usuario ENUM('real', 'clon') DEFAULT 'real' AFTER nickname");
     } catch (Exception $e) {
-        // La columna ya existe, ignoramos
+        // La columna ya existe, ignoramos.
     }
 
     // 3. Modificar tableros_progreso para soportar ciclos
     try {
         $pdo->exec("ALTER TABLE tableros_progreso ADD COLUMN ciclo INT DEFAULT 1 AFTER tablero_tipo");
     } catch (Exception $e) {
-        // Ya existe
+        // Ya existe.
     }
 
-    // 4. Agregar columnas de verificación blockchain a pagos
+    // 4. Agregar columnas de verificacion blockchain a pagos
     try {
         $pdo->exec("ALTER TABLE pagos ADD COLUMN tx_hash VARCHAR(66) NULL UNIQUE AFTER estado");
     } catch (Exception $e) { /* Ya existe */ }
@@ -44,17 +43,16 @@ try {
         $pdo->exec("ALTER TABLE pagos MODIFY COLUMN tipo ENUM('regalo','ganancia_tablero','tesoreria_clon','salto_fase_1','salto_fase_2','salto_fase_3','reentrada') NOT NULL");
     } catch (Exception $e) { /* Ya existe */ }
 
-    // 6. Agregar columna telegram_chat_id a usuarios (MEJORA #6)
+    // 6. Agregar columnas de Telegram a usuarios
     try {
         $pdo->exec("ALTER TABLE usuarios ADD COLUMN telegram_chat_id VARCHAR(30) NULL DEFAULT NULL AFTER tipo_usuario");
     } catch (Exception $e) { /* Ya existe */ }
 
-    // 6b. Agregar usuario publico de Telegram al perfil
     try {
         $pdo->exec("ALTER TABLE usuarios ADD COLUMN telegram_username VARCHAR(32) NULL DEFAULT NULL AFTER telegram_chat_id");
     } catch (Exception $e) { /* Ya existe */ }
 
-    // 7. Crear tabla retiros si no existe (MEJORA #4)
+    // 7. Crear tabla retiros si no existe
     $pdo->exec("CREATE TABLE IF NOT EXISTS retiros (
         id INT AUTO_INCREMENT PRIMARY KEY,
         usuario_id INT NOT NULL,
@@ -67,18 +65,32 @@ try {
         FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
     )");
 
-    // 8b. Restricción única en referidos: un padre no puede tener dos hijos en la misma posición
-    //     Protege contra race conditions en registros simultáneos (fraude de posición doble)
+    // 8. Ajustar llaves unicas de referidos para fases paralelas.
+    //    Un usuario puede existir bajo el mismo padre en fases distintas.
+    $referidos_keys_to_drop = [
+        'unique_padre_posicion',
+        'unique_padre_hijo',
+        'unique_padre_hijo_ciclo',
+        'unique_padre_posicion_ciclo',
+    ];
+
+    foreach ($referidos_keys_to_drop as $key_name) {
+        try {
+            $pdo->exec("ALTER TABLE referidos DROP INDEX $key_name");
+        } catch (Exception $e) {
+            // La llave no existe en esta instalacion, continuar.
+        }
+    }
+
     try {
-        $pdo->exec("ALTER TABLE referidos ADD UNIQUE KEY unique_padre_posicion (id_padre, posicion)");
+        $pdo->exec("ALTER TABLE referidos ADD UNIQUE KEY unique_padre_hijo_fase_ciclo (id_padre, id_hijo, fase_numero, ciclo)");
     } catch (Exception $e) { /* Constraint ya existe */ }
 
-    // 8c. Restricción única en referidos: un hijo no puede estar dos veces bajo el mismo padre
     try {
-        $pdo->exec("ALTER TABLE referidos ADD UNIQUE KEY unique_padre_hijo (id_padre, id_hijo)");
+        $pdo->exec("ALTER TABLE referidos ADD UNIQUE KEY unique_padre_posicion_fase_ciclo (id_padre, fase_numero, ciclo, posicion)");
     } catch (Exception $e) { /* Constraint ya existe */ }
 
-    // 8. Crear tabla tesoreria_movimientos si no existe
+    // 9. Crear tabla tesoreria_movimientos si no existe
     $pdo->exec("CREATE TABLE IF NOT EXISTS tesoreria_movimientos (
         id INT AUTO_INCREMENT PRIMARY KEY,
         tipo ENUM('ingreso','egreso') NOT NULL,
@@ -88,6 +100,7 @@ try {
         fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
 
+    // 10. Crear tabla reservas_tablero si no existe
     $pdo->exec("CREATE TABLE IF NOT EXISTS reservas_tablero (
         id INT AUTO_INCREMENT PRIMARY KEY,
         usuario_id INT NOT NULL,
@@ -105,9 +118,15 @@ try {
         CONSTRAINT fk_reservas_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
     )");
 
-    echo "✅ Base de datos actualizada correctamente para Phase 0.";
+    // 11. Activar Fase 1 para la apertura paralela controlada.
+    try {
+        $pdo->exec("UPDATE fases_config SET activa = CASE WHEN fase_numero = 1 THEN 1 ELSE activa END");
+    } catch (Exception $e) {
+        // fases_config podria no existir aun en instalaciones parciales.
+    }
 
+    echo "Base de datos actualizada correctamente para RADIX.";
 } catch (PDOException $e) {
-    echo "❌ Error actualizando base de datos: " . $e->getMessage();
+    echo "Error actualizando base de datos: " . $e->getMessage();
 }
 ?>

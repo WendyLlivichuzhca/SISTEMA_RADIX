@@ -40,6 +40,7 @@ try {
     // 1. Obtener el pago pendiente (incluye campos de pago parcial)
     $stmt = $pdo->prepare("
         SELECT p.id, p.monto, p.id_emisor, p.id_receptor, p.beneficiario_usuario_id,
+               p.fase_numero, p.ciclo, p.tablero_tipo,
                p.wallet_destino_real, p.estado, p.tx_hash, p.tx_hash_2,
                COALESCE(p.monto_pagado, 0) as monto_pagado
         FROM pagos p
@@ -173,12 +174,24 @@ try {
 
         // Procesar el avance directo antes del commit evita dejar pagos
         // confirmados sin su cierre interno cuando el motor falle luego.
-        verificarAvanceTablero($beneficiario_logico_id, $pdo, true);
+        verificarAvanceTablero(
+            $beneficiario_logico_id,
+            $pdo,
+            true,
+            (int)($pago['fase_numero'] ?? 0),
+            (int)($pago['ciclo'] ?? 1)
+        );
 
         $pdo->commit();
 
         // Disparar avance del PATRÓN (id_receptor)
-        verificarCadenaAscendente($beneficiario_logico_id, $pdo);
+        verificarCadenaAscendente(
+            $beneficiario_logico_id,
+            $pdo,
+            10,
+            (int)($pago['fase_numero'] ?? 0),
+            (int)($pago['ciclo'] ?? 1)
+        );
 
         // Mensaje según si hubo excedente o no
         $mensaje = '✅ Pago verificado correctamente. Tu tablero avanzará en breve.';

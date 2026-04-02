@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $user_id = $user['id'];
 
         // 2. Tablero actual y progreso visual
-        $stmt = $pdo->prepare("SELECT id, tablero_tipo, ciclo, fecha_inicio FROM tableros_progreso WHERE usuario_id = ? AND estado = 'en_progreso' ORDER BY id DESC LIMIT 1");
+        $stmt = $pdo->prepare("SELECT id, tablero_tipo, ciclo, fecha_inicio FROM tableros_progreso WHERE usuario_id = ? AND fase_numero = 0 AND estado = 'en_progreso' ORDER BY ciclo DESC, id DESC LIMIT 1");
         $stmt->execute([$user_id]);
         $tablero = $stmt->fetch();
         $ciclo_actual = $tablero ? $tablero['ciclo'] : 1;
@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $nivel_actual = $tablero['tablero_tipo'];
         } else {
             // Sin tablero activo: verificar si ya completó la Fase 0 (esperando Fase 1)
-            $stmt_check = $pdo->prepare("SELECT id FROM tableros_progreso WHERE usuario_id = ? AND tablero_tipo = 'C' AND estado = 'completado' LIMIT 1");
+            $stmt_check = $pdo->prepare("SELECT id FROM tableros_progreso WHERE usuario_id = ? AND fase_numero = 0 AND tablero_tipo = 'C' AND estado = 'completado' LIMIT 1");
             $stmt_check->execute([$user_id]);
             $nivel_actual = $stmt_check->fetch() ? 'FASE0_COMPLETADA' : 'A';
         }
@@ -88,8 +88,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 u.tipo_usuario AS tipo,
                 r.posicion,
                 r.ciclo,
-                (SELECT estado FROM pagos WHERE id_emisor = u.id AND tipo = 'regalo' ORDER BY id DESC LIMIT 1) AS pago_estado,
-                (SELECT tablero_tipo FROM tableros_progreso WHERE usuario_id = u.id AND estado = 'en_progreso' ORDER BY id DESC LIMIT 1) AS nivel_actual
+                (SELECT estado FROM pagos WHERE id_emisor = u.id AND fase_numero = 0 AND tipo = 'regalo' ORDER BY id DESC LIMIT 1) AS pago_estado,
+                (SELECT tablero_tipo FROM tableros_progreso WHERE usuario_id = u.id AND fase_numero = 0 AND estado = 'en_progreso' ORDER BY ciclo DESC, id DESC LIMIT 1) AS nivel_actual
             FROM referidos r
             JOIN usuarios u ON r.id_hijo = u.id
             WHERE r.id_padre = ? AND r.ciclo = ? AND u.tipo_usuario = 'real'
@@ -153,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         // 5f. Verificar si el usuario completó la Fase 0 (Tablero C completado)
         //     Solo cuando fase0_completada=true se habilita el botón RETIRAR en el frontend.
-        $stmt = $pdo->prepare("SELECT id FROM tableros_progreso WHERE usuario_id = ? AND tablero_tipo = 'C' AND estado = 'completado' LIMIT 1");
+        $stmt = $pdo->prepare("SELECT id FROM tableros_progreso WHERE usuario_id = ? AND fase_numero = 0 AND tablero_tipo = 'C' AND estado = 'completado' LIMIT 1");
         $stmt->execute([$user_id]);
         $fase0_completada = $user['tipo_usuario'] === 'real' ? (bool)$stmt->fetch() : false;
 

@@ -31,7 +31,7 @@ try {
 
     // 2. Verificar que el usuario haya completado la Fase 0 (Tablero C completado)
     // Sin esto, usuarios en Fase 0 podrían retirar créditos o ganancias parciales.
-    $stmt = $pdo->prepare("SELECT id FROM tableros_progreso WHERE usuario_id = ? AND tablero_tipo = 'C' AND estado = 'completado' LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id FROM tableros_progreso WHERE usuario_id = ? AND fase_numero = 0 AND tablero_tipo = 'C' AND estado = 'completado' LIMIT 1");
     $stmt->execute([$user_id]);
     if (!$stmt->fetch()) {
         sendResponse(['error' => 'Debes completar la Fase 0 (Tableros A → B → C) antes de poder retirar tus ganancias.'], 403);
