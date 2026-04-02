@@ -129,6 +129,57 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
         .master-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
         .master-table th { text-align: left; padding: 12px; color: #555; border-bottom: 1px solid #2a2a3a; }
         .master-table td { padding: 14px 12px; border-bottom: 1px solid #1a1a24; color: #ccc; }
+        .master-tree-toolbar { display:grid; grid-template-columns: 160px 160px minmax(220px, 1fr) auto; gap:14px; align-items:end; margin-bottom:18px; }
+        .master-tree-control label { display:block; font-size:0.72rem; color:#666; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px; }
+        .master-tree-control select,
+        .master-tree-control input {
+            width:100%;
+            background:rgba(255,255,255,0.03);
+            border:1px solid #2a2a3a;
+            color:#fff;
+            border-radius:12px;
+            padding:12px 14px;
+            font-size:0.86rem;
+            outline:none;
+        }
+        .master-tree-control input::placeholder { color:#555; }
+        .master-tree-control select:focus,
+        .master-tree-control input:focus {
+            border-color:var(--secondary);
+            box-shadow:0 0 0 3px rgba(0,210,255,0.08);
+        }
+        .master-tree-actions { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+        .master-tree-chip-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+        .master-tree-chip {
+            padding:8px 12px;
+            border-radius:999px;
+            border:1px solid rgba(255,255,255,0.08);
+            background:rgba(255,255,255,0.02);
+            font-size:0.78rem;
+            color:#aaa;
+        }
+        .master-tree-chip strong { color:#fff; }
+        .master-tree-stage { margin-bottom:14px; font-size:0.8rem; color:#666; }
+        .master-tree-stage strong { color:var(--secondary); }
+        .master-network-tree {
+            position:relative;
+            min-height:680px;
+            border-radius:22px;
+            border:1px solid rgba(255,255,255,0.06);
+            background:radial-gradient(circle at top, rgba(157,0,255,0.06), transparent 42%), rgba(255,255,255,0.01);
+            overflow:hidden;
+        }
+        .master-network-tree svg { width:100%; height:680px; display:block; cursor:grab; }
+        .master-network-tree.is-dragging svg { cursor:grabbing; }
+        .master-tree-empty { color:#555; font-size:0.84rem; text-align:center; padding:90px 20px; }
+        @media (max-width: 1080px) {
+            .master-tree-toolbar { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 900px) {
+            .master-tree-toolbar { grid-template-columns: 1fr; }
+            .master-network-tree { min-height: 560px; }
+            .master-network-tree svg { height: 560px; }
+        }
         <?php endif; ?>
     </style>
     <!-- D3.js: necesario para el árbol de red (todos los usuarios) -->
@@ -257,6 +308,9 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
         <nav>
             <a href="#" class="nav-item active" id="nav-dashboard" onclick="switchMasterSection('dashboard')">📊 Dashboard</a>
             <?php if ($es_master): ?>
+                <a href="#" class="nav-item" id="nav-analizador" onclick="switchMasterSection('analizador')">🧮 Analizador</a>
+                <a href="#" class="nav-item" id="nav-ledger" onclick="switchMasterSection('ledger')">📒 Libro Mayor</a>
+                <a href="#" class="nav-item" id="nav-mapa" onclick="switchMasterSection('mapa')">🗺️ Mapa de Red</a>
                 <a href="#" class="nav-item" id="nav-usuarios" onclick="switchMasterSection('usuarios')">👥 Usuarios Reales</a>
                 <a href="#" class="nav-item" id="nav-retiros" onclick="switchMasterSection('retiros')">💰 Pagos Pendientes</a>
                 <a href="#" class="nav-item" id="nav-clones" onclick="switchMasterSection('clones')">🤖 Control de Cuentas Espejo</a>
@@ -309,34 +363,153 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                     <div style="display:flex; flex-direction:column; gap:20px;">
                         <div class="master-card" style="flex:1;">
                             <h4>Distribución</h4>
+                            <div id="master-dist-scope" style="font-size:0.72rem; color:#666; margin:-8px 0 14px 0;">Vista general de tableros en progreso.</div>
                             <div style="margin-bottom:10px;"><div style="display:flex; justify-content:space-between; font-size:0.7rem;"><span>Tablero A</span><span id="dist-a-val">0</span></div><div style="height:4px; background:#222;"><div id="dist-a-bar" style="height:100%; background:#9d00ff; width:0%;"></div></div></div>
                             <div style="margin-bottom:10px;"><div style="display:flex; justify-content:space-between; font-size:0.7rem;"><span>Tablero B</span><span id="dist-b-val">0</span></div><div style="height:4px; background:#222;"><div id="dist-b-bar" style="height:100%; background:#00d2ff; width:0%;"></div></div></div>
                             <div style="margin-bottom:10px;"><div style="display:flex; justify-content:space-between; font-size:0.7rem;"><span>Tablero C</span><span id="dist-c-val">0</span></div><div style="height:4px; background:#222;"><div id="dist-c-bar" style="height:100%; background:#00e676; width:0%;"></div></div></div>
                             <h4 style="margin-top:20px;">Ratio Reales/Cuentas Espejo</h4>
                             <div style="height:8px; background:#222; border-radius:4px;"><div id="reales-clones-bar" style="height:100%; background:var(--primary); width:50%;"></div></div>
-                        </div>
-                        <div class="master-card">
-                            <h4>Control</h4>
-                            <button class="btn-master" onclick="activarClonManual()">🚀 ACTIVAR AGENTE IA</button>
-                            <div id="clon-result" style="margin-top:10px; font-size:0.7rem;"></div>
+                            <div id="reales-clones-label" style="font-size:0.72rem; color:#666; margin-top:8px;">Reales 0 | Clones 0</div>
                         </div>
                     </div>
                 </div>
 
+                <div id="master-panel-stats" class="master-tool-panel" style="display:none; margin-bottom:20px;">
+                <div class="master-card" style="margin-bottom:20px;">
+                    <h4>Analizador de distribucion</h4>
+                    <div class="master-tree-stage">
+                        Filtra por fase, tablero, ciclo y tipo de usuario para saber a cuantos ya se les distribuyeron los $10 y como se mueve la red.
+                    </div>
+                    <div class="master-tree-toolbar" style="margin-bottom:20px;">
+                        <div class="master-tree-control">
+                            <label for="master-stats-phase">Fase</label>
+                            <select id="master-stats-phase"></select>
+                        </div>
+                        <div class="master-tree-control">
+                            <label for="master-stats-board">Tablero</label>
+                            <select id="master-stats-board"></select>
+                        </div>
+                        <div class="master-tree-control">
+                            <label for="master-stats-cycle">Ciclo</label>
+                            <select id="master-stats-cycle"></select>
+                        </div>
+                        <div class="master-tree-control">
+                            <label for="master-stats-user-type">Tipo usuario</label>
+                            <select id="master-stats-user-type"></select>
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:20px;">
+                        <div style="background:rgba(255,255,255,0.02); border:1px solid #1a1a24; border-radius:14px; padding:16px;">
+                            <div style="font-size:0.68rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Total filtrado</div>
+                            <div id="master-filter-total" style="font-size:1.8rem; font-weight:800; color:#fff;">$0.00</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.02); border:1px solid #1a1a24; border-radius:14px; padding:16px;">
+                            <div style="font-size:0.68rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Beneficiarios</div>
+                            <div id="master-filter-beneficiarios" style="font-size:1.8rem; font-weight:800; color:#00d2ff;">0</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.02); border:1px solid #1a1a24; border-radius:14px; padding:16px;">
+                            <div style="font-size:0.68rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Usuarios con $10</div>
+                            <div id="master-filter-users-10" style="font-size:1.8rem; font-weight:800; color:#00e676;">0</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.02); border:1px solid #1a1a24; border-radius:14px; padding:16px;">
+                            <div style="font-size:0.68rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Pagos de $10</div>
+                            <div id="master-filter-payments-10" style="font-size:1.8rem; font-weight:800; color:#ffb300;">0</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+                        <div id="master-filter-caption" style="font-size:0.78rem; color:#888;">Vista actual: todas las fases, todos los tableros y todos los ciclos.</div>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                            <button class="btn-master" type="button" onclick="applyMasterStatsFilters()">Aplicar filtros</button>
+                            <button class="btn-master" type="button" onclick="clearMasterStatsFilters()" style="background:#1a1a28; color:#fff; border:1px solid #2a2a3a;">Limpiar filtros</button>
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1.35fr 1fr; gap:18px;">
+                        <div style="overflow-x:auto;">
+                            <table class="master-table">
+                                <thead>
+                                    <tr>
+                                        <th>Fase</th>
+                                        <th>Tablero</th>
+                                        <th>Ciclo</th>
+                                        <th>Beneficiarios</th>
+                                        <th>Pagos</th>
+                                        <th>Total</th>
+                                        <th>Usuarios $10</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="master-distribution-body"></tbody>
+                            </table>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table class="master-table">
+                                <thead>
+                                    <tr>
+                                        <th>Usuario</th>
+                                        <th>Tipo</th>
+                                        <th>Veces</th>
+                                        <th>Ultima</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="master-ten-users-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                </div>
+                <div id="master-panel-ledger" class="master-tool-panel" style="display:none; margin-bottom:20px;">
                 <div class="master-card" style="margin-bottom:20px;">
                     <h4>📜 Libro Mayor de Tesorería</h4>
                     <div style="overflow-x:auto;"><table class="master-table"><thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th><th>Estado</th></tr></thead><tbody id="master-ledger-body"></tbody></table></div>
                 </div>
-
-                <div class="master-grid-bottom">
-                    <div class="master-card"><h4>🤖 Historial IA</h4><table class="master-table"><thead><tr><th>Beneficiario</th><th>Costo</th><th>Fecha</th></tr></thead><tbody id="master-clones-history-body"></tbody></table></div>
-                    <div class="master-card"><h4>💸 Retiros Pendientes</h4><div id="master-retiros-mini-list"></div></div>
                 </div>
 
-                <div class="master-card"><h4>📊 Actividad del Sistema</h4><table class="master-table"><thead><tr><th>Acción</th><th>Detalles</th><th>Fecha</th></tr></thead><tbody id="master-activity-body"></tbody></table></div>
+                <div id="master-panel-map" class="master-tool-panel" style="display:none; margin-bottom:20px;">
+                <div class="master-card" style="margin-bottom:20px;">
+                    <h4>Mapa General de Red</h4>
+                    <div class="master-tree-stage">
+                        Vista global de la red por fase y ciclo. Puedes centrar una rama escribiendo el ID, nombre, nickname o wallet del usuario.
+                    </div>
+
+                    <div class="master-tree-toolbar">
+                        <div class="master-tree-control">
+                            <label for="master-tree-phase">Fase</label>
+                            <select id="master-tree-phase"></select>
+                        </div>
+                        <div class="master-tree-control">
+                            <label for="master-tree-cycle">Ciclo</label>
+                            <select id="master-tree-cycle"></select>
+                        </div>
+                        <div class="master-tree-control">
+                            <label for="master-tree-root">Raiz o busqueda</label>
+                            <input id="master-tree-root" type="text" placeholder="Ej: 1001, Wendy, TRON_TQ2R o wallet">
+                        </div>
+                        <div class="master-tree-actions">
+                            <button class="btn-master" type="button" onclick="aplicarFiltrosArbolMaster()">Ver arbol</button>
+                            <button class="btn-master" type="button" onclick="resetZoomMasterTree()" style="background:#1a1a28; color:#fff; border:1px solid #2a2a3a;">Reset vista</button>
+                            <button class="btn-master" type="button" onclick="limpiarFiltroArbolMaster()" style="background:rgba(255,255,255,0.08); color:#fff; border:1px solid rgba(255,255,255,0.1);">Vista general</button>
+                        </div>
+                    </div>
+
+                    <div id="master-tree-summary" class="master-tree-chip-row">
+                        <span class="master-tree-chip">Cargando arbol general...</span>
+                    </div>
+
+                    <div id="master-network-tree" class="master-network-tree">
+                        <div class="master-tree-empty">Cargando red general...</div>
+                    </div>
+                </div>
+                </div>
+
+                <div id="master-panel-retiros" class="master-tool-panel" style="display:none; margin-bottom:20px;">
+                    <div class="master-card"><h4>Retiros Pendientes</h4><div id="master-retiros-mini-list"></div></div>
+                </div>
+
+                <div id="master-panel-activity" class="master-tool-panel" style="display:none; margin-bottom:20px;">
+                    <div class="master-card"><h4>Actividad del Sistema</h4><table class="master-table"><thead><tr><th>Acción</th><th>Detalles</th><th>Fecha</th></tr></thead><tbody id="master-activity-body"></tbody></table></div>
+                </div>
 
                 <!-- TELEGRAM MASTER -->
-                <div class="master-card" style="margin-top:20px;">
+                <div id="master-telegram-card" class="master-card" style="margin-top:20px; margin-bottom:20px;">
                     <h3>🔔 Notificaciones Telegram — Master</h3>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;">
                         <div style="background:#0a0a12; border-radius:14px; padding:18px;">
@@ -477,7 +650,8 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                             <div class="profile-summary-name" id="profile-summary-name"><?php echo htmlspecialchars($nickname); ?></div>
                             <div class="profile-summary-sub" id="profile-summary-nick">@<?php echo htmlspecialchars($user_info['nickname'] ?? ''); ?></div>
                             <div class="profile-summary-wallet" id="profile-summary-wallet"><?php echo htmlspecialchars($user_wallet); ?></div>
-                            <div class="profile-summary-note">Administra tus datos de contacto y protege tu acceso sin depender de soporte.</div>
+                            <div class="profile-summary-note" id="profile-summary-telegram">Telegram de perfil: No registrado</div>
+                            <div class="profile-summary-note">Este dato es solo informativo y no reemplaza la vinculacion del bot para notificaciones.</div>
                         </div>
 
                         <div class="profile-form-card">
@@ -501,6 +675,10 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                                 <div class="profile-field profile-field-full">
                                     <label for="profile-correo">Correo electrónico</label>
                                     <input id="profile-correo" type="email" autocomplete="email">
+                                </div>
+                                <div class="profile-field profile-field-full">
+                                    <label for="profile-telegram">Usuario de Telegram</label>
+                                    <input id="profile-telegram" type="text" autocomplete="off" placeholder="@tuusuario">
                                 </div>
                             </div>
                             <div class="profile-actions">
@@ -653,7 +831,33 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
         <?php if ($es_master): ?>
             <!-- SPA SECTIONS FOR MASTER -->
             <div id="section-usuarios" class="master-section"><div class="master-card"><h4>👥 Gestión Usuarios</h4><table class="master-table"><thead><tr><th>ID</th><th>Nombre</th><th>Nick</th><th>Teléfono</th><th>Correo</th><th>Estado de pago</th><th>Wallet</th></tr></thead><tbody id="master-users-body"></tbody></table></div></div>
-            <div id="section-clones" class="master-section"><div class="master-card"><h4>🤖 Todos los Agentes</h4><table class="master-table"><thead><tr><th>ID</th><th>Beneficiario</th><th>Fecha</th></tr></thead><tbody id="master-clones-full-body"></tbody></table></div></div>
+            <div id="section-clones" class="master-section">
+                <div class="master-grid-bottom">
+                    <div class="master-card">
+                        <h4>Control de IA</h4>
+                        <button class="btn-master" onclick="activarClonManual()">ACTIVAR AGENTE IA</button>
+                        <div id="clon-result" style="margin-top:10px; font-size:0.7rem;"></div>
+                    </div>
+                    <div class="master-card">
+                        <h4>Historial IA</h4>
+                        <table class="master-table">
+                            <thead>
+                                <tr><th>Beneficiario</th><th>Costo</th><th>Fecha</th></tr>
+                            </thead>
+                            <tbody id="master-clones-history-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="master-card" style="margin-top:20px;">
+                    <h4>🤖 Registro de Agentes</h4>
+                        <table class="master-table">
+                            <thead>
+                                <tr><th>ID</th><th>Beneficiario</th><th>Fecha</th></tr>
+                            </thead>
+                            <tbody id="master-clones-full-body"></tbody>
+                        </table>
+                </div>
+            </div>
             <div id="section-retiros" class="master-section"><div class="master-card"><h4>💰 Retiros Full</h4><div id="master-retiros-full-list"></div></div></div>
             <div id="section-auditoria" class="master-section"><div class="master-card"><h4>📜 Auditoría Completa</h4><table class="master-table"><thead><tr><th>Acción</th><th>Fecha</th></tr></thead><tbody id="master-auditoria-full-body"></tbody></table></div></div>
         <?php endif; ?>

@@ -56,6 +56,16 @@ let _masterAuditoria    = [];
 let _chartInstance      = null;
 let _lastEventTimestamp = Math.floor(Date.now() / 1000);
 let _profileSnapshot    = null;
+let _masterTreeZoom     = null;
+let _masterTreeSvg      = null;
+let _masterTreeInitialTransform = null;
+let _activeMasterToolPanel = null;
+let _masterStatsFilterState = {
+    fase_numero: 'all',
+    tablero_tipo: 'all',
+    ciclo: 'all',
+    tipo_usuario: 'all'
+};
 
 function getDisplayName(entity) {
     if (!entity) return '';
@@ -113,6 +123,19 @@ function setProfileStatus(targetId, message = '', color = '#7f86a7') {
     el.style.color = color;
 }
 
+function normalizeTelegramUsernameValue(value) {
+    return (value || '').replace(/\s+/g, '').replace(/^@+/, '');
+}
+
+function telegramUsernameValueIsValid(value) {
+    return value === '' || /^[A-Za-z0-9_]{5,32}$/.test(value);
+}
+
+function profilePhoneValueIsValid(value) {
+    const digits = (value || '').replace(/\D+/g, '');
+    return digits.length >= 7 && digits.length <= 20;
+}
+
 function openProfileModal() {
     const modal = document.getElementById('profile-modal');
     if (!modal) return;
@@ -165,6 +188,7 @@ function applyProfileVisuals(profile) {
     const displayName = (profile.display_name || profile.nombre_completo || profile.nickname || '').trim();
     const nickname = profile.nickname || '';
     const wallet = profile.wallet || '';
+    const telegramUsername = normalizeTelegramUsernameValue(profile.telegram_username || '');
     const initials = getDisplayInitials({
         display_name: displayName,
         nickname,
@@ -178,6 +202,7 @@ function applyProfileVisuals(profile) {
     const summaryName = document.getElementById('profile-summary-name');
     const summaryNick = document.getElementById('profile-summary-nick');
     const summaryWallet = document.getElementById('profile-summary-wallet');
+    const summaryTelegram = document.getElementById('profile-summary-telegram');
 
     if (welcomeEl && displayName) welcomeEl.textContent = `Hola, ${displayName}`;
     if (avatarCircle) avatarCircle.textContent = initials;
@@ -187,6 +212,11 @@ function applyProfileVisuals(profile) {
     if (summaryName && displayName) summaryName.textContent = displayName;
     if (summaryNick) summaryNick.textContent = nickname ? `@${nickname}` : 'Sin nick';
     if (summaryWallet && wallet) summaryWallet.textContent = wallet;
+    if (summaryTelegram) {
+        summaryTelegram.textContent = telegramUsername
+            ? `Telegram de perfil: @${telegramUsername}`
+            : 'Telegram de perfil: No registrado';
+    }
     if (wallet) updateSidebarWallet(wallet);
 }
 
@@ -198,6 +228,7 @@ function fillProfileForm(profile) {
     const nombreInput = document.getElementById('profile-nombre');
     const telefonoInput = document.getElementById('profile-telefono');
     const correoInput = document.getElementById('profile-correo');
+    const telegramInput = document.getElementById('profile-telegram');
     const passwordBadge = document.getElementById('profile-password-badge');
     const currentPasswordInput = document.getElementById('profile-current-password');
 
@@ -206,6 +237,10 @@ function fillProfileForm(profile) {
     if (nombreInput) nombreInput.value = profile.nombre_completo || '';
     if (telefonoInput) telefonoInput.value = profile.telefono || '';
     if (correoInput) correoInput.value = profile.correo_electronico || '';
+    if (telegramInput) {
+        const telegramUsername = normalizeTelegramUsernameValue(profile.telegram_username || '');
+        telegramInput.value = telegramUsername ? `@${telegramUsername}` : '';
+    }
 
     if (passwordBadge) {
         passwordBadge.textContent = profile.has_password ? 'Protegido' : 'Sin contraseña';
@@ -264,20 +299,37 @@ async function guardarPerfil() {
     const nombreInput = document.getElementById('profile-nombre');
     const telefonoInput = document.getElementById('profile-telefono');
     const correoInput = document.getElementById('profile-correo');
+    const telegramInput = document.getElementById('profile-telegram');
 
-    if (!nombreInput || !telefonoInput || !correoInput) return;
+    if (!nombreInput || !telefonoInput || !correoInput || !telegramInput) return;
 
     const nombre = nombreInput.value.trim();
     const telefono = telefonoInput.value.trim();
     const correo = correoInput.value.trim();
+    const telegramUsername = normalizeTelegramUsernameValue(telegramInput.value);
 
     if (!nombre || !telefono || !correo) {
         setProfileStatus('profile-status', 'Completa nombre, teléfono y correo.', '#ff5252');
         return;
     }
 
+    if (nombre.length < 3) {
+        setProfileStatus('profile-status', 'El nombre debe tener al menos 3 caracteres.', '#ff5252');
+        return;
+    }
+
+    if (!profilePhoneValueIsValid(telefono)) {
+        setProfileStatus('profile-status', 'El telefono no es valido.', '#ff5252');
+        return;
+    }
+
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
         setProfileStatus('profile-status', 'El correo electrónico no es válido.', '#ff5252');
+        return;
+    }
+
+    if (!telegramUsernameValueIsValid(telegramUsername)) {
+        setProfileStatus('profile-status', 'El usuario de Telegram no es valido. Usa 5 a 32 letras, numeros o _.', '#ff5252');
         return;
     }
 
@@ -288,6 +340,7 @@ async function guardarPerfil() {
         formData.append('nombre_completo', nombre);
         formData.append('telefono', telefono);
         formData.append('correo_electronico', correo);
+        formData.append('telegram_username', telegramUsername);
 
         const res = await fetch('radix_api/profile_update.php', {
             method: 'POST',
@@ -303,6 +356,9 @@ async function guardarPerfil() {
         _profileSnapshot = {
             ...(_profileSnapshot || {}),
             ...(data.profile || {}),
+            telegram_username: data.profile && Object.prototype.hasOwnProperty.call(data.profile, 'telegram_username')
+                ? data.profile.telegram_username
+                : telegramUsername,
             display_name: (data.profile && data.profile.display_name) || nombre,
         };
         fillProfileForm(_profileSnapshot);
@@ -413,6 +469,27 @@ async function loadDashboard() {
                     </tr>`;
                 }).join('') || '<tr><td colspan="4" style="text-align:center;padding:20px;color:#444;">Sin movimientos.</td></tr>';
             }
+
+            const masterPhaseSelect = document.getElementById('master-tree-phase');
+            if (masterPhaseSelect && !masterPhaseSelect.dataset.bound) {
+                masterPhaseSelect.addEventListener('change', () => loadMasterNetworkTree());
+                masterPhaseSelect.dataset.bound = '1';
+            }
+            const masterCycleSelect = document.getElementById('master-tree-cycle');
+            if (masterCycleSelect && !masterCycleSelect.dataset.bound) {
+                masterCycleSelect.addEventListener('change', () => loadMasterNetworkTree());
+                masterCycleSelect.dataset.bound = '1';
+            }
+            const masterRootInput = document.getElementById('master-tree-root');
+            if (masterRootInput && !masterRootInput.dataset.bound) {
+                masterRootInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        loadMasterNetworkTree();
+                    }
+                });
+                masterRootInput.dataset.bound = '1';
+            }
             loadMasterAdvancedData();
         } else {
             // USER MODE
@@ -475,9 +552,262 @@ async function loadDashboard() {
     finally { if(document.getElementById('loading-overlay')) document.getElementById('loading-overlay').style.display='none'; }
 }
 
+function formatCurrencyValue(value) {
+    return `$${parseFloat(value || 0).toFixed(2)}`;
+}
+
+function getMasterStatsFilters() {
+    return {
+        fase_numero: document.getElementById('master-stats-phase')?.value || _masterStatsFilterState.fase_numero || 'all',
+        tablero_tipo: document.getElementById('master-stats-board')?.value || _masterStatsFilterState.tablero_tipo || 'all',
+        ciclo: document.getElementById('master-stats-cycle')?.value || _masterStatsFilterState.ciclo || 'all',
+        tipo_usuario: document.getElementById('master-stats-user-type')?.value || _masterStatsFilterState.tipo_usuario || 'all'
+    };
+}
+
+function buildMasterStatsCaption(filters) {
+    const phaseLabel = filters.fase_numero === 'all' ? 'todas las fases' : `fase ${filters.fase_numero}`;
+    const boardLabel = filters.tablero_tipo === 'all' ? 'todos los tableros' : `tablero ${filters.tablero_tipo}`;
+    const cycleLabel = filters.ciclo === 'all' ? 'todos los ciclos' : `ciclo ${filters.ciclo}`;
+    const typeMap = {
+        all: 'todos los usuarios',
+        real: 'solo reales',
+        clon: 'solo clones',
+        master: 'solo master',
+        sistema: 'solo sistema'
+    };
+    const typeLabel = typeMap[filters.tipo_usuario] || 'todos los usuarios';
+    return `Vista actual: ${phaseLabel}, ${boardLabel}, ${cycleLabel}, ${typeLabel}.`;
+}
+
+function populateMasterStatsFilters(filters = {}) {
+    const phaseSelect = document.getElementById('master-stats-phase');
+    const boardSelect = document.getElementById('master-stats-board');
+    const cycleSelect = document.getElementById('master-stats-cycle');
+    const typeSelect = document.getElementById('master-stats-user-type');
+
+    if (phaseSelect) {
+        phaseSelect.innerHTML = ['<option value="all">Todas</option>']
+            .concat((filters.fases || []).map(f => `<option value="${f.fase_numero}">${f.nombre || ('Fase ' + f.fase_numero)}</option>`))
+            .join('');
+        phaseSelect.value = String(filters.fase_numero ?? 'all');
+    }
+
+    if (boardSelect) {
+        boardSelect.innerHTML = ['<option value="all">Todos</option>']
+            .concat((filters.tableros || []).map(board => `<option value="${board}">Tablero ${board}</option>`))
+            .join('');
+        boardSelect.value = String(filters.tablero_tipo ?? 'all');
+    }
+
+    if (cycleSelect) {
+        cycleSelect.innerHTML = ['<option value="all">Todos</option>']
+            .concat((filters.ciclos || []).map(cycle => `<option value="${cycle}">Ciclo ${cycle}</option>`))
+            .join('');
+        cycleSelect.value = String(filters.ciclo ?? 'all');
+    }
+
+    if (typeSelect) {
+        typeSelect.innerHTML = (filters.tipos_usuario || []).map(type => `
+            <option value="${type.value}">${type.label}</option>
+        `).join('');
+        typeSelect.value = String(filters.tipo_usuario ?? 'all');
+    }
+
+    _masterStatsFilterState = {
+        fase_numero: String(filters.fase_numero ?? 'all'),
+        tablero_tipo: String(filters.tablero_tipo ?? 'all'),
+        ciclo: String(filters.ciclo ?? 'all'),
+        tipo_usuario: String(filters.tipo_usuario ?? 'all')
+    };
+}
+
+function bindMasterStatsControls() {
+    ['master-stats-phase', 'master-stats-board', 'master-stats-cycle', 'master-stats-user-type'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el || el.dataset.bound) return;
+        el.addEventListener('change', () => {
+            _masterStatsFilterState = getMasterStatsFilters();
+            loadMasterAdvancedData();
+        });
+        el.dataset.bound = '1';
+    });
+}
+
+function renderMasterDistributionBars(distribution = {}, filters = {}) {
+    const current = {
+        A: parseInt(distribution.A || 0, 10),
+        B: parseInt(distribution.B || 0, 10),
+        C: parseInt(distribution.C || 0, 10)
+    };
+    const max = Math.max(current.A, current.B, current.C, 1);
+
+    ['a', 'b', 'c'].forEach((tab) => {
+        const label = document.getElementById(`dist-${tab}-val`);
+        const bar = document.getElementById(`dist-${tab}-bar`);
+        if (label) label.innerText = current[tab.toUpperCase()];
+        if (bar) bar.style.width = `${(current[tab.toUpperCase()] / max) * 100}%`;
+    });
+
+    const scope = document.getElementById('master-dist-scope');
+    if (scope) scope.innerText = buildMasterStatsCaption(filters);
+}
+
+function renderMasterRatio(ratio = {}) {
+    const reales = parseInt(ratio.reales || 0, 10);
+    const clones = parseInt(ratio.clones || 0, 10);
+    const total = Math.max(reales + clones, 1);
+    const realPercent = (reales / total) * 100;
+    const bar = document.getElementById('reales-clones-bar');
+    const label = document.getElementById('reales-clones-label');
+
+    if (bar) bar.style.width = `${realPercent}%`;
+    if (label) label.innerText = `Reales ${reales} | Clones ${clones}`;
+}
+
+function renderMasterFilteredSummary(summary = {}, filters = {}) {
+    const caption = document.getElementById('master-filter-caption');
+    if (caption) caption.innerText = buildMasterStatsCaption(filters);
+
+    const totalEl = document.getElementById('master-filter-total');
+    const beneficiariosEl = document.getElementById('master-filter-beneficiarios');
+    const users10El = document.getElementById('master-filter-users-10');
+    const payments10El = document.getElementById('master-filter-payments-10');
+
+    if (totalEl) totalEl.innerText = formatCurrencyValue(summary.total_distribuido || 0);
+    if (beneficiariosEl) beneficiariosEl.innerText = parseInt(summary.beneficiarios || 0, 10);
+    if (users10El) users10El.innerText = parseInt(summary.beneficiarios_con_diez || 0, 10);
+    if (payments10El) payments10El.innerText = parseInt(summary.pagos_de_diez || 0, 10);
+}
+
+function renderMasterDistributionDetail(rows = []) {
+    const body = document.getElementById('master-distribution-body');
+    if (!body) return;
+
+    if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="7" style="color:#555; text-align:center; padding:20px;">No hay distribuciones para esos filtros.</td></tr>';
+        return;
+    }
+
+    body.innerHTML = rows.map((row) => `
+        <tr>
+            <td>Fase ${row.fase_numero}</td>
+            <td>${row.tablero_tipo || '-'}</td>
+            <td>${row.ciclo || '-'}</td>
+            <td>${parseInt(row.beneficiarios || 0, 10)}</td>
+            <td>${parseInt(row.pagos_distribuidos || 0, 10)}</td>
+            <td>${formatCurrencyValue(row.total_distribuido || 0)}</td>
+            <td>${parseInt(row.beneficiarios_con_diez || 0, 10)}</td>
+        </tr>
+    `).join('');
+}
+
+function renderMasterUsersWithTen(rows = []) {
+    const body = document.getElementById('master-ten-users-body');
+    if (!body) return;
+
+    if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="4" style="color:#555; text-align:center; padding:20px;">Nadie ha cobrado $10 con esos filtros.</td></tr>';
+        return;
+    }
+
+    body.innerHTML = rows.map((row) => `
+        <tr>
+            <td style="color:#fff; font-weight:700;">${row.display_name || ('Usuario ' + row.beneficiario_id)}</td>
+            <td style="text-transform:capitalize;">${row.tipo_usuario || '-'}</td>
+            <td>${parseInt(row.pagos_de_diez || 0, 10)}</td>
+            <td>${((row.ultima_fecha || '').split(' ')[0]) || '-'}</td>
+        </tr>
+    `).join('');
+}
+
+function applyMasterStatsFilters() {
+    _masterStatsFilterState = getMasterStatsFilters();
+    loadMasterAdvancedData();
+}
+
+function clearMasterStatsFilters() {
+    _masterStatsFilterState = {
+        fase_numero: 'all',
+        tablero_tipo: 'all',
+        ciclo: 'all',
+        tipo_usuario: 'all'
+    };
+
+    const phaseSelect = document.getElementById('master-stats-phase');
+    const boardSelect = document.getElementById('master-stats-board');
+    const cycleSelect = document.getElementById('master-stats-cycle');
+    const typeSelect = document.getElementById('master-stats-user-type');
+
+    if (phaseSelect) phaseSelect.value = 'all';
+    if (boardSelect) boardSelect.value = 'all';
+    if (cycleSelect) cycleSelect.value = 'all';
+    if (typeSelect) typeSelect.value = 'all';
+
+    loadMasterAdvancedData();
+}
+
+function setMasterToolButtonStates(activePanelId = '') {
+    document.querySelectorAll('.master-tool-button').forEach((button) => {
+        const isActive = button.dataset.masterTool === activePanelId;
+        button.style.background = isActive ? 'linear-gradient(135deg,#9d00ff,#00d2ff)' : '#1a1a28';
+        button.style.color = '#fff';
+        button.style.border = isActive ? 'none' : '1px solid #2a2a3a';
+        button.style.boxShadow = isActive ? '0 10px 24px rgba(0,210,255,0.18)' : 'none';
+    });
+}
+
+function closeMasterToolPanels() {
+    document.querySelectorAll('.master-tool-panel').forEach((panel) => {
+        panel.style.display = 'none';
+    });
+    _activeMasterToolPanel = null;
+    setMasterToolButtonStates('');
+}
+
+function setMasterDashboardHomeVisibility(isVisible = true) {
+    const selectors = ['.widgets-master', '.master-grid-top', '#master-telegram-card'];
+    selectors.forEach((selector) => {
+        document.querySelectorAll(selector).forEach((element) => {
+            element.style.display = isVisible ? '' : 'none';
+        });
+    });
+}
+
+function toggleMasterToolPanel(panelId) {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+
+    const samePanelOpen = _activeMasterToolPanel === panelId && panel.style.display !== 'none';
+    closeMasterToolPanels();
+    if (samePanelOpen) return;
+
+    panel.style.display = 'block';
+    _activeMasterToolPanel = panelId;
+    setMasterToolButtonStates(panelId);
+
+    if (panelId === 'master-panel-map') {
+        setTimeout(() => loadMasterNetworkTree(), 120);
+    }
+
+    setTimeout(() => {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 30);
+}
+
 async function loadMasterAdvancedData() {
     try {
-        const res = await fetch('radix_api/admin_global_stats.php');
+        bindMasterStatsControls();
+        const filters = getMasterStatsFilters();
+        _masterStatsFilterState = { ...filters };
+
+        const params = new URLSearchParams();
+        params.set('fase_numero', filters.fase_numero || 'all');
+        params.set('tablero_tipo', filters.tablero_tipo || 'all');
+        params.set('ciclo', filters.ciclo || 'all');
+        params.set('tipo_usuario', filters.tipo_usuario || 'all');
+
+        const res = await fetch(`radix_api/admin_global_stats.php?${params.toString()}`);
         const data = await res.json();
         if (!data.success) return;
 
@@ -490,16 +820,13 @@ async function loadMasterAdvancedData() {
         animateValue(document.getElementById('val-fase'),              data.fase1_pool || 0,            '$', '', true);
         
         renderMasterCharts(data.crecimiento_diario || []);
-        
-        // Distribution Bars
-        const d = data.distribucion_tableros || {A:0,B:0,C:0};
-        const max = Math.max(d.A, d.B, d.C, 1);
-        ['a','b','c'].forEach(t => {
-            const l = document.getElementById(`dist-${t}-val`);
-            const b = document.getElementById(`dist-${t}-bar`);
-            if(l) l.innerText = d[t.toUpperCase()];
-            if(b) b.style.width = (d[t.toUpperCase()]/max*100)+'%';
-        });
+
+        populateMasterStatsFilters(data.filtros || {});
+        renderMasterDistributionBars(data.distribucion_tableros || { A: 0, B: 0, C: 0 }, data.filtros || filters);
+        renderMasterRatio(data.ratio_reales_clones || {});
+        renderMasterFilteredSummary(data.resumen_distribucion || {}, data.filtros || filters);
+        renderMasterDistributionDetail(data.distribucion_detalle || []);
+        renderMasterUsersWithTen(data.usuarios_con_diez || []);
 
         // A. Historial de Agentes IA
         const clonesBody = document.getElementById('master-clones-history-body');
@@ -549,9 +876,309 @@ async function loadMasterAdvancedData() {
         _masterUserList     = data.lista_usuarios || [];
         _masterRetirosList  = data.retiros_pendientes || [];
         _masterAuditoria    = data.logs_actividad || [];
+        loadMasterNetworkTree();
 
     } catch (e) { 
         console.error("Error cargando datos master:", e); 
+    }
+}
+
+function masterTreeDisplayName(nodeData) {
+    return nodeData.display_name || nodeData.nickname || `Usuario ${nodeData.id}`;
+}
+
+function masterTreeInitials(nodeData) {
+    const source = masterTreeDisplayName(nodeData).trim();
+    if (!source) return 'RD';
+    const parts = source.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function renderMasterTreeSummary(data) {
+    const summary = data.resumen || {};
+    const filtros = data.filtros || {};
+    const root = filtros.root_resuelto || null;
+    const box = document.getElementById('master-tree-summary');
+    if (!box) return;
+
+    const chips = [
+        `<span class="master-tree-chip">Fase <strong>${filtros.fase_numero ?? 0}</strong></span>`,
+        `<span class="master-tree-chip">Ciclo <strong>${filtros.ciclo ?? 1}</strong></span>`,
+        `<span class="master-tree-chip">Nodos <strong>${summary.nodos ?? 0}</strong></span>`,
+        `<span class="master-tree-chip">Reales <strong>${summary.reales ?? 0}</strong></span>`,
+        `<span class="master-tree-chip">Clones <strong>${summary.clones ?? 0}</strong></span>`,
+        `<span class="master-tree-chip">Niveles <strong>${summary.profundidad ?? 0}</strong></span>`
+    ];
+
+    if (root) {
+        chips.push(`<span class="master-tree-chip">Raiz actual <strong>${masterTreeDisplayName(root)}</strong> · ID ${root.id}</span>`);
+    }
+
+    box.innerHTML = chips.join('');
+}
+
+function syncMasterTreeControls(data) {
+    const filtros = data.filtros || {};
+    const phaseSelect = document.getElementById('master-tree-phase');
+    const cycleSelect = document.getElementById('master-tree-cycle');
+    const rootInput = document.getElementById('master-tree-root');
+
+    if (phaseSelect) {
+        phaseSelect.innerHTML = (filtros.fases || []).map(f => `
+            <option value="${f.fase_numero}">${f.nombre || ('Fase ' + f.fase_numero)}</option>
+        `).join('');
+        phaseSelect.value = String(filtros.fase_numero ?? 0);
+    }
+
+    if (cycleSelect) {
+        cycleSelect.innerHTML = (filtros.ciclos || []).map(c => `
+            <option value="${c}">Ciclo ${c}</option>
+        `).join('');
+        cycleSelect.value = String(filtros.ciclo ?? 1);
+    }
+
+    if (rootInput && document.activeElement !== rootInput) {
+        rootInput.value = filtros.root_query || '';
+    }
+}
+
+function getMasterTreeColor(d) {
+    if (d.data.es_raiz) return '#9d00ff';
+    if (d.data.tipo_usuario === 'clon') return '#ff9800';
+    if (d.data.pago_estado === 'completado') return '#00e676';
+    if (d.data.pago_estado === 'pendiente') return '#ff5252';
+    return '#00d2ff';
+}
+
+function renderMasterNetworkTree(treeData) {
+    const container = document.getElementById('master-network-tree');
+    if (!container) return;
+
+    if (!treeData) {
+        container.innerHTML = '<div class="master-tree-empty">No hay estructura disponible para esa fase/ciclo.</div>';
+        return;
+    }
+
+    container.innerHTML = '';
+    container.classList.remove('is-dragging');
+
+    const root = d3.hierarchy(treeData, d => d.hijos && d.hijos.length ? d.hijos : null);
+    const leafCount = Math.max(root.leaves().length, 1);
+    const depthCount = Math.max(root.height + 1, 1);
+    const containerWidth = container.clientWidth || 1180;
+    const containerHeight = container.clientHeight || 680;
+    const margin = { top: 90, right: 90, bottom: 110, left: 90 };
+    const nodeHorizontalSpacing = leafCount > 14 ? 98 : leafCount > 8 ? 118 : 148;
+    const nodeVerticalSpacing = depthCount > 4 ? 145 : 170;
+    const layoutWidth = Math.max(720, leafCount * nodeHorizontalSpacing);
+    const layoutHeight = Math.max(280, (depthCount - 1) * nodeVerticalSpacing);
+    const rootRadius = 26;
+    const childRadius = 18;
+
+    const treeLayout = d3.tree().size([layoutWidth, layoutHeight]);
+    treeLayout(root);
+
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', '100%')
+        .attr('height', containerHeight)
+        .attr('viewBox', `0 0 ${containerWidth} ${containerHeight}`)
+        .attr('preserveAspectRatio', 'xMidYMid meet');
+
+    const defs = svg.append('defs');
+    const gradId = 'masterTreeGrad_' + Date.now();
+    const gradient = defs.append('linearGradient')
+        .attr('id', gradId)
+        .attr('gradientUnits', 'userSpaceOnUse')
+        .attr('x1', 0).attr('y1', 0)
+        .attr('x2', 0).attr('y2', containerHeight);
+    gradient.append('stop').attr('offset', '0%').attr('stop-color', '#9d00ff').attr('stop-opacity', 0.92);
+    gradient.append('stop').attr('offset', '100%').attr('stop-color', '#00d2ff').attr('stop-opacity', 0.92);
+
+    const viewport = svg.append('g');
+    const g = viewport.append('g').attr('transform', `translate(${margin.left}, ${margin.top})`);
+    const nodeRadius = node => node.data.es_raiz ? rootRadius : childRadius;
+    const linkSegments = [];
+
+    root.descendants().forEach(parent => {
+        const children = parent.children || [];
+        if (!children.length) return;
+
+        const parentBottomY = parent.y + nodeRadius(parent) + 6;
+        const childTopYs = children.map(child => child.y - nodeRadius(child) - 10);
+
+        if (children.length === 1) {
+            linkSegments.push({
+                x1: parent.x,
+                y1: parentBottomY,
+                x2: children[0].x,
+                y2: childTopYs[0]
+            });
+            return;
+        }
+
+        let branchY = parentBottomY + 20;
+        const highestChildTop = Math.min(...childTopYs);
+        if (branchY > highestChildTop - 18) {
+            branchY = parentBottomY + Math.max(12, (highestChildTop - parentBottomY) * 0.35);
+        }
+
+        const childXs = children.map(child => child.x);
+        linkSegments.push({ x1: parent.x, y1: parentBottomY, x2: parent.x, y2: branchY });
+        linkSegments.push({ x1: Math.min(...childXs), y1: branchY, x2: Math.max(...childXs), y2: branchY });
+        children.forEach((child, index) => {
+            linkSegments.push({ x1: child.x, y1: branchY, x2: child.x, y2: childTopYs[index] });
+        });
+    });
+
+    g.selectAll('.master-link')
+        .data(linkSegments)
+        .enter()
+        .append('path')
+        .attr('class', 'master-link')
+        .attr('d', d => `M${d.x1},${d.y1} L${d.x2},${d.y2}`)
+        .attr('fill', 'none')
+        .attr('stroke', `url(#${gradId})`)
+        .attr('stroke-width', 2.8)
+        .attr('stroke-linecap', 'round')
+        .attr('opacity', 0.95);
+
+    const node = g.selectAll('.master-node')
+        .data(root.descendants())
+        .enter()
+        .append('g')
+        .attr('class', 'master-node')
+        .attr('transform', d => `translate(${d.x},${d.y})`);
+
+    node.append('circle')
+        .attr('r', 0)
+        .attr('fill', d => getMasterTreeColor(d))
+        .attr('stroke', '#090911')
+        .attr('stroke-width', 2)
+        .style('filter', d => `drop-shadow(0 0 12px ${getMasterTreeColor(d)})`)
+        .transition().duration(450)
+        .attr('r', d => nodeRadius(d));
+
+    node.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .attr('font-size', d => d.data.es_raiz ? '10px' : '8px')
+        .attr('font-weight', '800')
+        .attr('fill', '#000')
+        .text(d => masterTreeInitials(d.data));
+
+    node.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', d => d.data.es_raiz ? '46px' : '38px')
+        .attr('font-size', '10px')
+        .attr('fill', '#c7ccda')
+        .text(d => {
+            const name = masterTreeDisplayName(d.data);
+            return name.length > 18 ? `${name.substring(0, 18)}…` : name;
+        });
+
+    node.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', d => d.data.es_raiz ? '-34px' : '-28px')
+        .attr('font-size', d => d.data.es_raiz ? '10px' : '8px')
+        .attr('fill', d => d.data.es_raiz ? '#9d00ff' : '#888')
+        .text(d => d.data.es_raiz ? `Raiz · Tablero ${d.data.tablero_actual || 'A'}` : `ID ${d.data.id}`);
+
+    const legendItems = [
+        { color: '#9d00ff', label: 'Raiz' },
+        { color: '#00e676', label: 'Pago completo' },
+        { color: '#ff5252', label: 'Pendiente' },
+        { color: '#ff9800', label: 'Clon' },
+        { color: '#00d2ff', label: 'Nuevo' }
+    ];
+    const legendSpacing = 112;
+    const legendWidth = (legendItems.length - 1) * legendSpacing + 90;
+    const legendX = Math.max((containerWidth - legendWidth) / 2, 20);
+    const legend = svg.append('g').attr('transform', `translate(${legendX}, ${containerHeight - 34})`);
+
+    legendItems.forEach((item, index) => {
+        legend.append('circle').attr('cx', index * legendSpacing).attr('cy', 0).attr('r', 5).attr('fill', item.color);
+        legend.append('text')
+            .attr('x', index * legendSpacing + 10)
+            .attr('y', 4)
+            .attr('font-size', '10px')
+            .attr('fill', '#777')
+            .text(item.label);
+    });
+
+    _masterTreeZoom = d3.zoom()
+        .scaleExtent([0.35, 2.2])
+        .on('start', () => container.classList.add('is-dragging'))
+        .on('zoom', event => viewport.attr('transform', event.transform))
+        .on('end', () => container.classList.remove('is-dragging'));
+
+    svg.call(_masterTreeZoom);
+    _masterTreeSvg = svg;
+
+    const bounds = g.node().getBBox();
+    const paddedWidth = bounds.width + margin.left + margin.right;
+    const paddedHeight = bounds.height + margin.top + margin.bottom;
+    const scale = Math.min(
+        (containerWidth - 40) / Math.max(paddedWidth, 1),
+        (containerHeight - 48) / Math.max(paddedHeight, 1),
+        1.08
+    );
+    const tx = (containerWidth - bounds.width * scale) / 2 - bounds.x * scale;
+    const ty = Math.max(18, (containerHeight - bounds.height * scale) / 2 - bounds.y * scale - 16);
+    _masterTreeInitialTransform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+    svg.call(_masterTreeZoom.transform, _masterTreeInitialTransform);
+}
+
+async function loadMasterNetworkTree(options = {}) {
+    const container = document.getElementById('master-network-tree');
+    const phaseSelect = document.getElementById('master-tree-phase');
+    const cycleSelect = document.getElementById('master-tree-cycle');
+    const rootInput = document.getElementById('master-tree-root');
+    if (!container) return;
+
+    const faseNumero = options.fase_numero ?? (parseInt(phaseSelect?.value || '0', 10) || 0);
+    const ciclo = options.ciclo ?? (parseInt(cycleSelect?.value || '1', 10) || 1);
+    const root = options.root ?? (rootInput?.value || '').trim();
+
+    container.innerHTML = '<div class="master-tree-empty">Construyendo mapa general de la red...</div>';
+
+    try {
+        const params = new URLSearchParams();
+        params.set('fase_numero', String(faseNumero));
+        params.set('ciclo', String(ciclo));
+        if (root) params.set('root', root);
+
+        const res = await fetch(`radix_api/admin_network_tree.php?${params.toString()}`);
+        const data = await res.json();
+
+        if (!data.success) {
+            container.innerHTML = `<div class="master-tree-empty">${data.error || 'No se pudo cargar el arbol.'}</div>`;
+            return;
+        }
+
+        syncMasterTreeControls(data);
+        renderMasterTreeSummary(data);
+        renderMasterNetworkTree(data.arbol);
+    } catch (error) {
+        console.error('Master network tree error:', error);
+        container.innerHTML = '<div class="master-tree-empty">Error al cargar el arbol general.</div>';
+    }
+}
+
+function aplicarFiltrosArbolMaster() {
+    loadMasterNetworkTree();
+}
+
+function limpiarFiltroArbolMaster() {
+    const rootInput = document.getElementById('master-tree-root');
+    if (rootInput) rootInput.value = '';
+    loadMasterNetworkTree();
+}
+
+function resetZoomMasterTree() {
+    if (_masterTreeSvg && _masterTreeZoom && _masterTreeInitialTransform) {
+        _masterTreeSvg.transition().duration(350).call(_masterTreeZoom.transform, _masterTreeInitialTransform);
     }
 }
 
@@ -604,12 +1231,48 @@ async function solicitarRetiro() {
 function switchMasterSection(tabName) {
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.master-section').forEach(el => el.classList.remove('active'));
+    closeMasterToolPanels();
+
     const nav = document.getElementById(`nav-${tabName}`);
+    const dashboardSection = document.getElementById('section-dashboard');
     const sec = document.getElementById(`section-${tabName}`);
+
     if (nav) nav.classList.add('active');
+
+    if (tabName === 'dashboard') {
+        if (dashboardSection) dashboardSection.classList.add('active');
+        setMasterDashboardHomeVisibility(true);
+        loadMasterAdvancedData();
+        return;
+    }
+
+    if (tabName === 'analizador') {
+        if (dashboardSection) dashboardSection.classList.add('active');
+        setMasterDashboardHomeVisibility(false);
+        toggleMasterToolPanel('master-panel-stats');
+        loadMasterAdvancedData();
+        return;
+    }
+
+    if (tabName === 'ledger') {
+        if (dashboardSection) dashboardSection.classList.add('active');
+        setMasterDashboardHomeVisibility(false);
+        toggleMasterToolPanel('master-panel-ledger');
+        loadMasterAdvancedData();
+        return;
+    }
+
+    if (tabName === 'mapa') {
+        if (dashboardSection) dashboardSection.classList.add('active');
+        setMasterDashboardHomeVisibility(false);
+        toggleMasterToolPanel('master-panel-map');
+        return;
+    }
+
+    setMasterDashboardHomeVisibility(true);
+
     if (sec) sec.classList.add('active');
 
-    if (tabName === 'dashboard') loadMasterAdvancedData();
     if (tabName === 'usuarios')  renderMasterUsers();
     if (tabName === 'retiros')   renderMasterRetirosFull();
     if (tabName === 'clones')    renderMasterClonesFull();

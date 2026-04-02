@@ -1,10 +1,34 @@
 <?php
-require_once 'config.php';
-require_once 'phase_config.php';
-require_once 'clon_logic.php';       // Compatibilidad con el flujo actual
-require_once 'notificaciones.php';   // MEJORA #6: Notificaciones Telegram
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/phase_config.php';
+require_once __DIR__ . '/clon_logic.php';       // Compatibilidad con el flujo actual
+require_once __DIR__ . '/notificaciones.php';   // MEJORA #6: Notificaciones Telegram
 
-function asegurarReservaTableroActual($pdo, $usuario_id, $tipo_actual, $ciclo_actual, $fase_actual = 0)
+function obtenerMasterRadix(PDO $pdo): array
+{
+    $stmt = $pdo->query("
+        SELECT id, wallet_address
+        FROM usuarios
+        WHERE tipo_usuario = 'master'
+        ORDER BY id ASC
+        LIMIT 1
+    ");
+    $master = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($master) {
+        return [
+            'id' => (int)$master['id'],
+            'wallet_address' => $master['wallet_address'] ?: RADIX_CENTRAL_WALLET,
+        ];
+    }
+
+    return [
+        'id' => 1,
+        'wallet_address' => RADIX_CENTRAL_WALLET,
+    ];
+}
+
+function asegurarReservaTableroActual($pdo, $usuario_id, $tipo_actual, $ciclo_actual, $fase_actual = 0, $propietario_flujo = 'usuario')
 {
     if ($tipo_actual === 'A') {
         return true;
@@ -40,13 +64,14 @@ function asegurarReservaTableroActual($pdo, $usuario_id, $tipo_actual, $ciclo_ac
     // Compatibilidad con usuarios que avanzaron antes de existir fase_numero en reservas.
     $stmt = $pdo->prepare("
         INSERT INTO reservas_tablero (
-            usuario_id, fase_numero, desde_tablero, hacia_destino, ciclo_origen, ciclo_destino,
-            monto, estado, detalle, fecha_uso
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'usado', ?, NOW())
+            usuario_id, fase_numero, propietario_flujo, desde_tablero, hacia_destino, ciclo_origen,
+            ciclo_destino, monto, estado, detalle, fecha_uso
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'usado', ?, NOW())
     ");
     $stmt->execute([
         $usuario_id,
         $fase_actual,
+        $propietario_flujo,
         $desde_tablero,
         $hacia_destino,
         $ciclo_actual,
@@ -63,7 +88,7 @@ function asegurarReservaTableroActual($pdo, $usuario_id, $tipo_actual, $ciclo_ac
  * Funcion para verificar y avanzar a un usuario de tablero.
  * Por ahora mantiene intacta la operacion real de Fase 0, pero ya guardando fase_numero.
  */
-function verificarAvanceTablero($usuario_id, $pdo)
+function verificarAvanceTablero($usuario_id, $pdo, $strict = false)
 {
     try {
         $stmt = $pdo->prepare("SELECT tipo_usuario, patrocinador_id FROM usuarios WHERE id = ?");
@@ -93,8 +118,12 @@ function verificarAvanceTablero($usuario_id, $pdo)
         $tipo_actual = $tablero['tablero_tipo'];
         $ciclo_actual = (int)$tablero['ciclo'];
         $fase_actual = (int)($tablero['fase_numero'] ?? 0);
+        $propietario_usuario = $user_data['tipo_usuario'] === 'clon' ? 'sistema' : 'usuario';
+        $master_user = $user_data['tipo_usuario'] === 'clon' ? obtenerMasterRadix($pdo) : null;
+        $receptor_ganancia_id = $master_user['id'] ?? (int)$usuario_id;
+        $wallet_destino_ganancia = $master_user['wallet_address'] ?? null;
 
-        asegurarReservaTableroActual($pdo, $usuario_id, $tipo_actual, $ciclo_actual, $fase_actual);
+        asegurarReservaTableroActual($pdo, $usuario_id, $tipo_actual, $ciclo_actual, $fase_actual, $propietario_usuario);
 
         // Conteo inteligente por fase y ciclo
         $referidos = 0;
@@ -175,33 +204,43 @@ function verificarAvanceTablero($usuario_id, $pdo)
 
         $stmt = $pdo->prepare("
             INSERT INTO pagos (
-                id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, wallet_destino_real,
-                tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
-            ) VALUES (1000, ?, ?, ?, NULL, ?, ?, 'reserva_interna', ?, 'ganancia_tablero', 'completado')
+                id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, propietario_flujo,
+                wallet_destino_real, tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
+            ) VALUES (1000, ?, ?, ?, ?, ?, ?, ?, 'reserva_interna', ?, 'ganancia_tablero', 'completado')
         ");
-        $stmt->execute([$usuario_id, $usuario_id, $fase_actual, $tipo_actual, $ciclo_actual, $monto_usuario]);
+        $stmt->execute([
+            $receptor_ganancia_id,
+            $usuario_id,
+            $fase_actual,
+            $propietario_usuario,
+            $wallet_destino_ganancia,
+            $tipo_actual,
+            $ciclo_actual,
+            $monto_usuario,
+        ]);
 
         $stmt = $pdo->prepare("UPDATE sistema_config SET valor_decimal = valor_decimal + ? WHERE clave = 'tesoreria_balance'");
         $stmt->execute([$monto_clon]);
 
         $stmt = $pdo->prepare("
             INSERT INTO pagos (
-                id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, wallet_destino_real,
-                tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
-            ) VALUES (?, 1000, 1000, ?, NULL, ?, ?, 'reserva_interna', ?, 'tesoreria_clon', 'completado')
+                id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, propietario_flujo,
+                wallet_destino_real, tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
+            ) VALUES (?, 1000, 1000, ?, 'sistema', NULL, ?, ?, 'reserva_interna', ?, 'tesoreria_clon', 'completado')
         ");
         $stmt->execute([$usuario_id, $fase_actual, $tipo_actual, $ciclo_actual, $monto_clon]);
 
         if ($nuevo_tipo) {
             $stmt = $pdo->prepare("
                 INSERT INTO reservas_tablero (
-                    usuario_id, fase_numero, desde_tablero, hacia_destino, ciclo_origen, ciclo_destino,
-                    monto, estado, detalle, fecha_uso
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'usado', ?, NOW())
+                    usuario_id, fase_numero, propietario_flujo, desde_tablero, hacia_destino,
+                    ciclo_origen, ciclo_destino, monto, estado, detalle, fecha_uso
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'usado', ?, NOW())
             ");
             $stmt->execute([
                 $usuario_id,
                 $fase_actual,
+                $propietario_usuario,
                 $tipo_actual,
                 $destino_reserva,
                 $ciclo_actual,
@@ -229,21 +268,22 @@ function verificarAvanceTablero($usuario_id, $pdo)
 
             $stmt = $pdo->prepare("
                 INSERT INTO pagos (
-                    id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, wallet_destino_real,
-                    tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
-                ) VALUES (?, 1000, 1000, ?, NULL, ?, ?, 'reserva_interna', ?, ?, 'completado')
+                    id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, propietario_flujo,
+                    wallet_destino_real, tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
+                ) VALUES (?, 1000, 1000, ?, ?, NULL, ?, ?, 'reserva_interna', ?, ?, 'completado')
             ");
-            $stmt->execute([$usuario_id, $fase_actual, $tipo_actual, $ciclo_actual, $monto_semilla, $tipo_salto]);
+            $stmt->execute([$usuario_id, $fase_actual, $propietario_usuario, $tipo_actual, $ciclo_actual, $monto_semilla, $tipo_salto]);
 
             $stmt = $pdo->prepare("
                 INSERT INTO reservas_tablero (
-                    usuario_id, fase_numero, desde_tablero, hacia_destino, ciclo_origen, ciclo_destino,
-                    monto, estado, detalle, fecha_uso
-                ) VALUES (?, ?, 'C', ?, ?, NULL, ?, 'usado', ?, NOW())
+                    usuario_id, fase_numero, propietario_flujo, desde_tablero, hacia_destino,
+                    ciclo_origen, ciclo_destino, monto, estado, detalle, fecha_uso
+                ) VALUES (?, ?, ?, 'C', ?, ?, NULL, ?, 'usado', ?, NOW())
             ");
             $stmt->execute([
                 $usuario_id,
                 $fase_actual,
+                $propietario_usuario,
                 getPhaseReserveDestination($fase_actual),
                 $ciclo_actual,
                 $monto_semilla,
@@ -252,21 +292,22 @@ function verificarAvanceTablero($usuario_id, $pdo)
 
             $stmt = $pdo->prepare("
                 INSERT INTO pagos (
-                    id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, wallet_destino_real,
-                    tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
-                ) VALUES (?, 1000, ?, ?, NULL, ?, ?, 'reserva_interna', ?, 'reentrada', 'completado')
+                    id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, propietario_flujo,
+                    wallet_destino_real, tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
+                ) VALUES (?, 1000, ?, ?, ?, NULL, ?, ?, 'reserva_interna', ?, 'reentrada', 'completado')
             ");
-            $stmt->execute([$usuario_id, $usuario_id, $fase_actual, $tipo_actual, $ciclo_actual, $monto_reentrada]);
+            $stmt->execute([$usuario_id, $usuario_id, $fase_actual, $propietario_usuario, $tipo_actual, $ciclo_actual, $monto_reentrada]);
 
             $stmt = $pdo->prepare("
                 INSERT INTO reservas_tablero (
-                    usuario_id, fase_numero, desde_tablero, hacia_destino, ciclo_origen, ciclo_destino,
-                    monto, estado, detalle, fecha_uso
-                ) VALUES (?, ?, 'C', 'REENTRADA_A', ?, ?, ?, 'usado', ?, NOW())
+                    usuario_id, fase_numero, propietario_flujo, desde_tablero, hacia_destino,
+                    ciclo_origen, ciclo_destino, monto, estado, detalle, fecha_uso
+                ) VALUES (?, ?, ?, 'C', 'REENTRADA_A', ?, ?, ?, 'usado', ?, NOW())
             ");
             $stmt->execute([
                 $usuario_id,
                 $fase_actual,
+                $propietario_usuario,
                 $ciclo_actual,
                 $nuevo_ciclo,
                 $monto_reentrada,
@@ -309,19 +350,82 @@ function verificarAvanceTablero($usuario_id, $pdo)
             $pdo->commit();
         }
 
-        notificarAvanceTablero($pdo, $usuario_id, $tipo_actual, $monto_usuario);
+        if ($propietario_usuario === 'usuario') {
+            notificarAvanceTablero($pdo, $usuario_id, $tipo_actual, $monto_usuario);
+        }
 
         // MODO MANUAL:
         // Los clones no se activan automaticamente al completar tableros.
         // La tesoreria se acumula y el admin los activa desde el panel.
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         if (isset($propia_tx) && $propia_tx && $pdo->inTransaction()) {
             $pdo->rollBack();
         }
         error_log("RADIX matrix_logic ERROR (usuario $usuario_id): " . $e->getMessage());
+        if ($strict) {
+            throw $e;
+        }
         return false;
     }
 
     return true;
+}
+
+function verificarCadenaAscendente($usuario_id, $pdo, $max_niveles = 10)
+{
+    try {
+        $usuario_actual = (int)$usuario_id;
+        $visitados = [];
+
+        for ($nivel = 0; $nivel < $max_niveles; $nivel++) {
+            if ($usuario_actual <= 0 || isset($visitados[$usuario_actual])) {
+                break;
+            }
+
+            $visitados[$usuario_actual] = true;
+
+            $stmt = $pdo->prepare("
+                SELECT fase_numero, ciclo
+                FROM tableros_progreso
+                WHERE usuario_id = ? AND estado = 'en_progreso'
+                ORDER BY fase_numero DESC, id DESC
+                LIMIT 1
+            ");
+            $stmt->execute([$usuario_actual]);
+            $tablero_actual = $stmt->fetch();
+
+            if (!$tablero_actual) {
+                break;
+            }
+
+            $stmt = $pdo->prepare("
+                SELECT id_padre
+                FROM referidos
+                WHERE id_hijo = ?
+                  AND fase_numero = ?
+                  AND ciclo = ?
+                ORDER BY id DESC
+                LIMIT 1
+            ");
+            $stmt->execute([
+                $usuario_actual,
+                (int)$tablero_actual['fase_numero'],
+                (int)$tablero_actual['ciclo'],
+            ]);
+            $padre_id = (int)($stmt->fetchColumn() ?: 0);
+
+            if ($padre_id <= 0) {
+                break;
+            }
+
+            verificarAvanceTablero($padre_id, $pdo);
+            $usuario_actual = $padre_id;
+        }
+
+        return true;
+    } catch (Exception $e) {
+        error_log("RADIX matrix_logic chain ERROR (usuario $usuario_id): " . $e->getMessage());
+        return false;
+    }
 }
 ?>

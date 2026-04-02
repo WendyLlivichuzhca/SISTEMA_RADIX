@@ -42,11 +42,18 @@ try {
     if ($accion === 'aprobar') {
         $uid = $retiro['usuario_id'];
 
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE id_receptor=? AND estado='completado' AND tipo='ganancia_tablero'");
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE id_receptor=? AND propietario_flujo='usuario' AND estado='completado' AND tipo='ganancia_tablero'");
         $stmt->execute([$uid]);
         $bruto = (float)$stmt->fetch()['t'];
 
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE id_emisor=? AND estado='completado' AND tipo IN ('salto_fase_1','reentrada')");
+        $stmt = $pdo->prepare("
+            SELECT COALESCE(SUM(monto),0) as t
+            FROM pagos
+            WHERE id_emisor=?
+              AND propietario_flujo='usuario'
+              AND estado='completado'
+              AND (tipo LIKE 'salto_fase_%' OR tipo='reentrada')
+        ");
         $stmt->execute([$uid]);
         $deducciones = (float)$stmt->fetch()['t'];
 

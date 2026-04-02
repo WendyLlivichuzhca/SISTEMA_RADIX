@@ -4,6 +4,14 @@ require_once __DIR__ . '/radix_api/config.php';
 $_ENV['TELEGRAM_BOT_TOKEN'] = '';
 putenv('TELEGRAM_BOT_TOKEN=');
 
+$maintenance_key = $_GET['key'] ?? '';
+define('RADIX_MAINTENANCE_KEY', $_ENV['RADIX_MAINTENANCE_KEY'] ?? 'radix_tools_2026');
+
+if ($maintenance_key !== RADIX_MAINTENANCE_KEY) {
+    http_response_code(403);
+    die('<h2>403 - Acceso denegado.</h2><p>Usa: diagnose_board_progress.php?key=' . htmlspecialchars(RADIX_MAINTENANCE_KEY, ENT_QUOTES, 'UTF-8') . '&user_id=1020</p>');
+}
+
 $userId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
 $error = null;
 $summary = null;

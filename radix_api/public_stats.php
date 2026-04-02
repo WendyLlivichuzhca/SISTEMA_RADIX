@@ -52,6 +52,7 @@ try {
         FROM pagos p
         JOIN usuarios u ON p.id_receptor = u.id
         WHERE p.tipo = 'ganancia_tablero'
+          AND p.propietario_flujo = 'usuario'
           AND p.estado = 'completado'
           AND u.tipo_usuario = 'real'
     ");

@@ -1,8 +1,8 @@
 <?php
-require_once 'config.php';
-require_once 'phase_config.php';
-require_once 'matrix_logic.php';
-require_once 'notificaciones.php'; // MEJORA #6: Notificaciones Telegram
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/phase_config.php';
+require_once __DIR__ . '/matrix_logic.php';
+require_once __DIR__ . '/notificaciones.php'; // MEJORA #6: Notificaciones Telegram
 
 /**
  * Intenta activar un clon usando los fondos de la tesoreria.
@@ -105,10 +105,10 @@ function intentarActivarClon($pdo)
 
         $stmt = $pdo->prepare("
             INSERT INTO pagos (
-                id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, wallet_destino_real,
-                tablero_tipo, ciclo, origen_fondos, monto, monto_pagado,
+                id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, propietario_flujo,
+                wallet_destino_real, tablero_tipo, ciclo, origen_fondos, monto, monto_pagado,
                 tipo, estado, fecha_confirmacion
-            ) VALUES (?, ?, ?, ?, NULL, ?, ?, 'tesoreria', ?, ?, 'regalo', 'completado', NOW())
+            ) VALUES (?, ?, ?, ?, 'sistema', NULL, ?, ?, 'tesoreria', ?, ?, 'regalo', 'completado', NOW())
         ");
         $stmt->execute([$clon_id, $padre_id, $padre_id, $fase_actual, $tablero_tipo, $ciclo_actual, $monto_clon, $monto_clon]);
 
@@ -133,6 +133,7 @@ function intentarActivarClon($pdo)
 
         notificarClonActivado($pdo, $padre_id, (float)$monto_clon);
         verificarAvanceTablero($padre_id, $pdo);
+        verificarCadenaAscendente($padre_id, $pdo);
 
         return "Clon $clon_nickname activado para usuario ID $padre_id (\$$monto_clon USDT).";
     } catch (Exception $e) {

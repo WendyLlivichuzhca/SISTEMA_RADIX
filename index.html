@@ -35,6 +35,7 @@
                 <li><a href="#benefits">Beneficios</a></li>
                 <li><button id="open-login-modal" type="button" class="nav-login-btn">Iniciar Sesión</button></li>
                 <li><a href="https://t.me/+jxoT_lB6Wm82Njgx" target="_blank" class="nav-btn">Comunidad</a></li>
+                <li><button id="open-register-modal-nav" type="button" class="nav-register-btn">Registrarme</button></li>
             </ul>
         </nav>
     </header>
@@ -44,18 +45,16 @@
             <div class="hero-content">
                 <div class="mobile-dapp-notice">
                     <div class="mobile-dapp-badge">Movil + SafePal</div>
-                    <p>Si estas en celular, abre esta web desde el navegador DApp de SafePal y usa tu wallet TRON para conectar y firmar.</p>
+                    <p>Si estas en celular puedes registrarte desde tu navegador normal. Solo necesitas una wallet valida de la red TRON.</p>
                 </div>
                 <h1 class="gradient-text">Impulsa tu Futuro Financiero</h1>
                 <p>Únete a la nueva era de la economía colaborativa impulsada por Smart Contracts. Transparencia, velocidad y crecimiento real.</p>
                 <div class="cta-group">
-                    <button id="connect-wallet" class="primary-btn">Conectar Billetera</button>
-                    <button class="secondary-btn">Saber más</button>
                     <a href="https://www.youtube.com/@RADIX.MASTER" target="_blank" rel="noopener noreferrer" class="secondary-btn media-cta" aria-label="Ver videos en YouTube"></a>
                 </div>
                 <div class="login-shortcut">
                     <span>Â¿Ya estÃ¡s registrado?</span>
-                    <button id="open-login-modal-hero" type="button" class="login-link-btn">Ingresar</button>
+                    <button id="copy-safe-link-hero" type="button" class="login-link-btn">Copiar enlace</button>
                 </div>
             </div>
             <div class="hero-image">
@@ -240,35 +239,57 @@
             <div style="text-align:center;margin-bottom:22px;">
                 <div style="display:inline-block;background:rgba(0,210,255,0.12);border:1px solid rgba(0,210,255,0.35);color:#00d2ff;font-size:0.72rem;font-weight:700;padding:4px 14px;border-radius:20px;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px;">Registro</div>
                 <h3 style="font-size:1.35rem;font-weight:800;color:#fff;margin-bottom:8px;">Completa tus datos</h3>
-                <p style="color:#888;font-size:0.86rem;line-height:1.6;margin:0;">Antes de entrar a RADIX necesitamos tu nombre completo, teléfono y correo electrónico.</p>
+                <p style="color:#888;font-size:0.86rem;line-height:1.6;margin:0;">Completa tu registro con una wallet valida de la red TRON. Ya no necesitas firmar para crear tu cuenta.</p>
             </div>
 
             <form id="contact-modal-form" style="display:flex;flex-direction:column;gap:14px;">
                 <div>
                     <label for="contact-nombre" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Nombre completo</label>
                     <input id="contact-nombre" name="nombre_completo" type="text" autocomplete="name" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
+                    <div id="contact-nombre-error" style="min-height:16px;margin-top:6px;color:#ff6b6b;font-size:0.74rem;line-height:1.4;"></div>
                 </div>
                 <div>
                     <label for="contact-telefono" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Teléfono</label>
                     <input id="contact-telefono" name="telefono" type="tel" autocomplete="tel" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
+                    <div id="contact-telefono-error" style="min-height:16px;margin-top:6px;color:#ff6b6b;font-size:0.74rem;line-height:1.4;"></div>
                 </div>
                 <div>
                     <label for="contact-correo" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Correo electrónico</label>
                     <input id="contact-correo" name="correo_electronico" type="email" autocomplete="email" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
+                    <div id="contact-correo-error" style="min-height:16px;margin-top:6px;color:#ff6b6b;font-size:0.74rem;line-height:1.4;"></div>
                 </div>
+                <div>
+                    <label for="contact-telegram" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Usuario de Telegram</label>
+                    <input id="contact-telegram" name="telegram_username" type="text" autocomplete="off" placeholder="@tuusuario" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
+                    <div id="contact-telegram-error" style="min-height:16px;margin-top:6px;color:#ff6b6b;font-size:0.74rem;line-height:1.4;"></div>
+                    <div style="margin-top:2px;color:#777;font-size:0.76rem;line-height:1.5;">Opcional. Si lo llenas, guardaremos tu usuario para contacto.</div>
+                </div>
+                <input id="contact-patrocinador" name="patrocinador" type="hidden" value="">
+                <div>
+                    <label for="contact-wallet" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Tu wallet TRON</label>
+                    <input id="contact-wallet" name="wallet" type="text" autocomplete="off" placeholder="T..." style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
+                    <div id="contact-wallet-error" style="min-height:16px;margin-top:6px;color:#ff6b6b;font-size:0.74rem;line-height:1.4;"></div>
+                </div>
+                <div id="contact-wallet-hint" style="margin-top:-4px;color:#777;font-size:0.76rem;line-height:1.5;">Usa una direccion valida de la red TRON. El sistema revisa el formato antes de crear tu cuenta.</div>
                 <div id="contact-password-wrap">
                     <label for="contact-password" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">ContraseÃ±a de acceso</label>
                     <input id="contact-password" name="password" type="password" autocomplete="new-password" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
+                    <div id="contact-password-error" style="min-height:16px;margin-top:6px;color:#ff6b6b;font-size:0.74rem;line-height:1.4;"></div>
                 </div>
                 <div id="contact-password-confirm-wrap">
                     <label for="contact-password-confirm" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Confirmar contraseÃ±a</label>
                     <input id="contact-password-confirm" type="password" autocomplete="new-password" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
+                    <div id="contact-password-confirm-error" style="min-height:16px;margin-top:6px;color:#ff6b6b;font-size:0.74rem;line-height:1.4;"></div>
                 </div>
                 <div id="contact-password-hint" style="margin-top:-4px;color:#777;font-size:0.76rem;line-height:1.5;">Esta contraseÃ±a te servirÃ¡ para volver a entrar con tu correo, telÃ©fono o wallet sin firmar de nuevo.</div>
                 <div id="contact-modal-status" style="min-height:18px;color:#ff6b6b;font-size:0.78rem;"></div>
                 <button type="submit" style="width:100%;padding:14px;border-radius:14px;background:linear-gradient(135deg,#9d00ff,#7000cc);border:none;color:#fff;font-size:0.95rem;font-weight:700;cursor:pointer;">
-                    Guardar y continuar
+                    Crear cuenta
                 </button>
+                <div style="text-align:center;color:#888;font-size:0.8rem;">
+                    Â¿Ya tienes cuenta?
+                    <button id="switch-to-login" type="button" style="background:none;border:none;color:#00d2ff;font:inherit;font-weight:700;cursor:pointer;padding:0 0 0 4px;">Inicia sesiÃ³n</button>
+                </div>
             </form>
         </div>
     </div>
@@ -296,6 +317,10 @@
                 <button type="submit" style="width:100%;padding:14px;border-radius:14px;background:linear-gradient(135deg,#00d2ff,#2476ff);border:none;color:#fff;font-size:0.95rem;font-weight:700;cursor:pointer;">
                     Ingresar ahora
                 </button>
+                <div style="text-align:center;color:#888;font-size:0.8rem;">
+                    Â¿No tienes cuenta?
+                    <button id="switch-to-register" type="button" style="background:none;border:none;color:#9d00ff;font:inherit;font-weight:700;cursor:pointer;padding:0 0 0 4px;">RegÃ­strate</button>
+                </div>
             </form>
         </div>
     </div>

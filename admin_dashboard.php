@@ -31,6 +31,7 @@ elseif (!empty($_SESSION['radix_admin_id'])) {
     <title>RADIX — Panel Administrativo (Master)</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <style>
         :root {
             --bg: #050508; --gold: #ffcc00; --primary: #9d00ff;
@@ -91,10 +92,103 @@ elseif (!empty($_SESSION['radix_admin_id'])) {
         .retiro-item { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
         .retiro-item:last-child { border-bottom:none; }
 
+        /* ARBOL ADMIN GENERAL */
+        .admin-tree-toolbar {
+            display: grid;
+            grid-template-columns: 160px 160px minmax(240px, 1fr) auto;
+            gap: 14px;
+            align-items: end;
+            margin-bottom: 18px;
+        }
+        .admin-tree-control label {
+            display: block;
+            font-size: 0.72rem;
+            color: #666;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .admin-tree-control select,
+        .admin-tree-control input {
+            width: 100%;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            color: #fff;
+            border-radius: 12px;
+            padding: 12px 14px;
+            font-size: 0.86rem;
+            outline: none;
+        }
+        .admin-tree-control input::placeholder { color: #555; }
+        .admin-tree-control select:focus,
+        .admin-tree-control input:focus {
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 3px rgba(0,210,255,0.08);
+        }
+        .admin-tree-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .admin-tree-summary {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .admin-tree-chip {
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.02);
+            font-size: 0.78rem;
+            color: #aaa;
+        }
+        .admin-tree-chip strong { color: #fff; }
+        .admin-tree-stage {
+            margin-bottom: 14px;
+            font-size: 0.8rem;
+            color: #666;
+        }
+        .admin-tree-stage strong { color: var(--gold); }
+        .admin-network-tree {
+            position: relative;
+            min-height: 720px;
+            border-radius: 22px;
+            border: 1px solid rgba(255,255,255,0.06);
+            background: radial-gradient(circle at top, rgba(157,0,255,0.06), transparent 42%), rgba(255,255,255,0.01);
+            overflow: hidden;
+        }
+        .admin-network-tree svg {
+            width: 100%;
+            height: 720px;
+            display: block;
+            cursor: grab;
+        }
+        .admin-network-tree.is-dragging svg { cursor: grabbing; }
+        .admin-tree-empty {
+            color: #555;
+            font-size: 0.84rem;
+            text-align: center;
+            padding: 80px 20px;
+        }
+
         #loading { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--gold); }
         #clon-result { font-size:0.8rem; margin-top:10px; min-height:18px; }
 
-        @media(max-width:900px) { .metrics { grid-template-columns:1fr 1fr; } .layout-3,.layout-2 { grid-template-columns:1fr; } }
+        @media(max-width:1100px) {
+            .admin-tree-toolbar { grid-template-columns: 1fr 1fr; }
+            .admin-tree-actions { justify-content: stretch; }
+        }
+
+        @media(max-width:900px) {
+            .metrics { grid-template-columns:1fr 1fr; }
+            .layout-3,.layout-2 { grid-template-columns:1fr; }
+            .admin-tree-toolbar { grid-template-columns: 1fr; }
+            .admin-network-tree { min-height: 620px; }
+            .admin-network-tree svg { height: 620px; }
+        }
     </style>
 </head>
 <body>
@@ -198,6 +292,41 @@ elseif (!empty($_SESSION['radix_admin_id'])) {
     </div>
 
     <!-- ── FILA: HISTORIAL CLONES + RETIROS PENDIENTES ── -->
+    <div class="section-box">
+        <h3>Mapa General de Red</h3>
+        <div class="admin-tree-stage">
+            Vista general de la red por fase y ciclo. Puedes centrar una rama escribiendo el ID, nombre, nickname o wallet de un usuario.
+        </div>
+
+        <div class="admin-tree-toolbar">
+            <div class="admin-tree-control">
+                <label for="admin-tree-phase">Fase</label>
+                <select id="admin-tree-phase"></select>
+            </div>
+            <div class="admin-tree-control">
+                <label for="admin-tree-cycle">Ciclo</label>
+                <select id="admin-tree-cycle"></select>
+            </div>
+            <div class="admin-tree-control">
+                <label for="admin-tree-root">Raiz o busqueda</label>
+                <input id="admin-tree-root" type="text" placeholder="Ej: 1001, Wendy, TRON_TQ2R o wallet">
+            </div>
+            <div class="admin-tree-actions">
+                <button class="btn-action btn-green" type="button" onclick="aplicarFiltrosArbolAdmin()">Ver arbol</button>
+                <button class="btn-action btn-gold" type="button" onclick="resetZoomAdminTree()">Reset vista</button>
+                <button class="btn-action btn-red" type="button" onclick="limpiarFiltroArbolAdmin()">Vista general</button>
+            </div>
+        </div>
+
+        <div class="admin-tree-summary" id="admin-tree-summary">
+            <span class="admin-tree-chip">Cargando arbol general...</span>
+        </div>
+
+        <div id="admin-network-tree" class="admin-network-tree">
+            <div class="admin-tree-empty">Cargando red general...</div>
+        </div>
+    </div>
+
     <div class="layout-2">
 
         <!-- Historial detallado de clones (MEJORA #8) -->
@@ -244,6 +373,9 @@ elseif (!empty($_SESSION['radix_admin_id'])) {
 
 <script>
 let _chartInstance = null;
+let _adminTreeZoom = null;
+let _adminTreeSvg = null;
+let _adminTreeInitialTransform = null;
 
 async function loadAdminStats() {
     try {
@@ -400,6 +532,308 @@ async function loadAdminStats() {
 }
 
 // Botón manual activar clon (MEJORA #8)
+function adminTreeDisplayName(nodeData) {
+    return nodeData.display_name || nodeData.nickname || `Usuario ${nodeData.id}`;
+}
+
+function adminTreeInitials(nodeData) {
+    const source = adminTreeDisplayName(nodeData).trim();
+    if (!source) return 'RD';
+    const parts = source.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) {
+        return parts[0].slice(0, 2).toUpperCase();
+    }
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function renderAdminTreeSummary(data) {
+    const summary = data.resumen || {};
+    const filtros = data.filtros || {};
+    const root = filtros.root_resuelto || null;
+    const box = document.getElementById('admin-tree-summary');
+    if (!box) return;
+
+    const chips = [
+        `<span class="admin-tree-chip">Fase <strong>${filtros.fase_numero ?? 0}</strong></span>`,
+        `<span class="admin-tree-chip">Ciclo <strong>${filtros.ciclo ?? 1}</strong></span>`,
+        `<span class="admin-tree-chip">Nodos <strong>${summary.nodos ?? 0}</strong></span>`,
+        `<span class="admin-tree-chip">Reales <strong>${summary.reales ?? 0}</strong></span>`,
+        `<span class="admin-tree-chip">Clones <strong>${summary.clones ?? 0}</strong></span>`,
+        `<span class="admin-tree-chip">Niveles <strong>${summary.profundidad ?? 0}</strong></span>`
+    ];
+
+    if (root) {
+        chips.push(`<span class="admin-tree-chip">Raiz actual <strong>${adminTreeDisplayName(root)}</strong> · ID ${root.id}</span>`);
+    }
+
+    box.innerHTML = chips.join('');
+}
+
+function syncAdminTreeControls(data) {
+    const filtros = data.filtros || {};
+    const phaseSelect = document.getElementById('admin-tree-phase');
+    const cycleSelect = document.getElementById('admin-tree-cycle');
+    const rootInput = document.getElementById('admin-tree-root');
+
+    if (phaseSelect) {
+        phaseSelect.innerHTML = (filtros.fases || []).map(f => `
+            <option value="${f.fase_numero}">${f.nombre || ('Fase ' + f.fase_numero)}</option>
+        `).join('');
+        phaseSelect.value = String(filtros.fase_numero ?? 0);
+    }
+
+    if (cycleSelect) {
+        cycleSelect.innerHTML = (filtros.ciclos || []).map(c => `
+            <option value="${c}">Ciclo ${c}</option>
+        `).join('');
+        cycleSelect.value = String(filtros.ciclo ?? 1);
+    }
+
+    if (rootInput && document.activeElement !== rootInput) {
+        rootInput.value = filtros.root_query || '';
+    }
+}
+
+function getAdminTreeColor(d) {
+    if (d.data.es_raiz) return '#ffcc00';
+    if (d.data.tipo_usuario === 'clon') return '#ff9800';
+    if (d.data.pago_estado === 'completado') return '#00e676';
+    if (d.data.pago_estado === 'pendiente') return '#ff5252';
+    return '#00d2ff';
+}
+
+function renderAdminNetworkTree(treeData) {
+    const container = document.getElementById('admin-network-tree');
+    if (!container) return;
+
+    if (!treeData) {
+        container.innerHTML = '<div class="admin-tree-empty">No hay estructura disponible para esa fase/ciclo.</div>';
+        return;
+    }
+
+    container.innerHTML = '';
+    container.classList.remove('is-dragging');
+
+    const root = d3.hierarchy(treeData, d => d.hijos && d.hijos.length ? d.hijos : null);
+    const leafCount = Math.max(root.leaves().length, 1);
+    const depthCount = Math.max(root.height + 1, 1);
+    const containerWidth = container.clientWidth || 1200;
+    const containerHeight = container.clientHeight || 720;
+    const margin = { top: 90, right: 90, bottom: 120, left: 90 };
+    const nodeHorizontalSpacing = leafCount > 14 ? 100 : leafCount > 8 ? 120 : 150;
+    const nodeVerticalSpacing = depthCount > 4 ? 145 : 170;
+    const layoutWidth = Math.max(720, leafCount * nodeHorizontalSpacing);
+    const layoutHeight = Math.max(280, (depthCount - 1) * nodeVerticalSpacing);
+    const rootRadius = 26;
+    const childRadius = 18;
+
+    const treeLayout = d3.tree().size([layoutWidth, layoutHeight]);
+    treeLayout(root);
+
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', '100%')
+        .attr('height', containerHeight)
+        .attr('viewBox', `0 0 ${containerWidth} ${containerHeight}`)
+        .attr('preserveAspectRatio', 'xMidYMid meet');
+
+    const defs = svg.append('defs');
+    const gradId = 'adminTreeGrad_' + Date.now();
+    const gradient = defs.append('linearGradient')
+        .attr('id', gradId)
+        .attr('gradientUnits', 'userSpaceOnUse')
+        .attr('x1', 0).attr('y1', 0)
+        .attr('x2', 0).attr('y2', containerHeight);
+    gradient.append('stop').attr('offset', '0%').attr('stop-color', '#9d00ff').attr('stop-opacity', 0.92);
+    gradient.append('stop').attr('offset', '100%').attr('stop-color', '#00d2ff').attr('stop-opacity', 0.92);
+
+    const viewport = svg.append('g');
+    const g = viewport.append('g').attr('transform', `translate(${margin.left}, ${margin.top})`);
+
+    const linkSegments = [];
+    const nodeRadius = node => node.data.es_raiz ? rootRadius : childRadius;
+
+    root.descendants().forEach(parent => {
+        const children = parent.children || [];
+        if (!children.length) return;
+
+        const parentBottomY = parent.y + nodeRadius(parent) + 6;
+        const childTopYs = children.map(child => child.y - nodeRadius(child) - 10);
+
+        if (children.length === 1) {
+            linkSegments.push({
+                x1: parent.x,
+                y1: parentBottomY,
+                x2: children[0].x,
+                y2: childTopYs[0]
+            });
+            return;
+        }
+
+        let branchY = parentBottomY + 20;
+        const highestChildTop = Math.min(...childTopYs);
+        if (branchY > highestChildTop - 18) {
+            branchY = parentBottomY + Math.max(12, (highestChildTop - parentBottomY) * 0.35);
+        }
+
+        const childXs = children.map(child => child.x);
+        linkSegments.push({ x1: parent.x, y1: parentBottomY, x2: parent.x, y2: branchY });
+        linkSegments.push({ x1: Math.min(...childXs), y1: branchY, x2: Math.max(...childXs), y2: branchY });
+        children.forEach((child, index) => {
+            linkSegments.push({ x1: child.x, y1: branchY, x2: child.x, y2: childTopYs[index] });
+        });
+    });
+
+    g.selectAll('.admin-link')
+        .data(linkSegments)
+        .enter()
+        .append('path')
+        .attr('class', 'admin-link')
+        .attr('d', d => `M${d.x1},${d.y1} L${d.x2},${d.y2}`)
+        .attr('fill', 'none')
+        .attr('stroke', `url(#${gradId})`)
+        .attr('stroke-width', 2.8)
+        .attr('stroke-linecap', 'round')
+        .attr('opacity', 0.95);
+
+    const node = g.selectAll('.admin-node')
+        .data(root.descendants())
+        .enter()
+        .append('g')
+        .attr('class', 'admin-node')
+        .attr('transform', d => `translate(${d.x},${d.y})`);
+
+    node.append('circle')
+        .attr('r', 0)
+        .attr('fill', d => getAdminTreeColor(d))
+        .attr('stroke', '#090911')
+        .attr('stroke-width', 2)
+        .style('filter', d => `drop-shadow(0 0 12px ${getAdminTreeColor(d)})`)
+        .transition().duration(450)
+        .attr('r', d => nodeRadius(d));
+
+    node.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .attr('font-size', d => d.data.es_raiz ? '10px' : '8px')
+        .attr('font-weight', '800')
+        .attr('fill', '#000')
+        .text(d => adminTreeInitials(d.data));
+
+    node.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', d => d.data.es_raiz ? '46px' : '38px')
+        .attr('font-size', '10px')
+        .attr('fill', '#c7ccda')
+        .text(d => {
+            const name = adminTreeDisplayName(d.data);
+            return name.length > 18 ? name.substring(0, 18) + '…' : name;
+        });
+
+    node.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', d => d.data.es_raiz ? '-34px' : '-28px')
+        .attr('font-size', d => d.data.es_raiz ? '10px' : '8px')
+        .attr('fill', d => d.data.es_raiz ? '#ffcc00' : '#888')
+        .text(d => d.data.es_raiz ? `Raiz · Tablero ${d.data.tablero_actual || 'A'}` : `ID ${d.data.id}`);
+
+    const legendItems = [
+        { color: '#ffcc00', label: 'Raiz' },
+        { color: '#00e676', label: 'Pago completo' },
+        { color: '#ff5252', label: 'Pendiente' },
+        { color: '#ff9800', label: 'Clon' },
+        { color: '#00d2ff', label: 'Nuevo' }
+    ];
+    const legendSpacing = 112;
+    const legendWidth = (legendItems.length - 1) * legendSpacing + 90;
+    const legendX = Math.max((containerWidth - legendWidth) / 2, 20);
+    const legend = svg.append('g').attr('transform', `translate(${legendX}, ${containerHeight - 34})`);
+    legendItems.forEach((item, index) => {
+        legend.append('circle').attr('cx', index * legendSpacing).attr('cy', 0).attr('r', 5).attr('fill', item.color);
+        legend.append('text')
+            .attr('x', index * legendSpacing + 10)
+            .attr('y', 4)
+            .attr('font-size', '10px')
+            .attr('fill', '#777')
+            .text(item.label);
+    });
+
+    _adminTreeZoom = d3.zoom()
+        .scaleExtent([0.35, 2.2])
+        .on('start', () => container.classList.add('is-dragging'))
+        .on('zoom', event => viewport.attr('transform', event.transform))
+        .on('end', () => container.classList.remove('is-dragging'));
+
+    svg.call(_adminTreeZoom);
+    _adminTreeSvg = svg;
+
+    const bounds = g.node().getBBox();
+    const paddedWidth = bounds.width + margin.left + margin.right;
+    const paddedHeight = bounds.height + margin.top + margin.bottom;
+    const scale = Math.min(
+        (containerWidth - 40) / Math.max(paddedWidth, 1),
+        (containerHeight - 48) / Math.max(paddedHeight, 1),
+        1.08
+    );
+    const tx = (containerWidth - bounds.width * scale) / 2 - bounds.x * scale;
+    const ty = Math.max(18, (containerHeight - bounds.height * scale) / 2 - bounds.y * scale - 16);
+    _adminTreeInitialTransform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+    svg.call(_adminTreeZoom.transform, _adminTreeInitialTransform);
+}
+
+async function loadAdminNetworkTree(options = {}) {
+    const container = document.getElementById('admin-network-tree');
+    const phaseSelect = document.getElementById('admin-tree-phase');
+    const cycleSelect = document.getElementById('admin-tree-cycle');
+    const rootInput = document.getElementById('admin-tree-root');
+
+    if (!container) return;
+
+    const faseNumero = options.fase_numero ?? (parseInt(phaseSelect?.value || '0', 10) || 0);
+    const ciclo = options.ciclo ?? (parseInt(cycleSelect?.value || '1', 10) || 1);
+    const root = options.root ?? (rootInput?.value || '').trim();
+
+    container.innerHTML = '<div class="admin-tree-empty">Construyendo mapa general de la red...</div>';
+
+    try {
+        const params = new URLSearchParams();
+        params.set('fase_numero', String(faseNumero));
+        params.set('ciclo', String(ciclo));
+        if (root) params.set('root', root);
+
+        const res = await fetch(`radix_api/admin_network_tree.php?${params.toString()}`);
+        const data = await res.json();
+
+        if (!data.success) {
+            container.innerHTML = `<div class="admin-tree-empty">${data.error || 'No se pudo cargar el arbol.'}</div>`;
+            return;
+        }
+
+        syncAdminTreeControls(data);
+        renderAdminTreeSummary(data);
+        renderAdminNetworkTree(data.arbol);
+    } catch (error) {
+        console.error('Admin network tree error:', error);
+        container.innerHTML = '<div class="admin-tree-empty">Error al cargar el arbol administrativo.</div>';
+    }
+}
+
+function aplicarFiltrosArbolAdmin() {
+    loadAdminNetworkTree();
+}
+
+function limpiarFiltroArbolAdmin() {
+    const rootInput = document.getElementById('admin-tree-root');
+    if (rootInput) rootInput.value = '';
+    loadAdminNetworkTree();
+}
+
+function resetZoomAdminTree() {
+    if (_adminTreeSvg && _adminTreeZoom && _adminTreeInitialTransform) {
+        _adminTreeSvg.transition().duration(350).call(_adminTreeZoom.transform, _adminTreeInitialTransform);
+    }
+}
+
 async function activarClonManual() {
     const resultEl = document.getElementById('clon-result');
     resultEl.style.color = '#aaa';
@@ -412,7 +846,12 @@ async function activarClonManual() {
         resultEl.style.color = data.success ? '#00e676' : '#ff5252';
         resultEl.innerText   = data.resultado || data.error;
 
-        if (data.success) setTimeout(() => loadAdminStats(), 1500);
+        if (data.success) {
+            setTimeout(() => {
+                loadAdminStats();
+                loadAdminNetworkTree();
+            }, 1500);
+        }
 
     } catch (e) {
         resultEl.style.color = '#ff5252';
@@ -460,7 +899,29 @@ async function procesarRetiro(retiroId, accion) {
     }
 }
 
-window.onload = loadAdminStats;
+window.onload = async () => {
+    await loadAdminStats();
+    await loadAdminNetworkTree();
+
+    const phaseSelect = document.getElementById('admin-tree-phase');
+    const cycleSelect = document.getElementById('admin-tree-cycle');
+    const rootInput = document.getElementById('admin-tree-root');
+
+    if (phaseSelect) {
+        phaseSelect.addEventListener('change', () => loadAdminNetworkTree({ fase_numero: parseInt(phaseSelect.value || '0', 10) || 0 }));
+    }
+    if (cycleSelect) {
+        cycleSelect.addEventListener('change', () => loadAdminNetworkTree());
+    }
+    if (rootInput) {
+        rootInput.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                loadAdminNetworkTree();
+            }
+        });
+    }
+};
 </script>
 </body>
 </html>

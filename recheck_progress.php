@@ -6,10 +6,34 @@ putenv('TELEGRAM_BOT_TOKEN=');
 
 require_once __DIR__ . '/radix_api/matrix_logic.php';
 
+$maintenance_key = $_GET['key'] ?? '';
+define('RADIX_MAINTENANCE_KEY', $_ENV['RADIX_MAINTENANCE_KEY'] ?? 'radix_tools_2026');
+
+if ($maintenance_key !== RADIX_MAINTENANCE_KEY) {
+    http_response_code(403);
+    die('<h2>403 - Acceso denegado.</h2><p>Usa: recheck_progress.php?key=' . htmlspecialchars(RADIX_MAINTENANCE_KEY, ENT_QUOTES, 'UTF-8') . '&user_id=1020</p>');
+}
+
 $user_id = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
 $resultado = null;
 $error = null;
 $tableros = [];
+$antes = null;
+$despues = null;
+$hubo_avance_real = false;
+
+function obtenerTableroActivoUsuario(PDO $pdo, int $user_id)
+{
+    $stmt = $pdo->prepare("
+        SELECT id, fase_numero, tablero_tipo, ciclo, estado, fecha_inicio, fecha_fin
+        FROM tableros_progreso
+        WHERE usuario_id = ? AND estado = 'en_progreso'
+        ORDER BY fase_numero DESC, id DESC
+        LIMIT 1
+    ");
+    $stmt->execute([$user_id]);
+    return $stmt->fetch();
+}
 
 if ($user_id > 0) {
     try {
@@ -21,7 +45,10 @@ if ($user_id > 0) {
             throw new RuntimeException("No existe el usuario ID {$user_id}.");
         }
 
+        $antes = obtenerTableroActivoUsuario($pdo, $user_id);
         $resultado = verificarAvanceTablero($user_id, $pdo);
+        $despues = obtenerTableroActivoUsuario($pdo, $user_id);
+        $hubo_avance_real = $antes !== $despues;
 
         $stmt = $pdo->prepare("
             SELECT id, tablero_tipo, ciclo, estado, fecha_inicio, fecha_fin
@@ -85,11 +112,21 @@ if ($user_id > 0) {
 
         <?php if ($user_id > 0 && !$error): ?>
             <div class="card">
-                <h2 class="<?php echo $resultado ? 'ok' : 'muted'; ?>">
-                    Resultado: <?php echo $resultado ? 'motor ejecutado' : 'sin avance visible'; ?>
+                <h2 class="<?php echo $hubo_avance_real ? 'ok' : 'muted'; ?>">
+                    Resultado: <?php echo $hubo_avance_real ? 'hubo avance real' : 'se evaluo, pero no hubo cambio'; ?>
                 </h2>
                 <p class="muted">
-                    Si no hubo avance visible, el usuario todavía no cumplía las condiciones para cambiar de tablero.
+                    <?php if ($hubo_avance_real): ?>
+                        El tablero activo del usuario cambio despues de ejecutar la verificacion.
+                    <?php else: ?>
+                        La funcion termino sin error, pero el usuario todavia no cumplia todas las condiciones para cambiar de tablero.
+                    <?php endif; ?>
+                </p>
+                <p class="muted">
+                    Antes:
+                    <code><?php echo $antes ? htmlspecialchars($antes['tablero_tipo'] . '-C' . $antes['ciclo'] . ' (' . $antes['estado'] . ')', ENT_QUOTES, 'UTF-8') : 'sin tablero activo'; ?></code>
+                    | Despues:
+                    <code><?php echo $despues ? htmlspecialchars($despues['tablero_tipo'] . '-C' . $despues['ciclo'] . ' (' . $despues['estado'] . ')', ENT_QUOTES, 'UTF-8') : 'sin tablero activo'; ?></code>
                 </p>
             </div>
 

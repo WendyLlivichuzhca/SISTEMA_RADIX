@@ -28,11 +28,13 @@ try {
     $hasNombre = profileHasColumn($pdo, 'nombre_completo');
     $hasTelefono = profileHasColumn($pdo, 'telefono');
     $hasCorreo = profileHasColumn($pdo, 'correo_electronico');
+    $hasTelegramUsername = profileHasColumn($pdo, 'telegram_username');
     $hasPassword = profileHasColumn($pdo, 'password_hash');
 
     $nombreSelect = $hasNombre ? 'nombre_completo' : "'' AS nombre_completo";
     $telefonoSelect = $hasTelefono ? 'telefono' : "'' AS telefono";
     $correoSelect = $hasCorreo ? 'correo_electronico' : "'' AS correo_electronico";
+    $telegramSelect = $hasTelegramUsername ? 'telegram_username' : "'' AS telegram_username";
     $passwordSelect = $hasPassword ? 'password_hash' : "'' AS password_hash";
     $displayNameSelect = $hasNombre
         ? "COALESCE(NULLIF(nombre_completo, ''), nickname) AS display_name"
@@ -47,6 +49,7 @@ try {
             {$nombreSelect},
             {$telefonoSelect},
             {$correoSelect},
+            {$telegramSelect},
             {$passwordSelect}
         FROM usuarios
         WHERE wallet_address = ?
@@ -69,6 +72,7 @@ try {
             'nombre_completo' => $user['nombre_completo'] ?? '',
             'telefono' => $user['telefono'] ?? '',
             'correo_electronico' => $user['correo_electronico'] ?? '',
+            'telegram_username' => $user['telegram_username'] ?? '',
             'has_password' => !empty($user['password_hash']),
         ],
     ]);

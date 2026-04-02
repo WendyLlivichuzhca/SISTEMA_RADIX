@@ -111,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         // 5. Cálculo de Ganancias
         // 5a. Ganancia bruta acumulada (todos los tableros completados)
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE id_receptor = ? AND estado = 'completado' AND tipo = 'ganancia_tablero'");
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE id_receptor = ? AND propietario_flujo = 'usuario' AND estado = 'completado' AND tipo = 'ganancia_tablero'");
         $stmt->execute([$user_id]);
         $total_ganado_bruto = (float)$stmt->fetch()['total'];
 
@@ -120,12 +120,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         //   - reentrada:    $10 que permiten volver a participar en Fase 1 (retención del sistema)
         //   Ambas se deducen automáticamente en matrix_logic.php al completar Tablero C.
         //   NO son pagos manuales del usuario — son retenciones de sus ganancias brutas.
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE id_emisor = ? AND estado = 'completado' AND tipo IN ('salto_fase_1', 'reentrada')");
+        $stmt = $pdo->prepare("
+            SELECT COALESCE(SUM(monto), 0) as total
+            FROM pagos
+            WHERE id_emisor = ?
+              AND propietario_flujo = 'usuario'
+              AND estado = 'completado'
+              AND (tipo LIKE 'salto_fase_%' OR tipo = 'reentrada')
+        ");
         $stmt->execute([$user_id]);
         $total_deducciones = (float)$stmt->fetch()['total'];
 
         // 5c. Reserva Fase 1 personal: cuánto ha aportado este usuario al pool de Fase 1
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE id_emisor = ? AND estado = 'completado' AND tipo = 'salto_fase_1'");
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE id_emisor = ? AND propietario_flujo = 'usuario' AND estado = 'completado' AND tipo = 'salto_fase_1'");
         $stmt->execute([$user_id]);
         $reserva_fase1 = (float)$stmt->fetch()['total'];
 
@@ -148,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         //     Solo cuando fase0_completada=true se habilita el botón RETIRAR en el frontend.
         $stmt = $pdo->prepare("SELECT id FROM tableros_progreso WHERE usuario_id = ? AND tablero_tipo = 'C' AND estado = 'completado' LIMIT 1");
         $stmt->execute([$user_id]);
-        $fase0_completada = (bool)$stmt->fetch();
+        $fase0_completada = $user['tipo_usuario'] === 'real' ? (bool)$stmt->fetch() : false;
 
         // 5e. Historial de movimientos (ganancias + retenciones) para mostrar en el dashboard
         $stmt = $pdo->prepare("
@@ -164,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                      ELSE 'deduccion'
                    END AS direccion
             FROM pagos
-            WHERE id_receptor = ? AND tipo = 'ganancia_tablero' AND estado = 'completado'
+            WHERE id_receptor = ? AND propietario_flujo = 'usuario' AND tipo = 'ganancia_tablero' AND estado = 'completado'
             UNION ALL
             SELECT tipo, monto, fecha_pago AS fecha, estado,
                    CASE tipo
@@ -174,7 +181,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                    END AS tipo_label,
                    'deduccion' AS direccion
             FROM pagos
-            WHERE id_emisor = ? AND tipo IN ('salto_fase_1','reentrada') AND estado = 'completado'
+            WHERE id_emisor = ?
+              AND propietario_flujo = 'usuario'
+              AND (tipo LIKE 'salto_fase_%' OR tipo = 'reentrada')
+              AND estado = 'completado'
             ORDER BY fecha DESC
             LIMIT 20
         ");
@@ -190,6 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 COALESCE(SUM(CASE WHEN hacia_destino = 'REENTRADA_A' THEN monto ELSE 0 END), 0) AS reserva_reentrada
             FROM reservas_tablero
             WHERE usuario_id = ?
+              AND propietario_flujo = 'usuario'
         ");
         $stmt->execute([$user_id]);
         $reservas_usuario = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -198,6 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             SELECT desde_tablero, hacia_destino, ciclo_origen, ciclo_destino, monto, estado, detalle, fecha_creacion, fecha_uso
             FROM reservas_tablero
             WHERE usuario_id = ?
+              AND propietario_flujo = 'usuario'
             ORDER BY id DESC
             LIMIT 10
         ");
@@ -243,7 +255,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
             // Total distribuido a la red (MASTER no tiene ganancias personales — es la billetera central del sistema)
             // Los pagos tipo 'regalo' a id=1 son entradas de tesorería, no utilidad personal del master.
-            $stmt = $pdo->query("SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE tipo = 'ganancia_tablero' AND estado = 'completado'");
+            $stmt = $pdo->query("SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE tipo = 'ganancia_tablero' AND propietario_flujo = 'usuario' AND estado = 'completado'");
             $master_earnings = (float)($stmt->fetchColumn() ?? 0);
 
             $treasury_stats = [

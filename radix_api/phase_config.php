@@ -1,5 +1,5 @@
 <?php
-require_once 'config.php';
+require_once __DIR__ . '/config.php';
 
 function radixDefaultPhaseConfig(int $fase_numero): array
 {
@@ -237,11 +237,13 @@ function getPreviousBoardType(string $tablero_tipo): ?string
 
 function getPhaseSeedPaymentType(int $fase_numero): ?string
 {
-    if ($fase_numero === 0) {
-        return 'salto_fase_1';
-    }
+    $map = [
+        0 => 'salto_fase_1',
+        1 => 'salto_fase_2',
+        2 => 'salto_fase_3',
+    ];
 
-    return null;
+    return $map[$fase_numero] ?? null;
 }
 
 function getPhaseReserveDestination(int $fase_numero): string

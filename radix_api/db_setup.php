@@ -41,12 +41,17 @@ try {
 
     // 5. Modificar ENUM de pagos para incluir tipos nuevos
     try {
-        $pdo->exec("ALTER TABLE pagos MODIFY COLUMN tipo ENUM('regalo','ganancia_tablero','tesoreria_clon','salto_fase_1','reentrada') NOT NULL");
+        $pdo->exec("ALTER TABLE pagos MODIFY COLUMN tipo ENUM('regalo','ganancia_tablero','tesoreria_clon','salto_fase_1','salto_fase_2','salto_fase_3','reentrada') NOT NULL");
     } catch (Exception $e) { /* Ya existe */ }
 
     // 6. Agregar columna telegram_chat_id a usuarios (MEJORA #6)
     try {
         $pdo->exec("ALTER TABLE usuarios ADD COLUMN telegram_chat_id VARCHAR(30) NULL DEFAULT NULL AFTER tipo_usuario");
+    } catch (Exception $e) { /* Ya existe */ }
+
+    // 6b. Agregar usuario publico de Telegram al perfil
+    try {
+        $pdo->exec("ALTER TABLE usuarios ADD COLUMN telegram_username VARCHAR(32) NULL DEFAULT NULL AFTER telegram_chat_id");
     } catch (Exception $e) { /* Ya existe */ }
 
     // 7. Crear tabla retiros si no existe (MEJORA #4)

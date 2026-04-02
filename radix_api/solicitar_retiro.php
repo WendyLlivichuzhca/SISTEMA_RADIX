@@ -19,11 +19,15 @@ $wallet = $_SESSION['radix_wallet'];
 
 try {
     // 1. Obtener usuario
-    $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE wallet_address = ?");
+    $stmt = $pdo->prepare("SELECT id, tipo_usuario FROM usuarios WHERE wallet_address = ?");
     $stmt->execute([$wallet]);
     $user = $stmt->fetch();
     if (!$user) sendResponse(['error' => 'Usuario no encontrado'], 404);
     $user_id = $user['id'];
+
+    if (($user['tipo_usuario'] ?? '') !== 'real') {
+        sendResponse(['error' => 'Solo los usuarios reales pueden solicitar retiros.'], 403);
+    }
 
     // 2. Verificar que el usuario haya completado la Fase 0 (Tablero C completado)
     // Sin esto, usuarios en Fase 0 podrían retirar créditos o ganancias parciales.
@@ -34,11 +38,18 @@ try {
     }
 
     // 3. Calcular saldo disponible (ganancias + crédito excedente - deducciones - ya retirado)
-    $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE id_receptor = ? AND estado = 'completado' AND tipo = 'ganancia_tablero'");
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE id_receptor = ? AND propietario_flujo = 'usuario' AND estado = 'completado' AND tipo = 'ganancia_tablero'");
     $stmt->execute([$user_id]);
     $bruto = (float)($stmt->fetch()['total'] ?? 0);
 
-    $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE id_emisor = ? AND estado = 'completado' AND tipo IN ('salto_fase_1','reentrada')");
+    $stmt = $pdo->prepare("
+        SELECT COALESCE(SUM(monto), 0) as total
+        FROM pagos
+        WHERE id_emisor = ?
+          AND propietario_flujo = 'usuario'
+          AND estado = 'completado'
+          AND (tipo LIKE 'salto_fase_%' OR tipo = 'reentrada')
+    ");
     $stmt->execute([$user_id]);
     $deducciones = (float)($stmt->fetch()['total'] ?? 0);
 

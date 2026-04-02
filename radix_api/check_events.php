@@ -51,6 +51,7 @@ try {
         SELECT monto, tipo, fecha_pago
         FROM pagos
         WHERE id_receptor = ?
+          AND propietario_flujo = 'usuario'
           AND estado = 'completado'
           AND tipo = 'ganancia_tablero'
           AND fecha_pago > ?

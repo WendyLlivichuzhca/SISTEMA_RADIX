@@ -169,12 +169,16 @@ try {
 
         $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles) VALUES (?, 'PAGO_CONFIRMADO_TRON', 'pagos', ?)");
         $stmt->execute([$pago['id_emisor'], $detalle_log]);
+        $beneficiario_logico_id = $pago['beneficiario_usuario_id'] ?: $pago['id_receptor'];
+
+        // Procesar el avance directo antes del commit evita dejar pagos
+        // confirmados sin su cierre interno cuando el motor falle luego.
+        verificarAvanceTablero($beneficiario_logico_id, $pdo, true);
 
         $pdo->commit();
 
         // Disparar avance del PATRÓN (id_receptor)
-        $beneficiario_logico_id = $pago['beneficiario_usuario_id'] ?: $pago['id_receptor'];
-        verificarAvanceTablero($beneficiario_logico_id, $pdo);
+        verificarCadenaAscendente($beneficiario_logico_id, $pdo);
 
         // Mensaje según si hubo excedente o no
         $mensaje = '✅ Pago verificado correctamente. Tu tablero avanzará en breve.';

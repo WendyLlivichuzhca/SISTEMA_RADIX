@@ -74,4 +74,64 @@ function sendResponse(array $data, int $status = 200): void
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
     exit();
 }
+
+function radix_base58_decode(string $input): ?string
+{
+    $alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    $map = array_flip(str_split($alphabet));
+    $bytes = [0];
+
+    foreach (str_split($input) as $char) {
+        if (!isset($map[$char])) {
+            return null;
+        }
+
+        $carry = $map[$char];
+        for ($i = 0, $count = count($bytes); $i < $count; $i++) {
+            $carry += $bytes[$i] * 58;
+            $bytes[$i] = $carry & 0xff;
+            $carry >>= 8;
+        }
+
+        while ($carry > 0) {
+            $bytes[] = $carry & 0xff;
+            $carry >>= 8;
+        }
+    }
+
+    $leadingZeroes = 0;
+    $length = strlen($input);
+    while ($leadingZeroes < $length && $input[$leadingZeroes] === '1') {
+        $leadingZeroes++;
+    }
+
+    $decoded = str_repeat("\x00", $leadingZeroes);
+    foreach (array_reverse($bytes) as $byte) {
+        $decoded .= chr($byte);
+    }
+
+    return $decoded;
+}
+
+function radix_is_valid_tron_wallet(string $wallet): bool
+{
+    $wallet = trim($wallet);
+    if (!preg_match('/^T[1-9A-HJ-NP-Za-km-z]{33}$/', $wallet)) {
+        return false;
+    }
+
+    $decoded = radix_base58_decode($wallet);
+    if ($decoded === null || strlen($decoded) !== 25) {
+        return false;
+    }
+
+    $payload = substr($decoded, 0, 21);
+    $checksum = substr($decoded, 21, 4);
+    if ($payload === false || $checksum === false || $payload[0] !== "\x41") {
+        return false;
+    }
+
+    $expectedChecksum = substr(hash('sha256', hash('sha256', $payload, true), true), 0, 4);
+    return hash_equals($expectedChecksum, $checksum);
+}
 ?>

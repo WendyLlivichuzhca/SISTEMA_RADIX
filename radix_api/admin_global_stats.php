@@ -14,163 +14,369 @@ function userColumnExists(PDO $pdo, string $column): bool
     $stmt->execute([$column]);
     return (int)$stmt->fetchColumn() > 0;
 }
-requireAdminSession(); // 🔒 Solo admins autenticados
 
-// admin_global_stats.php - API exclusiva para la dueña (RADIX Master Control)
+function readNullableIntFilter(string $key): ?int
+{
+    $value = $_GET[$key] ?? 'all';
+    if ($value === '' || $value === null || $value === 'all') {
+        return null;
+    }
+
+    return ctype_digit((string)$value) ? (int)$value : null;
+}
+
+function readNullableBoardFilter(string $key): ?string
+{
+    $value = strtoupper(trim((string)($_GET[$key] ?? 'all')));
+    return in_array($value, ['A', 'B', 'C'], true) ? $value : null;
+}
+
+function readNullableUserTypeFilter(string $key): ?string
+{
+    $value = strtolower(trim((string)($_GET[$key] ?? 'all')));
+    return in_array($value, ['real', 'clon', 'master', 'sistema'], true) ? $value : null;
+}
+
+function addPhaseBoardCycleFilters(
+    array &$conditions,
+    array &$params,
+    string $phaseField,
+    string $boardField,
+    string $cycleField,
+    ?int $phaseFilter,
+    ?string $boardFilter,
+    ?int $cycleFilter
+): void {
+    if ($phaseFilter !== null) {
+        $conditions[] = "{$phaseField} = ?";
+        $params[] = $phaseFilter;
+    }
+
+    if ($boardFilter !== null) {
+        $conditions[] = "{$boardField} = ?";
+        $params[] = $boardFilter;
+    }
+
+    if ($cycleFilter !== null) {
+        $conditions[] = "{$cycleField} = ?";
+        $params[] = $cycleFilter;
+    }
+}
+
+function addUserTypeFilter(array &$conditions, array &$params, string $userTypeField, ?string $userTypeFilter): void
+{
+    if ($userTypeFilter !== null) {
+        $conditions[] = "{$userTypeField} = ?";
+        $params[] = $userTypeFilter;
+    }
+}
+
+function fetchPhaseOptions(PDO $pdo): array
+{
+    $stmt = $pdo->query("
+        SELECT fase_numero, nombre
+        FROM fases_config
+        ORDER BY fase_numero ASC
+    ");
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function fetchCycleOptions(PDO $pdo): array
+{
+    $stmt = $pdo->query("
+        SELECT DISTINCT ciclo
+        FROM (
+            SELECT ciclo FROM tableros_progreso
+            UNION
+            SELECT ciclo FROM pagos
+        ) ciclos
+        WHERE ciclo IS NOT NULL
+        ORDER BY ciclo ASC
+    ");
+
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+requireAdminSession();
+
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
-        // 1. Balance de Tesorería (Fondos para Clones)
+        $phaseFilter = readNullableIntFilter('fase_numero');
+        $boardFilter = readNullableBoardFilter('tablero_tipo');
+        $cycleFilter = readNullableIntFilter('ciclo');
+        $userTypeFilter = readNullableUserTypeFilter('tipo_usuario');
+
+        $phaseOptions = fetchPhaseOptions($pdo);
+        $cycleOptions = fetchCycleOptions($pdo);
+        $logicalBeneficiaryExpr = "COALESCE(p.beneficiario_usuario_id, p.id_receptor)";
+        $beneficiaryDisplayExpr = userColumnExists($pdo, 'nombre_completo')
+            ? "COALESCE(NULLIF(bu.nombre_completo, ''), NULLIF(bu.nickname, ''), CONCAT('Usuario ', {$logicalBeneficiaryExpr}))"
+            : "COALESCE(NULLIF(bu.nickname, ''), CONCAT('Usuario ', {$logicalBeneficiaryExpr}))";
+
         $stmt = $pdo->prepare("SELECT valor_decimal FROM sistema_config WHERE clave = 'tesoreria_balance'");
         $stmt->execute();
-        $tesoreria = $stmt->fetch()['valor_decimal'] ?? 0;
+        $tesoreria = (float)($stmt->fetch()['valor_decimal'] ?? 0);
 
-        // 2. Conteo de Usuarios (Reales vs Clones)
         $stmt = $pdo->query("SELECT COUNT(*) FROM usuarios WHERE tipo_usuario = 'real'");
-        $total_reales = (int)($stmt->fetchColumn() ?: 0);
+        $totalReales = (int)($stmt->fetchColumn() ?: 0);
 
         $stmt = $pdo->query("SELECT COUNT(*) FROM usuarios WHERE tipo_usuario = 'clon'");
-        $total_clones = (int)($stmt->fetchColumn() ?: 0);
+        $totalClones = (int)($stmt->fetchColumn() ?: 0);
 
-        // 3. Fondos Acumulados para Fase 1 (Deducciones de $100)
-        $stmt = $pdo->query("SELECT SUM(monto) FROM pagos WHERE tipo = 'salto_fase_1' AND estado = 'completado'");
-        $fase1_pool = (float)($stmt->fetchColumn() ?: 0);
+        $stmt = $pdo->query("SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE tipo = 'salto_fase_1' AND estado = 'completado'");
+        $fase1Pool = (float)($stmt->fetchColumn() ?: 0);
 
-        // 3b. Re-entradas ya reinvertidas dentro del sistema
-        $stmt = $pdo->query("SELECT SUM(monto) FROM pagos WHERE tipo = 'reentrada' AND estado = 'completado'");
-        $reentrada_pool = (float)($stmt->fetchColumn() ?: 0);
+        $stmt = $pdo->query("SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE tipo = 'reentrada' AND estado = 'completado'");
+        $reentradaPool = (float)($stmt->fetchColumn() ?: 0);
 
-        // 3c. Reservas internas aplicadas entre tableros (A -> B, B -> C)
-        $reservas_aplicadas = 0.0;
-        $reservas_pendientes = 0.0;
-        $logs_reservas = [];
+        $reservasAplicadas = 0.0;
+        $reservasPendientes = 0.0;
+        $logsReservas = [];
         try {
             $stmt = $pdo->query("
                 SELECT COALESCE(SUM(monto), 0)
                 FROM reservas_tablero
                 WHERE estado = 'usado'
             ");
-            $reservas_aplicadas = (float)($stmt->fetchColumn() ?: 0);
+            $reservasAplicadas = (float)($stmt->fetchColumn() ?: 0);
 
             $stmt = $pdo->query("
                 SELECT COALESCE(SUM(monto), 0)
                 FROM reservas_tablero
                 WHERE estado = 'reservado'
             ");
-            $reservas_pendientes = (float)($stmt->fetchColumn() ?: 0);
+            $reservasPendientes = (float)($stmt->fetchColumn() ?: 0);
 
             $stmt = $pdo->query("
-                SELECT rt.usuario_id, rt.desde_tablero, rt.hacia_destino, rt.ciclo_origen,
-                       rt.ciclo_destino, rt.monto, rt.estado, rt.detalle, rt.fecha_creacion,
-                       rt.fecha_uso, u.nickname
+                SELECT
+                    rt.usuario_id,
+                    rt.fase_numero,
+                    rt.desde_tablero,
+                    rt.hacia_destino,
+                    rt.ciclo_origen,
+                    rt.ciclo_destino,
+                    rt.monto,
+                    rt.estado,
+                    rt.detalle,
+                    rt.fecha_creacion,
+                    rt.fecha_uso,
+                    u.nickname
                 FROM reservas_tablero rt
                 LEFT JOIN usuarios u ON rt.usuario_id = u.id
                 ORDER BY rt.id DESC
                 LIMIT 20
             ");
-            $logs_reservas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $logsReservas = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (Exception $e) {
-            // La tabla puede no existir aun en instalaciones antiguas.
         }
 
-        // 4. Historial detallado de clones activados (con usuario beneficiario)
-        // NOTA: Se eliminó el LEFT JOIN con tesoreria_movimientos porque producía filas
-        // duplicadas cuando un usuario recibía más de un clon (N egresos × M logs = N×M filas).
-        // El monto se extrae del campo 'detalles' que ya lo guarda en formato "$X de tesorería".
         $stmt = $pdo->query("
-            SELECT al.id, al.detalles, al.fecha,
-                   u.nickname, u.wallet_address
+            SELECT al.id, al.detalles, al.fecha, u.nickname, u.wallet_address
             FROM auditoria_logs al
             LEFT JOIN usuarios u ON al.usuario_id = u.id
             WHERE al.accion = 'ACTIVACION_CLON'
-            ORDER BY al.id DESC LIMIT 10
+            ORDER BY al.id DESC
+            LIMIT 10
         ");
-        $logs_clones_raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // Extraer el monto del texto: "Clon X generado con $10 de tesorería."
-        $logs_clones = array_map(function($row) {
-            preg_match('/\$(\d+(?:\.\d+)?)/', $row['detalles'] ?? '', $m);
-            $row['monto'] = isset($m[1]) ? (float)$m[1] : null;
+        $logsClonesRaw = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $logsClones = array_map(function ($row) {
+            preg_match('/\\$(\\d+(?:\\.\\d+)?)/', $row['detalles'] ?? '', $match);
+            $row['monto'] = isset($match[1]) ? (float)$match[1] : null;
             return $row;
-        }, $logs_clones_raw);
+        }, $logsClonesRaw);
 
-        // 5. Total distribuido a la red como ganancias de tableros completados.
-        //    NOTA: RADIX_MASTER NO tiene ganancias personales — es la billetera central del sistema.
-        //    Los pagos tipo 'regalo' que llegan a id=1 son ENTRADAS del sistema, NO utilidad del master.
-        //    La ganancia real se genera vía 'ganancia_tablero' cuando un tablero se completa (matrix_logic.php).
-        $stmt = $pdo->query("SELECT COALESCE(SUM(monto), 0) as total FROM pagos WHERE tipo = 'ganancia_tablero' AND estado = 'completado'");
-        $master_earnings = (float)($stmt->fetch()['total'] ?? 0);  // = total ya distribuido a usuarios de la red
-
-        // 5b. Total físico recibido en blockchain (TODOS los pagos de entrada van a RADIX_MASTER wallet on-chain)
-        //     Incluye pagos donde id_receptor es cualquier usuario (ej: TKqT recibe comisión de TQ2R)
-        //     pero el USDT físico siempre llega a la billetera central TDLFwy5swL2B8stX6tgUgQr2BjB1DFdwoU
         $stmt = $pdo->query("
-            SELECT COALESCE(SUM(monto_pagado), 0) as total
+            SELECT COALESCE(SUM(monto), 0) AS total
+            FROM pagos
+            WHERE tipo = 'ganancia_tablero'
+              AND propietario_flujo = 'usuario'
+              AND estado = 'completado'
+        ");
+        $masterEarnings = (float)($stmt->fetch()['total'] ?? 0);
+
+        $stmt = $pdo->query("
+            SELECT COALESCE(SUM(monto_pagado), 0) AS total
             FROM pagos
             WHERE tipo = 'regalo'
               AND estado = 'completado'
               AND origen_fondos = 'externo'
         ");
-        $total_blockchain = (float)($stmt->fetch()['total'] ?? 0);
+        $totalBlockchain = (float)($stmt->fetch()['total'] ?? 0);
 
-        // 5c. Créditos por excedente: pagos superiores al monto esperado ya abonados
-        //     a usuarios específicos. No deben confundirse con fondos "libres por distribuir".
         $stmt = $pdo->query("
-            SELECT COALESCE(SUM(credito_saldo), 0) as total
+            SELECT COALESCE(SUM(credito_saldo), 0) AS total
             FROM usuarios
             WHERE tipo_usuario = 'real'
         ");
-        $creditos_excedente = (float)($stmt->fetch()['total'] ?? 0);
+        $creditosExcedente = (float)($stmt->fetch()['total'] ?? 0);
 
-        // 5d. Total pendiente de distribuir = entradas blockchain - fondos ya asignados internamente.
-        //     Se descuentan ganancias ya pagadas, tesoreria, reservas usadas, fondo Fase 1,
-        //     re-entradas y créditos excedentes ya comprometidos a usuarios.
-        $pendiente_distribuir = max(
+        $pendienteDistribuir = max(
             0,
-            $total_blockchain
-            - $master_earnings
+            $totalBlockchain
+            - $masterEarnings
             - $tesoreria
-            - $reservas_aplicadas
-            - $fase1_pool
-            - $reentrada_pool
-            - $creditos_excedente
+            - $reservasAplicadas
+            - $fase1Pool
+            - $reentradaPool
+            - $creditosExcedente
         );
 
-        // 6. Distribución de usuarios por tablero actual
-        $stmt = $pdo->query("
-            SELECT tablero_tipo, COUNT(*) as cantidad
-            FROM tableros_progreso
-            WHERE estado = 'en_progreso'
-            GROUP BY tablero_tipo
+        $progressConditions = ["tp.estado = 'en_progreso'"];
+        $progressParams = [];
+        addPhaseBoardCycleFilters(
+            $progressConditions,
+            $progressParams,
+            'tp.fase_numero',
+            'tp.tablero_tipo',
+            'tp.ciclo',
+            $phaseFilter,
+            $boardFilter,
+            $cycleFilter
+        );
+        addUserTypeFilter($progressConditions, $progressParams, 'u.tipo_usuario', $userTypeFilter);
+
+        $stmt = $pdo->prepare("
+            SELECT tp.tablero_tipo, COUNT(*) AS cantidad
+            FROM tableros_progreso tp
+            INNER JOIN usuarios u ON u.id = tp.usuario_id
+            WHERE " . implode(' AND ', $progressConditions) . "
+            GROUP BY tp.tablero_tipo
         ");
-        $dist_raw = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
-        $distribucion_tableros = [
-            'A' => (int)($dist_raw['A'] ?? 0),
-            'B' => (int)($dist_raw['B'] ?? 0),
-            'C' => (int)($dist_raw['C'] ?? 0),
+        $stmt->execute($progressParams);
+        $distributionRaw = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        $distribucionTableros = [
+            'A' => (int)($distributionRaw['A'] ?? 0),
+            'B' => (int)($distributionRaw['B'] ?? 0),
+            'C' => (int)($distributionRaw['C'] ?? 0),
         ];
 
-        // 7. Crecimiento diario — nuevos usuarios por día (últimos 7 días)
+        $stmt = $pdo->prepare("
+            SELECT u.tipo_usuario, COUNT(DISTINCT tp.usuario_id) AS cantidad
+            FROM tableros_progreso tp
+            INNER JOIN usuarios u ON u.id = tp.usuario_id
+            WHERE " . implode(' AND ', $progressConditions) . "
+            GROUP BY u.tipo_usuario
+        ");
+        $stmt->execute($progressParams);
+        $ratioRaw = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        $ratioRealesClones = [
+            'reales' => (int)($ratioRaw['real'] ?? 0),
+            'clones' => (int)($ratioRaw['clon'] ?? 0),
+        ];
+
+        $gainConditions = [
+            "p.tipo = 'ganancia_tablero'",
+            "p.estado = 'completado'",
+        ];
+        $gainParams = [];
+        addPhaseBoardCycleFilters(
+            $gainConditions,
+            $gainParams,
+            'p.fase_numero',
+            'p.tablero_tipo',
+            'p.ciclo',
+            $phaseFilter,
+            $boardFilter,
+            $cycleFilter
+        );
+        addUserTypeFilter($gainConditions, $gainParams, 'bu.tipo_usuario', $userTypeFilter);
+
+        $stmt = $pdo->prepare("
+            SELECT
+                COALESCE(SUM(p.monto), 0) AS total_distribuido,
+                COUNT(*) AS pagos_distribuidos,
+                COUNT(DISTINCT {$logicalBeneficiaryExpr}) AS beneficiarios,
+                COALESCE(SUM(CASE WHEN ABS(p.monto - 10.00) < 0.0001 THEN 1 ELSE 0 END), 0) AS pagos_de_diez,
+                COUNT(DISTINCT CASE WHEN ABS(p.monto - 10.00) < 0.0001 THEN {$logicalBeneficiaryExpr} END) AS beneficiarios_con_diez
+            FROM pagos p
+            LEFT JOIN usuarios bu ON bu.id = {$logicalBeneficiaryExpr}
+            WHERE " . implode(' AND ', $gainConditions)
+        );
+        $stmt->execute($gainParams);
+        $distributionSummary = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        $stmt = $pdo->prepare("
+            SELECT
+                p.fase_numero,
+                p.tablero_tipo,
+                p.ciclo,
+                COUNT(*) AS pagos_distribuidos,
+                COUNT(DISTINCT {$logicalBeneficiaryExpr}) AS beneficiarios,
+                COALESCE(SUM(p.monto), 0) AS total_distribuido,
+                COALESCE(SUM(CASE WHEN ABS(p.monto - 10.00) < 0.0001 THEN 1 ELSE 0 END), 0) AS pagos_de_diez,
+                COUNT(DISTINCT CASE WHEN ABS(p.monto - 10.00) < 0.0001 THEN {$logicalBeneficiaryExpr} END) AS beneficiarios_con_diez
+            FROM pagos p
+            LEFT JOIN usuarios bu ON bu.id = {$logicalBeneficiaryExpr}
+            WHERE " . implode(' AND ', $gainConditions) . "
+            GROUP BY p.fase_numero, p.tablero_tipo, p.ciclo
+            ORDER BY p.fase_numero ASC, FIELD(p.tablero_tipo, 'A', 'B', 'C'), p.ciclo ASC
+        ");
+        $stmt->execute($gainParams);
+        $distributionDetail = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmt = $pdo->prepare("
+            SELECT
+                {$logicalBeneficiaryExpr} AS beneficiario_id,
+                {$beneficiaryDisplayExpr} AS display_name,
+                COALESCE(bu.tipo_usuario, 'desconocido') AS tipo_usuario,
+                COUNT(*) AS pagos_de_diez,
+                COALESCE(SUM(p.monto), 0) AS total_de_diez,
+                MAX(p.fecha_pago) AS ultima_fecha
+            FROM pagos p
+            LEFT JOIN usuarios bu ON bu.id = {$logicalBeneficiaryExpr}
+            WHERE " . implode(' AND ', $gainConditions) . "
+              AND ABS(p.monto - 10.00) < 0.0001
+            GROUP BY
+                {$logicalBeneficiaryExpr},
+                {$beneficiaryDisplayExpr},
+                COALESCE(bu.tipo_usuario, 'desconocido')
+            ORDER BY MAX(p.id) DESC
+            LIMIT 12
+        ");
+        $stmt->execute($gainParams);
+        $usersWithTen = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmt = $pdo->prepare("
+            SELECT
+                p.id,
+                p.fase_numero,
+                p.tablero_tipo,
+                p.ciclo,
+                p.monto,
+                p.fecha_pago,
+                {$logicalBeneficiaryExpr} AS beneficiario_id,
+                {$beneficiaryDisplayExpr} AS display_name,
+                COALESCE(bu.tipo_usuario, 'desconocido') AS tipo_usuario
+            FROM pagos p
+            LEFT JOIN usuarios bu ON bu.id = {$logicalBeneficiaryExpr}
+            WHERE " . implode(' AND ', $gainConditions) . "
+            ORDER BY p.id DESC
+            LIMIT 12
+        ");
+        $stmt->execute($gainParams);
+        $latestGains = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
         $stmt = $pdo->query("
-            SELECT DATE(fecha_registro) as dia, COUNT(*) as nuevos
+            SELECT DATE(fecha_registro) AS dia, COUNT(*) AS nuevos
             FROM usuarios
             WHERE tipo_usuario = 'real'
               AND fecha_registro >= DATE_SUB(NOW(), INTERVAL 7 DAY)
             GROUP BY DATE(fecha_registro)
             ORDER BY dia ASC
         ");
-        $crecimiento_diario = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $crecimientoDiario = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // 8. Registro de Actividad General (TODOS los tipos de acción)
         $stmt = $pdo->query("
-            SELECT al.accion, al.detalles, al.fecha, u.nickname
+            SELECT al.accion, al.detalles, al.fecha, al.fase_numero, u.nickname
             FROM auditoria_logs al
             LEFT JOIN usuarios u ON al.usuario_id = u.id
-            ORDER BY al.id DESC LIMIT 20
+            ORDER BY al.id DESC
+            LIMIT 20
         ");
-        $logs_actividad = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $logsActividad = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // 9. Solicitudes de retiro pendientes
-        $retiros_pendientes = [];
+        $retirosPendientes = [];
         try {
             $stmt = $pdo->query("
                 SELECT r.id, r.monto, r.wallet_destino, r.fecha_solicitud, u.nickname
@@ -180,17 +386,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 ORDER BY r.fecha_solicitud ASC
                 LIMIT 20
             ");
-            $retiros_pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Exception $e) { }
+            $retirosPendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+        }
 
-        // 10. Lista completa de usuarios reales
-        $select_nombre = userColumnExists($pdo, 'nombre_completo')
+        $selectNombre = userColumnExists($pdo, 'nombre_completo')
             ? 'u.nombre_completo'
             : "'' AS nombre_completo";
-        $select_telefono = userColumnExists($pdo, 'telefono')
+        $selectTelefono = userColumnExists($pdo, 'telefono')
             ? 'u.telefono'
             : "'' AS telefono";
-        $select_correo = userColumnExists($pdo, 'correo_electronico')
+        $selectCorreo = userColumnExists($pdo, 'correo_electronico')
             ? 'u.correo_electronico'
             : "'' AS correo_electronico";
 
@@ -201,9 +407,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 u.wallet_address,
                 u.tipo_usuario,
                 u.fecha_registro,
-                {$select_nombre},
-                {$select_telefono},
-                {$select_correo},
+                {$selectNombre},
+                {$selectTelefono},
+                {$selectCorreo},
                 (
                     SELECT p.estado
                     FROM pagos p
@@ -216,47 +422,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             WHERE u.tipo_usuario IN ('real', 'master')
             ORDER BY u.id ASC
         ");
-        $lista_usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $listaUsuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // 11. Movimientos de Tesorería (libro mayor)
         $stmt = $pdo->query("
             SELECT tipo, monto, motivo, fecha
             FROM tesoreria_movimientos
-            ORDER BY id DESC LIMIT 30
+            ORDER BY id DESC
+            LIMIT 30
         ");
-        $tesoreria_movimientos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $tesoreriaMovimientos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         sendResponse([
-            'success'               => true,
-            'tesoreria'             => (float)$tesoreria,
-            'fase1_pool'            => (float)$fase1_pool,
-            'reentrada_pool'        => (float)$reentrada_pool,
-            'reservas_aplicadas'    => (float)$reservas_aplicadas,
-            'reservas_pendientes'   => (float)$reservas_pendientes,
-            'master_id1_earnings'   => (float)$master_earnings,
-            'total_blockchain'      => (float)$total_blockchain,
-            'creditos_excedente'    => (float)$creditos_excedente,
-            'pendiente_distribuir'  => (float)$pendiente_distribuir,
+            'success' => true,
+            'tesoreria' => $tesoreria,
+            'fase1_pool' => $fase1Pool,
+            'reentrada_pool' => $reentradaPool,
+            'reservas_aplicadas' => $reservasAplicadas,
+            'reservas_pendientes' => $reservasPendientes,
+            'master_id1_earnings' => $masterEarnings,
+            'total_blockchain' => $totalBlockchain,
+            'creditos_excedente' => $creditosExcedente,
+            'pendiente_distribuir' => $pendienteDistribuir,
             'usuarios' => [
-                'reales' => (int)$total_reales,
-                'clones' => (int)$total_clones,
-                'total'  => (int)($total_reales + $total_clones),
+                'reales' => $totalReales,
+                'clones' => $totalClones,
+                'total' => $totalReales + $totalClones,
             ],
-            'distribucion_tableros' => $distribucion_tableros,
-            'crecimiento_diario'    => $crecimiento_diario,
-            'logs'                  => $logs_clones,
-            'logs_reservas'         => $logs_reservas,
-            'logs_actividad'        => $logs_actividad,
-            'lista_usuarios'        => $lista_usuarios,
-            'retiros_pendientes'    => $retiros_pendientes,
-            'tesoreria_movimientos' => $tesoreria_movimientos,
+            'distribucion_tableros' => $distribucionTableros,
+            'ratio_reales_clones' => $ratioRealesClones,
+            'resumen_distribucion' => [
+                'total_distribuido' => (float)($distributionSummary['total_distribuido'] ?? 0),
+                'pagos_distribuidos' => (int)($distributionSummary['pagos_distribuidos'] ?? 0),
+                'beneficiarios' => (int)($distributionSummary['beneficiarios'] ?? 0),
+                'pagos_de_diez' => (int)($distributionSummary['pagos_de_diez'] ?? 0),
+                'beneficiarios_con_diez' => (int)($distributionSummary['beneficiarios_con_diez'] ?? 0),
+            ],
+            'distribucion_detalle' => $distributionDetail,
+            'usuarios_con_diez' => $usersWithTen,
+            'ultimas_ganancias' => $latestGains,
+            'filtros' => [
+                'fase_numero' => $phaseFilter ?? 'all',
+                'tablero_tipo' => $boardFilter ?? 'all',
+                'ciclo' => $cycleFilter ?? 'all',
+                'tipo_usuario' => $userTypeFilter ?? 'all',
+                'fases' => $phaseOptions,
+                'tableros' => ['A', 'B', 'C'],
+                'ciclos' => $cycleOptions,
+                'tipos_usuario' => [
+                    ['value' => 'all', 'label' => 'Todos'],
+                    ['value' => 'real', 'label' => 'Reales'],
+                    ['value' => 'clon', 'label' => 'Clones'],
+                    ['value' => 'master', 'label' => 'Master'],
+                    ['value' => 'sistema', 'label' => 'Sistema'],
+                ],
+            ],
+            'crecimiento_diario' => $crecimientoDiario,
+            'logs' => $logsClones,
+            'logs_reservas' => $logsReservas,
+            'logs_actividad' => $logsActividad,
+            'lista_usuarios' => $listaUsuarios,
+            'retiros_pendientes' => $retirosPendientes,
+            'tesoreria_movimientos' => $tesoreriaMovimientos,
         ]);
-
     } catch (PDOException $e) {
-        error_log("RADIX admin_global_stats ERROR: " . $e->getMessage());
+        error_log('RADIX admin_global_stats ERROR: ' . $e->getMessage());
         sendResponse(['error' => 'Error del servidor. Intenta de nuevo.'], 500);
     }
 } else {
-    sendResponse(['error' => 'Método no permitido'], 405);
+    sendResponse(['error' => 'Metodo no permitido'], 405);
 }
 ?>

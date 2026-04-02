@@ -3,14 +3,14 @@ require_once 'config.php';
 session_start();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    sendResponse(['error' => 'MÃ©todo no permitido'], 405);
+    sendResponse(['error' => 'Metodo no permitido'], 405);
 }
 
 $login = trim($_POST['login'] ?? '');
 $password = (string)($_POST['password'] ?? '');
 
 if ($login === '' || $password === '') {
-    sendResponse(['error' => 'Ingresa tu correo, telÃ©fono o wallet y tu contraseÃ±a.'], 400);
+    sendResponse(['error' => 'Ingresa tu correo, telefono o wallet y tu contrasena.'], 400);
 }
 
 try {
@@ -24,7 +24,7 @@ try {
     $columns = array_fill_keys($stmt->fetchAll(PDO::FETCH_COLUMN), true);
 
     if (empty($columns['password_hash'])) {
-        sendResponse(['error' => 'Falta habilitar el campo de contraseÃ±a en la base de datos.'], 500);
+        sendResponse(['error' => 'Falta habilitar el campo de contrasena en la base de datos.'], 500);
     }
 
     $displayNameSelect = !empty($columns['nombre_completo'])
@@ -63,11 +63,11 @@ try {
     }
 
     if (empty($user['password_hash'])) {
-        sendResponse(['error' => 'Tu cuenta aÃºn no tiene contraseÃ±a. Entra una vez con wallet para configurarla.'], 400);
+        sendResponse(['error' => 'Tu cuenta aun no tiene contrasena configurada. Contacta a soporte para recuperarla.'], 400);
     }
 
     if (!password_verify($password, $user['password_hash'])) {
-        sendResponse(['error' => 'ContraseÃ±a incorrecta.'], 401);
+        sendResponse(['error' => 'Contrasena incorrecta.'], 401);
     }
 
     $_SESSION['radix_wallet'] = $user['wallet_address'];
