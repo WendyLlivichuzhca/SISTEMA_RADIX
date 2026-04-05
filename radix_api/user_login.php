@@ -62,6 +62,10 @@ try {
         sendResponse(['error' => 'No encontramos una cuenta con esos datos.'], 404);
     }
 
+    if ($user['tipo_usuario'] === 'inactivo') {
+        sendResponse(['error' => 'Tu cuenta ha sido desactivada. Contacta al administrador.'], 403);
+    }
+
     if (empty($user['password_hash'])) {
         sendResponse(['error' => 'Tu cuenta aun no tiene contrasena configurada. Contacta a soporte para recuperarla.'], 400);
     }

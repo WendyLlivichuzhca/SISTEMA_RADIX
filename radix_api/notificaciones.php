@@ -56,19 +56,29 @@ function enviarTelegram(string $chat_id, string $texto): bool {
  * @param  PDO    $pdo        Conexión a la BD
  * @param  int    $user_id    ID del usuario beneficiario
  * @param  string $tablero    'A', 'B' o 'C'
- * @param  float  $ganancia   Monto ganado en este tablero
+ * @param  float  $ganancia   Monto neto ganado (ya descontada semilla de fase siguiente)
+ * @param  bool   $ciclo_completo  true cuando es Tablero C (ciclo finalizado)
  */
-function notificarAvanceTablero(PDO $pdo, int $user_id, string $tablero, float $ganancia): void {
+function notificarAvanceTablero(PDO $pdo, int $user_id, string $tablero, float $ganancia, bool $ciclo_completo = false): void {
     $chat_id = obtenerChatId($pdo, $user_id);
     if (!$chat_id) return;
 
-    $emojis = ['A' => '🅰️', 'B' => '🅱️', 'C' => '©️'];
-    $emoji  = $emojis[$tablero] ?? '🏆';
+    if ($ciclo_completo) {
+        // Mensaje especial para cierre de ciclo (Tablero C)
+        $mensaje = "🏆 *¡CICLO COMPLETADO!*\n\n"
+                 . "Completaste los 3 tableros de tu ciclo RADIX.\n\n"
+                 . "💸 *Saldo disponible para retiro: \${$ganancia} USDT*\n\n"
+                 . "Ingresa a tu dashboard para solicitar tu retiro.\n\n"
+                 . "_Sistema RADIX — Fase 0_";
+    } else {
+        $emojis = ['A' => '🅰️', 'B' => '🅱️'];
+        $emoji  = $emojis[$tablero] ?? '🎉';
 
-    $mensaje = "🎉 *¡Tablero {$tablero} completado!*\n\n"
-             . "{$emoji} Ganaste *\${$ganancia} USDT* en este tablero.\n"
-             . "📈 Tu ciclo continúa avanzando.\n\n"
-             . "_Sistema RADIX — Fase 0_";
+        $mensaje = "🎉 *¡Tablero {$tablero} completado!*\n\n"
+                 . "{$emoji} Ganaste *\${$ganancia} USDT* en este tablero.\n"
+                 . "📈 Tu ciclo continúa avanzando.\n\n"
+                 . "_Sistema RADIX — Fase 0_";
+    }
 
     enviarTelegram($chat_id, $mensaje);
 }

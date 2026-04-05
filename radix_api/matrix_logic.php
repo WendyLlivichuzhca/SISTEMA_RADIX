@@ -420,6 +420,10 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false, ?int $fase_o
             ? (float)($cfg_actual['ganancia_bruta_cierre'] ?? 0.00)
             : (float)($cfg_actual['ganancia_directa'] ?? 0.00);
         $monto_clon = (float)($cfg_actual['aporte_tesoreria'] ?? 0.00);
+        // Monto neto para notificación: en Tablero C se resta la semilla de Fase siguiente
+        $monto_notif = $finalizado
+            ? $monto_usuario - (float)($cfg_actual['semilla_siguiente_fase'] ?? 0.00)
+            : $monto_usuario;
 
         $propia_tx = !$pdo->inTransaction();
         if ($propia_tx) {
@@ -562,6 +566,72 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false, ?int $fase_o
                 $stmt->execute([$usuario_id, $fase_actual, $nuevo_ciclo]);
             }
 
+            // === REENLACE DE REFERIDOS EN NUEVO CICLO ===
+            // Cuando alguien hace reentrada al nuevo ciclo, re-establece los vinculos
+            // con sus hijos directos que ya hayan reentrado, y con su padre si ya reentro.
+            // Esto garantiza que el equipo original (principal + 3 referidos) continue
+            // unido en cada ciclo sin tener que conseguir personas nuevas.
+
+            // 1. Hijos directos del usuario actual que ya estan en el nuevo ciclo
+            $stmt_hijos = $pdo->prepare("
+                SELECT r.id_hijo, r.posicion, r.nivel_en_red
+                FROM referidos r
+                INNER JOIN tableros_progreso tp ON tp.usuario_id = r.id_hijo
+                WHERE r.id_padre = ?
+                  AND r.fase_numero = ?
+                  AND r.ciclo = ?
+                  AND tp.fase_numero = ?
+                  AND tp.tablero_tipo = 'A'
+                  AND tp.ciclo = ?
+            ");
+            $stmt_hijos->execute([$usuario_id, $fase_actual, $ciclo_actual, $fase_actual, $nuevo_ciclo]);
+            $hijos_reentrados = $stmt_hijos->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($hijos_reentrados as $hijo) {
+                $pdo->prepare("
+                    INSERT IGNORE INTO referidos (id_padre, id_hijo, fase_numero, posicion, nivel_en_red, ciclo)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ")->execute([
+                    $usuario_id,
+                    (int)$hijo['id_hijo'],
+                    $fase_actual,
+                    (int)$hijo['posicion'],
+                    (int)$hijo['nivel_en_red'],
+                    $nuevo_ciclo,
+                ]);
+            }
+
+            // 2. El padre del usuario actual, si ya reentro al nuevo ciclo
+            $stmt_padre_reentrado = $pdo->prepare("
+                SELECT r.id_padre, r.posicion, r.nivel_en_red
+                FROM referidos r
+                INNER JOIN tableros_progreso tp ON tp.usuario_id = r.id_padre
+                WHERE r.id_hijo = ?
+                  AND r.fase_numero = ?
+                  AND r.ciclo = ?
+                  AND tp.fase_numero = ?
+                  AND tp.tablero_tipo = 'A'
+                  AND tp.ciclo = ?
+                LIMIT 1
+            ");
+            $stmt_padre_reentrado->execute([$usuario_id, $fase_actual, $ciclo_actual, $fase_actual, $nuevo_ciclo]);
+            $padre_reentrado = $stmt_padre_reentrado->fetch(PDO::FETCH_ASSOC);
+
+            if ($padre_reentrado) {
+                $pdo->prepare("
+                    INSERT IGNORE INTO referidos (id_padre, id_hijo, fase_numero, posicion, nivel_en_red, ciclo)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ")->execute([
+                    (int)$padre_reentrado['id_padre'],
+                    $usuario_id,
+                    $fase_actual,
+                    (int)$padre_reentrado['posicion'],
+                    (int)$padre_reentrado['nivel_en_red'],
+                    $nuevo_ciclo,
+                ]);
+            }
+            // === FIN REENLACE ===
+
             // Apertura paralela: la siguiente fase se activa sin detener la fase actual.
             // Se protege con SAVEPOINT para no romper el cierre vigente si la fase nueva aun no esta lista.
             if ($monto_semilla > 0) {
@@ -605,7 +675,30 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false, ?int $fase_o
         }
 
         if ($propietario_usuario === 'usuario') {
-            notificarAvanceTablero($pdo, $usuario_id, $tipo_actual, $monto_usuario);
+            if ($finalizado) {
+                // Para Tablero C: mostrar el saldo neto TOTAL disponible para retiro
+                // (ganancias A+B+C menos semilla Fase 1 y reentrada, ya registradas en pagos)
+                $stmt_bruto = $pdo->prepare("
+                    SELECT COALESCE(SUM(monto),0) as t FROM pagos
+                    WHERE id_receptor=? AND propietario_flujo='usuario'
+                      AND estado='completado' AND tipo='ganancia_tablero' AND fase_numero=?
+                ");
+                $stmt_bruto->execute([$usuario_id, $fase_actual]);
+                $bruto_total = (float)$stmt_bruto->fetch()['t'];
+
+                $stmt_ded = $pdo->prepare("
+                    SELECT COALESCE(SUM(monto),0) as t FROM pagos
+                    WHERE id_emisor=? AND propietario_flujo='usuario'
+                      AND estado='completado'
+                      AND (tipo LIKE 'salto_fase_%' OR tipo='reentrada')
+                      AND fase_numero=?
+                ");
+                $stmt_ded->execute([$usuario_id, $fase_actual]);
+                $ded_total = (float)$stmt_ded->fetch()['t'];
+
+                $monto_notif = max(0, $bruto_total - $ded_total);
+            }
+            notificarAvanceTablero($pdo, $usuario_id, $tipo_actual, $monto_notif, $finalizado);
         }
 
         // MODO MANUAL:

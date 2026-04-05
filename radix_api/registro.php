@@ -431,7 +431,10 @@ try {
             sendResponse(['error' => 'No se permite usar cuentas administrativas como patrocinador.'], 400);
         }
 
-        $ciclo_red = obtenerCicloActivoUsuario($pdo, $patrocinador_id);
+        // Los nuevos usuarios SIEMPRE entran al ciclo=1, sin importar en qué
+        // ciclo esté el patrocinador. El ciclo=2 (y superiores) solo se llena
+        // mediante el mecanismo de reenlace al completar el ciclo anterior.
+        $ciclo_red = 1;
         $ubicacion = radixFindAvailablePlacement($pdo, $patrocinador_id, 0, $ciclo_red);
 
         if (!$ubicacion) {
@@ -490,7 +493,7 @@ try {
         notificarNuevoReferido($pdo, $padre_operativo_id, $nickname);
 
         require_once 'matrix_logic.php';
-        verificarAvanceTablero($padre_operativo_id, $pdo, false, 0, $ciclo_red);
+        verificarAvanceTablero($padre_operativo_id, $pdo, false, 0, 1);
     } else {
         $stmt = $pdo->prepare("
             SELECT id

@@ -184,24 +184,25 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
     </style>
     <!-- D3.js: necesario para el árbol de red (todos los usuarios) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-    <?php if ($es_master): ?>
-    <!-- Chart.js: solo necesario para las gráficas del panel master -->
+    <!-- Chart.js: gráficas del dashboard (master y usuario) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <?php endif; ?>
 </head>
 <body>
 
     <div id="toast-container" style="position:fixed; top:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:10px; pointer-events:none;"></div>
     <div id="loading-overlay">Cargando Sistema RADIX...</div>
 
-    <!-- MODAL DE RETIRO -->
+    <!-- MODAL DE RETIRO (por fase) -->
     <div id="retiro-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1000; align-items:center; justify-content:center;">
         <div style="background:#12121a; border:1px solid rgba(157,0,255,0.3); border-radius:20px; padding:36px; max-width:460px; width:90%; position:relative;">
             <button onclick="cerrarRetiro()" style="position:absolute;top:16px;right:16px;background:none;border:none;color:#555;font-size:1.4rem;cursor:pointer;">✕</button>
-            <h3 style="font-size:1.1rem; margin-bottom:6px; color:#fff;">💸 Solicitar Retiro</h3>
-            <p style="font-size:0.8rem; color:#666; margin-bottom:20px;">Retiro manual vía USDT TRC-20.</p>
+            <h3 style="font-size:1.1rem; margin-bottom:4px; color:#fff;">💸 Solicitar Retiro</h3>
+            <p style="font-size:0.75rem; color:var(--accent); font-weight:700; margin-bottom:16px;">
+                <span id="retiro-fase-label">Fase 0</span>
+            </p>
+            <p style="font-size:0.8rem; color:#666; margin-bottom:20px;">Retiro manual vía USDT TRC-20. Procesado en menos de 24h.</p>
             <div style="background:#0a0a12; border-radius:12px; padding:16px; margin-bottom:20px;">
-                <div style="font-size:0.7rem; color:#555; text-transform:uppercase; margin-bottom:4px;">Saldo disponible</div>
+                <div style="font-size:0.7rem; color:#555; text-transform:uppercase; margin-bottom:4px;">Saldo disponible en esta fase</div>
                 <div id="retiro-saldo" style="font-size:1.8rem; font-weight:800; color:var(--accent);">$0.00 USDT</div>
             </div>
             <div id="historial-list" style="max-height:180px; overflow-y:auto; margin-bottom:20px; font-size:0.8rem;"></div>
@@ -306,20 +307,23 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
         </div>
 
         <nav>
-            <a href="#" class="nav-item active" id="nav-dashboard" onclick="switchMasterSection('dashboard')">📊 Dashboard</a>
             <?php if ($es_master): ?>
+            <a href="#" class="nav-item active" id="nav-dashboard" onclick="switchMasterSection('dashboard')">📊 Dashboard</a>
                 <a href="#" class="nav-item" id="nav-analizador" onclick="switchMasterSection('analizador')">🧮 Analizador</a>
                 <a href="#" class="nav-item" id="nav-ledger" onclick="switchMasterSection('ledger')">📒 Libro Mayor</a>
                 <a href="#" class="nav-item" id="nav-mapa" onclick="switchMasterSection('mapa')">🗺️ Mapa de Red</a>
                 <a href="#" class="nav-item" id="nav-usuarios" onclick="switchMasterSection('usuarios')">👥 Usuarios Reales</a>
-                <a href="#" class="nav-item" id="nav-retiros" onclick="switchMasterSection('retiros')">💰 Pagos Pendientes</a>
+                <a href="#" class="nav-item" id="nav-retiros" onclick="switchMasterSection('retiros')">💰 Pagos Pendientes <span id="nav-badge-retiros" style="display:none; background:#ef5350; color:#fff; border-radius:12px; font-size:0.65rem; font-weight:800; padding:1px 7px; margin-left:4px; vertical-align:middle;"></span></a>
                 <a href="#" class="nav-item" id="nav-clones" onclick="switchMasterSection('clones')">🤖 Control de Cuentas Espejo</a>
                 <a href="#" class="nav-item" id="nav-auditoria" onclick="switchMasterSection('auditoria')">📜 Registro de Auditoría</a>
             <?php else: ?>
                 <div class="user-dashboard-shell">
-                <a href="#" class="nav-item" onclick="document.getElementById('profile-panel')?.scrollIntoView({behavior:'smooth', block:'start'}); return false;">👤 Mi Perfil</a>
-                <a href="#" class="nav-item" onclick="document.getElementById('team-list')?.closest('.master-card')?.scrollIntoView({behavior:'smooth'}); return false;">👥 Mi Equipo</a>
-                <a href="#" class="nav-item" onclick="document.getElementById('val-clones')?.closest('.sb')?.scrollIntoView({behavior:'smooth'}); return false;">🤖 Mis Agentes IA</a>
+                <a href="#" class="nav-item active" id="nav-user-overview" onclick="switchUserSection('overview'); return false;">📊 Dashboard</a>
+                <a href="#" class="nav-item" id="nav-user-fase-0" onclick="switchUserSection('fase-0'); return false;"><span class="nav-fase-dot" style="background:#00d2ff;"></span> Fase 0</a>
+                <a href="#" class="nav-item" id="nav-user-fase-1" onclick="switchUserSection('fase-1'); return false;"><span class="nav-fase-dot" style="background:#9d00ff;"></span> Fase 1</a>
+                <a href="#" class="nav-item" id="nav-user-fase-2" onclick="switchUserSection('fase-2'); return false;"><span class="nav-fase-dot" style="background:#00e676;"></span> Fase 2</a>
+                <a href="#" class="nav-item" id="nav-user-fase-3" onclick="switchUserSection('fase-3'); return false;"><span class="nav-fase-dot" style="background:#ffb300;"></span> Fase 3</a>
+                <a href="#" class="nav-item" onclick="openProfileModal(); return false;">👤 Mi Perfil</a>
                 </div>
             <?php endif; ?>
             <a href="radix_api/session_logout.php" class="nav-item" style="margin-top:auto; color:#ff4444;">🚪 Cerrar Sesión</a>
@@ -337,7 +341,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                 </div>
             </div>
             <div class="user-info">
-                <?php if (!$es_master): ?> <button class="btn-withdraw" id="btn-retiro" onclick="abrirRetiro()">RETIRAR</button> <?php endif; ?>
+                <?php /* Botón RETIRAR movido a sección de cada fase — ver f{n}-retiro-area */ ?>
                 <div class="avatar avatar-profile-trigger" id="avatar-circle" onclick="openProfileModal()" title="Abrir perfil" role="button" tabindex="0">?</div>
             </div>
         </header>
@@ -345,6 +349,52 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
         <div id="section-dashboard" class="master-section active">
             <?php if ($es_master): ?>
                 <!-- MASTER V3 LAYOUT -->
+
+                <!-- ══ CENTRO DE COMANDO ══════════════════════════════ -->
+                <div id="command-center" style="margin-bottom:22px;">
+                    <!-- Semáforo de Salud Financiera -->
+                    <div id="health-bar" style="display:flex; align-items:center; gap:14px; background:#0d0d17; border:1px solid #1e1e2e; border-radius:14px; padding:14px 18px; margin-bottom:14px; flex-wrap:wrap;">
+                        <div id="health-indicator" style="display:flex; align-items:center; gap:10px; flex:1; min-width:200px;">
+                            <div id="health-dot" style="width:14px; height:14px; border-radius:50%; background:#555; flex-shrink:0; box-shadow:0 0 0 4px rgba(85,85,85,0.2); transition:all 0.4s;"></div>
+                            <div>
+                                <div id="health-label" style="font-size:0.82rem; font-weight:800; color:#aaa;">Verificando sistema…</div>
+                                <div id="health-sub" style="font-size:0.7rem; color:#555; margin-top:1px;"></div>
+                            </div>
+                        </div>
+                        <!-- Métricas rápidas -->
+                        <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:center;">
+                            <div style="text-align:center;">
+                                <div style="font-size:0.62rem; color:#555; text-transform:uppercase; letter-spacing:1px;">Tesorería</div>
+                                <div id="hb-tesoreria" style="font-size:1rem; font-weight:800; color:#00e676;">$—</div>
+                            </div>
+                            <div style="width:1px; height:30px; background:#1e1e2e;"></div>
+                            <div style="text-align:center;">
+                                <div style="font-size:0.62rem; color:#555; text-transform:uppercase; letter-spacing:1px;">Retiros pendientes</div>
+                                <div id="hb-retiros" style="font-size:1rem; font-weight:800; color:#ffb300;">$—</div>
+                            </div>
+                            <div style="width:1px; height:30px; background:#1e1e2e;"></div>
+                            <div style="text-align:center;">
+                                <div style="font-size:0.62rem; color:#555; text-transform:uppercase; letter-spacing:1px;">Solvencia</div>
+                                <div id="hb-solvencia" style="font-size:0.78rem; font-weight:800; color:#555;">—</div>
+                            </div>
+                            <div style="width:1px; height:30px; background:#1e1e2e;"></div>
+                            <div style="text-align:center;">
+                                <div style="font-size:0.62rem; color:#555; text-transform:uppercase; letter-spacing:1px;">Pagos sin confirmar</div>
+                                <div id="hb-pagos-sc" style="font-size:1rem; font-weight:800; color:#555;">—</div>
+                            </div>
+                        </div>
+                        <!-- Botón de recarga -->
+                        <button onclick="loadMasterAdvancedData()" title="Actualizar estado"
+                            style="background:transparent; border:1px solid #2a2a3a; border-radius:8px; color:#555; font-size:0.78rem; padding:5px 11px; cursor:pointer; white-space:nowrap;">
+                            🔄 Actualizar
+                        </button>
+                    </div>
+
+                    <!-- Panel de Alertas -->
+                    <div id="alerts-panel"></div>
+                </div>
+                <!-- ══ FIN CENTRO DE COMANDO ═══════════════════════════ -->
+
                 <div class="widgets-master">
                     <div class="widget"><h4>Tesorería (Agentes IA)</h4><div id="val-balance" class="value">$0.00</div><div class="trend">💰 Fondo Cuentas Espejo</div></div>
                     <div class="widget"><h4>Reserva Fase 1 (Pool)</h4><div id="val-fase" class="value">$0.00</div><div class="trend">Acumulado Saltos</div></div>
@@ -354,6 +404,47 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                     <div class="widget" style="border-left: 3px solid #ffab00;"><h4>⏳ Por Distribuir</h4><div id="val-pendiente-dist" class="value">$0.00</div><div class="trend">Comisiones red pendientes</div></div>
                     <div class="widget" style="border-left: 3px solid #39d98a;"><h4>🧾 Créditos Excedente</h4><div id="val-creditos-excedente" class="value">$0.00</div><div class="trend">Saldo a favor de usuarios</div></div>
                 </div>
+
+                <!-- ══ PANORAMA POR FASE ══════════════════════════════ -->
+                <div id="panorama-fases-section" style="margin-bottom:24px;">
+
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+                        <span style="font-size:1.1rem;">🌐</span>
+                        <h3 style="margin:0; font-size:0.85rem; color:#777; text-transform:uppercase; letter-spacing:1.5px; font-weight:700;">Panorama por Fase</h3>
+                        <div style="flex:1; height:1px; background:#1a1a26;"></div>
+                    </div>
+
+                    <!-- Tarjetas de Fase (1 por fase) -->
+                    <div id="panorama-fases-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:14px; margin-bottom:18px;">
+                        <div style="text-align:center; padding:40px; color:#333; grid-column:1/-1; font-size:0.8rem;">Cargando panorama de fases…</div>
+                    </div>
+
+                    <!-- Matriz Tablero × Fase -->
+                    <div style="margin-bottom:16px;">
+                        <div style="font-size:0.68rem; color:#555; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:10px;">
+                            💰 Dinero distribuido + personas por Tablero × Fase
+                        </div>
+                        <div id="matrix-tablero-fase" style="overflow-x:auto;"></div>
+                    </div>
+
+                    <!-- Fila inferior: Embudo + Velocidad + Integridad -->
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px;">
+                        <div class="master-card" style="padding:18px;">
+                            <div style="font-size:0.72rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px;">🚰 Embudo de Usuarios</div>
+                            <div id="embudo-content"><div style="color:#444; font-size:0.78rem;">Cargando…</div></div>
+                        </div>
+                        <div class="master-card" style="padding:18px;">
+                            <div style="font-size:0.72rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px;">⚡ Esta Semana vs Anterior</div>
+                            <div id="velocidad-content"><div style="color:#444; font-size:0.78rem;">Cargando…</div></div>
+                        </div>
+                        <div class="master-card" style="padding:18px;">
+                            <div style="font-size:0.72rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px;">🔐 Integridad Financiera</div>
+                            <div id="integridad-content"><div style="color:#444; font-size:0.78rem;">Cargando…</div></div>
+                        </div>
+                    </div>
+
+                </div>
+                <!-- ══ FIN PANORAMA POR FASE ══════════════════════════ -->
 
                 <div class="master-grid-top">
                     <div class="master-card">
@@ -374,131 +465,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                     </div>
                 </div>
 
-                <div id="master-panel-stats" class="master-tool-panel" style="display:none; margin-bottom:20px;">
-                <div class="master-card" style="margin-bottom:20px;">
-                    <h4>Analizador de distribucion</h4>
-                    <div class="master-tree-stage">
-                        Filtra por fase, tablero, ciclo y tipo de usuario para saber a cuantos ya se les distribuyeron los $10 y como se mueve la red.
-                    </div>
-                    <div class="master-tree-toolbar" style="margin-bottom:20px;">
-                        <div class="master-tree-control">
-                            <label for="master-stats-phase">Fase</label>
-                            <select id="master-stats-phase"></select>
-                        </div>
-                        <div class="master-tree-control">
-                            <label for="master-stats-board">Tablero</label>
-                            <select id="master-stats-board"></select>
-                        </div>
-                        <div class="master-tree-control">
-                            <label for="master-stats-cycle">Ciclo</label>
-                            <select id="master-stats-cycle"></select>
-                        </div>
-                        <div class="master-tree-control">
-                            <label for="master-stats-user-type">Tipo usuario</label>
-                            <select id="master-stats-user-type"></select>
-                        </div>
-                    </div>
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:20px;">
-                        <div style="background:rgba(255,255,255,0.02); border:1px solid #1a1a24; border-radius:14px; padding:16px;">
-                            <div style="font-size:0.68rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Total filtrado</div>
-                            <div id="master-filter-total" style="font-size:1.8rem; font-weight:800; color:#fff;">$0.00</div>
-                        </div>
-                        <div style="background:rgba(255,255,255,0.02); border:1px solid #1a1a24; border-radius:14px; padding:16px;">
-                            <div style="font-size:0.68rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Beneficiarios</div>
-                            <div id="master-filter-beneficiarios" style="font-size:1.8rem; font-weight:800; color:#00d2ff;">0</div>
-                        </div>
-                        <div style="background:rgba(255,255,255,0.02); border:1px solid #1a1a24; border-radius:14px; padding:16px;">
-                            <div style="font-size:0.68rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Usuarios con $10</div>
-                            <div id="master-filter-users-10" style="font-size:1.8rem; font-weight:800; color:#00e676;">0</div>
-                        </div>
-                        <div style="background:rgba(255,255,255,0.02); border:1px solid #1a1a24; border-radius:14px; padding:16px;">
-                            <div style="font-size:0.68rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Pagos de $10</div>
-                            <div id="master-filter-payments-10" style="font-size:1.8rem; font-weight:800; color:#ffb300;">0</div>
-                        </div>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
-                        <div id="master-filter-caption" style="font-size:0.78rem; color:#888;">Vista actual: todas las fases, todos los tableros y todos los ciclos.</div>
-                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                            <button class="btn-master" type="button" onclick="applyMasterStatsFilters()">Aplicar filtros</button>
-                            <button class="btn-master" type="button" onclick="clearMasterStatsFilters()" style="background:#1a1a28; color:#fff; border:1px solid #2a2a3a;">Limpiar filtros</button>
-                        </div>
-                    </div>
-                    <div style="display:grid; grid-template-columns:1.35fr 1fr; gap:18px;">
-                        <div style="overflow-x:auto;">
-                            <table class="master-table">
-                                <thead>
-                                    <tr>
-                                        <th>Fase</th>
-                                        <th>Tablero</th>
-                                        <th>Ciclo</th>
-                                        <th>Beneficiarios</th>
-                                        <th>Pagos</th>
-                                        <th>Total</th>
-                                        <th>Usuarios $10</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="master-distribution-body"></tbody>
-                            </table>
-                        </div>
-                        <div style="overflow-x:auto;">
-                            <table class="master-table">
-                                <thead>
-                                    <tr>
-                                        <th>Usuario</th>
-                                        <th>Tipo</th>
-                                        <th>Veces</th>
-                                        <th>Ultima</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="master-ten-users-body"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                </div>
-                <div id="master-panel-ledger" class="master-tool-panel" style="display:none; margin-bottom:20px;">
-                <div class="master-card" style="margin-bottom:20px;">
-                    <h4>📜 Libro Mayor de Tesorería</h4>
-                    <div style="overflow-x:auto;"><table class="master-table"><thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th><th>Estado</th></tr></thead><tbody id="master-ledger-body"></tbody></table></div>
-                </div>
-                </div>
 
-                <div id="master-panel-map" class="master-tool-panel" style="display:none; margin-bottom:20px;">
-                <div class="master-card" style="margin-bottom:20px;">
-                    <h4>Mapa General de Red</h4>
-                    <div class="master-tree-stage">
-                        Vista global de la red por fase y ciclo. Puedes centrar una rama escribiendo el ID, nombre, nickname o wallet del usuario.
-                    </div>
-
-                    <div class="master-tree-toolbar">
-                        <div class="master-tree-control">
-                            <label for="master-tree-phase">Fase</label>
-                            <select id="master-tree-phase"></select>
-                        </div>
-                        <div class="master-tree-control">
-                            <label for="master-tree-cycle">Ciclo</label>
-                            <select id="master-tree-cycle"></select>
-                        </div>
-                        <div class="master-tree-control">
-                            <label for="master-tree-root">Raiz o busqueda</label>
-                            <input id="master-tree-root" type="text" placeholder="Ej: 1001, Wendy, TRON_TQ2R o wallet">
-                        </div>
-                        <div class="master-tree-actions">
-                            <button class="btn-master" type="button" onclick="aplicarFiltrosArbolMaster()">Ver arbol</button>
-                            <button class="btn-master" type="button" onclick="resetZoomMasterTree()" style="background:#1a1a28; color:#fff; border:1px solid #2a2a3a;">Reset vista</button>
-                            <button class="btn-master" type="button" onclick="limpiarFiltroArbolMaster()" style="background:rgba(255,255,255,0.08); color:#fff; border:1px solid rgba(255,255,255,0.1);">Vista general</button>
-                        </div>
-                    </div>
-
-                    <div id="master-tree-summary" class="master-tree-chip-row">
-                        <span class="master-tree-chip">Cargando arbol general...</span>
-                    </div>
-
-                    <div id="master-network-tree" class="master-network-tree">
-                        <div class="master-tree-empty">Cargando red general...</div>
-                    </div>
-                </div>
-                </div>
 
                 <div id="master-panel-retiros" class="master-tool-panel" style="display:none; margin-bottom:20px;">
                     <div class="master-card"><h4>Retiros Pendientes</h4><div id="master-retiros-mini-list"></div></div>
@@ -564,20 +531,67 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
             <?php else: ?>
                 <!-- USER LAYOUT V3.2 — PREMIUM RESTORATION -->
                 <!-- ── PAGO PENDIENTE (mejorado) ─────────────────────── -->
-                <section class="user-hero-card">
-                    <div class="user-hero-copy">
-                        <span class="user-hero-eyebrow">RADIX PHASE 0</span>
-                        <h3>Tu panel ya esta listo para operar y crecer dentro de la red.</h3>
-                        <p>Desde aqui puedes seguir tu activacion, revisar tu tablero actual y monitorear tu equipo con una experiencia mas clara y visual.</p>
-                    </div>
-                    <div class="user-hero-badges">
-                        <div class="user-hero-badge">
-                            <span class="user-hero-badge-label">Wallet Real</span>
-                            <strong>RADIX_MASTER</strong>
+                <!-- ── HERO CARD V2 — Personalizada ───────────────────── -->
+                <section class="user-hero-card-v2">
+                    <!-- Glow de fondo decorativo -->
+                    <div class="hero-v2-glow"></div>
+
+                    <!-- Fila superior: saludo + badge de fase -->
+                    <div class="hero-v2-top">
+                        <div class="hero-v2-greeting">
+                            <span class="hero-v2-hi">¡Hola,</span>
+                            <span class="hero-v2-name" id="hero-user-name"><?php echo htmlspecialchars(explode(' ', $nickname)[0]); ?></span>
+                            <span class="hero-v2-hi">👋</span>
                         </div>
-                        <div class="user-hero-badge">
-                            <span class="user-hero-badge-label">Modelo</span>
-                            <strong>Red 3x1 por ciclos</strong>
+                        <div class="hero-v2-fase-badge" id="hero-fase-badge">
+                            <span class="hero-v2-fase-dot" id="hero-fase-dot"></span>
+                            <span id="hero-fase-label">Fase 0</span>
+                        </div>
+                    </div>
+
+                    <!-- Mini barra de progreso A → B → C -->
+                    <div class="hero-v2-progress-wrap">
+                        <span class="hero-v2-progress-label">Tu tablero actual</span>
+                        <div class="hero-v2-nodes">
+                            <div class="hero-v2-node" id="hero-node-a">
+                                <div class="hero-v2-node-circle" id="hero-node-a-circle">A</div>
+                                <div class="hero-v2-node-txt">Tablero A</div>
+                            </div>
+                            <div class="hero-v2-track"><div class="hero-v2-track-fill" id="hero-track-ab"></div></div>
+                            <div class="hero-v2-node" id="hero-node-b">
+                                <div class="hero-v2-node-circle" id="hero-node-b-circle">B</div>
+                                <div class="hero-v2-node-txt">Tablero B</div>
+                            </div>
+                            <div class="hero-v2-track"><div class="hero-v2-track-fill" id="hero-track-bc"></div></div>
+                            <div class="hero-v2-node" id="hero-node-c">
+                                <div class="hero-v2-node-circle" id="hero-node-c-circle">C</div>
+                                <div class="hero-v2-node-txt">Tablero C</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pills de stats -->
+                    <div class="hero-v2-pills">
+                        <div class="hero-v2-pill">
+                            <span class="hero-v2-pill-icon">👥</span>
+                            <div>
+                                <div class="hero-v2-pill-val" id="hero-pill-equipo">—</div>
+                                <div class="hero-v2-pill-lbl">Equipo</div>
+                            </div>
+                        </div>
+                        <div class="hero-v2-pill">
+                            <span class="hero-v2-pill-icon">💰</span>
+                            <div>
+                                <div class="hero-v2-pill-val" id="hero-pill-saldo">—</div>
+                                <div class="hero-v2-pill-lbl">Saldo</div>
+                            </div>
+                        </div>
+                        <div class="hero-v2-pill">
+                            <span class="hero-v2-pill-icon">📋</span>
+                            <div>
+                                <div class="hero-v2-pill-val" id="hero-pill-tablero">—</div>
+                                <div class="hero-v2-pill-lbl">Tablero activo</div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -720,47 +734,129 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                     </div>
                 </div>
 
-                <div class="scoreboard scoreboard-user">
-                    <div class="sb sb-cyan"><span class="sb-icon">💰</span><span class="lbl">SALDO ACTUAL</span><div id="val-balance" class="num">$0.00</div></div>
-                    <div class="sb sb-cyan"><span class="sb-icon">🏦</span><span class="lbl">RESERVA FASE 1</span><div id="val-reserva" class="num">$0.00</div></div>
-                    <div class="sb sb-purple"><span class="sb-icon">🤖</span><span class="lbl">AGENTES IA</span><div id="val-clones" class="num">0</div></div>
-                    <div class="sb sb-white"><span class="sb-icon">📊</span><span class="lbl">TABLERO ACTUAL</span><div id="val-fase" class="num" style="font-size:1.4rem;">...</div></div>
-                    <div class="sb sb-green"><span class="sb-icon">👥</span><span class="lbl">EQUIPO DIRECTO</span><div id="val-equipo-count" class="num">0</div></div>
-                    <div class="sb sb-white sb-ref-link"><span class="sb-icon">🔗</span><span class="lbl">LINK DE REFERIDO</span>
-                        <div style="display:flex; gap:8px; margin-top:5px;">
-                            <input type="text" id="ref-link-input" readonly style="background:rgba(0,0,0,0.3); border:1px solid #2a2a3a; color:#888; padding:8px; border-radius:6px; flex:1; font-size:0.7rem;">
-                            <button onclick="copyRefLink()" style="background:var(--primary); color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:0.6rem; font-weight:800; padding:0 10px;">COPIAR</button>
+                <!-- Solo link de referido en el overview -->
+                <div class="master-card user-overview-block" style="display:flex; align-items:center; gap:14px; padding:16px 20px;">
+                    <span style="font-size:1.4rem;">🔗</span>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:0.65rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Tu link de referido</div>
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" id="ref-link-input" readonly style="background:rgba(0,0,0,0.3); border:1px solid #2a2a3a; color:#aaa; padding:8px 12px; border-radius:8px; flex:1; font-size:0.75rem; min-width:0;">
+                            <button onclick="copyRefLink()" style="background:var(--primary); color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:0.7rem; font-weight:800; padding:0 16px; white-space:nowrap;">COPIAR</button>
                         </div>
                     </div>
                 </div>
 
-                <div class="master-card user-feature-card">
-                    <h3>Progreso de Niveles</h3>
-                    <div class="progress-container">
-                        <div class="progress-track">
-                            <div id="progress-fill" class="progress-bar-fill"></div>
-                        </div>
-                        <div class="nodes-row">
-                            <div id="node-a" class="phase-node">A</div>
-                            <div id="node-b" class="phase-node">B</div>
-                            <div id="node-c" class="phase-node">C</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="user-main-grid">
-                    <div class="master-card" style="height:fit-content;">
-                        <h3>Equipo Reciente</h3>
-                        <div id="team-list" style="max-height:220px; overflow-y:auto; font-size:0.85rem;"></div>
+                <!-- Gráficas del overview -->
+                <div class="user-charts-grid user-overview-block">
+                    <div class="master-card">
+                        <h3>Avance por Fase</h3>
+                        <canvas id="chart-phase-progress" height="200"></canvas>
                     </div>
                     <div class="master-card">
-                        <h3>Estructura de Red Visual</h3>
-                        <div id="network-tree" style="min-height:300px; background:rgba(0,0,0,0.2); border-radius:15px; border:1px dashed #2a2a3a; display:flex; align-items:center; justify-content:center; color:#333;"></div>
+                        <h3>Equipo por Fase</h3>
+                        <canvas id="chart-phase-team" height="200"></canvas>
                     </div>
                 </div>
 
+                <!-- Contenedores ocultos requeridos por JS -->
+                <div style="display:none;">
+                    <div id="team-list"></div>
+                    <div id="network-tree"></div>
+                    <div id="progress-fill"></div>
+                    <div id="node-a"></div><div id="node-b"></div><div id="node-c"></div>
+                    <div id="val-balance"></div>
+                    <div id="val-reserva"></div>
+                    <div id="val-clones"></div>
+                    <div id="val-fase"></div>
+                    <div id="val-equipo-count"></div>
+                </div>
+
+                <!-- ══════════════════════════════════════════════
+                     SECCIONES POR FASE — se muestran/ocultan con switchUserSection()
+                     ══════════════════════════════════════════════ -->
+                <?php foreach ([0,1,2,3] as $fn):
+                    $colors = ['#00d2ff','#9d00ff','#00e676','#ffb300'];
+                    $fc = $colors[$fn];
+                ?>
+                <div id="section-fase-<?= $fn ?>" class="user-fase-section" style="display:none;">
+
+                    <!-- Header de fase -->
+                    <div class="fase-section-header" style="border-left:4px solid <?= $fc ?>;">
+                        <div>
+                            <span class="fase-section-eyebrow" style="color:<?= $fc ?>;">RADIX · FASE <?= $fn ?></span>
+                            <h2 class="fase-section-title" id="fase-title-<?= $fn ?>">Fase <?= $fn ?></h2>
+                        </div>
+                        <div class="fase-section-badge" id="fase-badge-<?= $fn ?>">Cargando...</div>
+                    </div>
+
+                    <!-- Tarjeta resumen de esta fase (ex Mapa de Fases) -->
+                    <div id="f<?= $fn ?>-phase-card" class="fase-phase-card-wrap" style="margin-bottom:20px;"></div>
+
+                    <!-- Fila de cumplimiento de esta fase (ex Cumplimiento por Fase) -->
+                    <div id="f<?= $fn ?>-compare-row" style="margin-bottom:20px;"></div>
+
+                    <!-- Scoreboard de fase -->
+                    <div class="scoreboard scoreboard-fase" id="sb-fase-<?= $fn ?>">
+                        <div class="sb" style="border-left:3px solid <?= $fc ?>;"><span class="lbl">SALDO FASE <?= $fn ?></span><div id="f<?= $fn ?>-balance" class="num">$0.00</div></div>
+                        <div class="sb sb-white"><span class="lbl">TABLERO ACTUAL</span><div id="f<?= $fn ?>-tablero" class="num" style="font-size:1.3rem;">—</div></div>
+                        <div class="sb sb-purple"><span class="lbl">AGENTES IA</span><div id="f<?= $fn ?>-clones" class="num">0</div></div>
+                        <div class="sb sb-green"><span class="lbl">EQUIPO</span><div id="f<?= $fn ?>-equipo" class="num">0</div></div>
+                        <div class="sb" style="border-left:3px solid #9d00ff;"><span class="lbl">RESERVA</span><div id="f<?= $fn ?>-reserva" class="num">$0.00</div></div>
+                        <div class="sb sb-white"><span class="lbl">CICLOS COMPLETADOS</span><div id="f<?= $fn ?>-ciclos" class="num">0</div></div>
+                    </div>
+
+                    <!-- Barra de progreso A→B→C -->
+                    <div class="master-card user-feature-card">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                            <h3 style="margin:0;">Progreso · Fase <?= $fn ?></h3>
+                            <span id="f<?= $fn ?>-progress-pct" style="font-size:0.95rem;font-weight:700;color:#aaa;">0%</span>
+                        </div>
+                        <div class="progress-container">
+                            <div class="progress-track">
+                                <div id="f<?= $fn ?>-progress-fill" class="progress-bar-fill" style="background:linear-gradient(90deg,<?= $fc ?>,<?= $colors[min($fn+1,3)] ?>);"></div>
+                            </div>
+                            <div class="nodes-row">
+                                <div id="f<?= $fn ?>-node-a" class="phase-node">A</div>
+                                <div id="f<?= $fn ?>-node-b" class="phase-node">B</div>
+                                <div id="f<?= $fn ?>-node-c" class="phase-node">C</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Equipo + árbol visual -->
+                    <div class="user-main-grid">
+                        <div class="master-card" style="height:fit-content;">
+                            <h3>Equipo · Fase <?= $fn ?></h3>
+                            <div id="f<?= $fn ?>-team-list" style="max-height:220px; overflow-y:auto; font-size:0.85rem;"></div>
+                        </div>
+                        <div class="master-card">
+                            <h3>Red Visual · Fase <?= $fn ?></h3>
+                            <div id="f<?= $fn ?>-network-tree" style="min-height:300px; background:rgba(0,0,0,0.2); border-radius:15px; border:1px dashed #2a2a3a; display:flex; align-items:center; justify-content:center; color:#333;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Botón RETIRAR de esta fase (visible solo cuando puede_retirar = true) -->
+                    <div id="f<?= $fn ?>-retiro-area" style="margin-top:20px; display:none; text-align:center;">
+                        <div id="f<?= $fn ?>-retiro-msg" style="display:none; font-size:0.82rem; color:#ffb300; margin-bottom:10px;"></div>
+                        <div style="font-size:0.75rem; color:#555; margin-bottom:8px; text-transform:uppercase;">Saldo disponible en Fase <?= $fn ?>:</div>
+                        <div id="f<?= $fn ?>-balance-retiro" style="font-size:1.4rem; font-weight:800; color:<?= $fc ?>; margin-bottom:16px;">$0.00 USDT</div>
+                        <button onclick="abrirRetiro(<?= $fn ?>)" class="btn-withdraw" style="background:linear-gradient(135deg,<?= $fc ?>,<?= $colors[min($fn+1,3)] ?>); color:#000; padding:16px 40px; font-size:1rem; border-radius:14px; border:none; cursor:pointer; font-weight:800; width:100%;">
+                            💸 RETIRAR GANANCIAS FASE <?= $fn ?>
+                        </button>
+                    </div>
+
+                    <!-- Placeholder si la fase no tiene actividad -->
+                    <div id="f<?= $fn ?>-coming-soon" class="fase-coming-soon" style="display:none;">
+                        <div style="font-size:3rem; margin-bottom:16px;">🔒</div>
+                        <h3>Fase <?= $fn ?> — Preparada</h3>
+                        <p>Esta fase se activará cuando completes la fase anterior y el sistema te posicione aquí automáticamente.</p>
+                    </div>
+
+                </div>
+                <?php endforeach; ?>
+
                 <!-- SECCIÓN TELEGRAM -->
-                <div class="master-card" style="margin-top:20px;">
+                <div class="master-card user-overview-block" style="margin-top:20px;">
                     <h3>🔔 Notificaciones Telegram</h3>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;">
 
@@ -830,13 +926,349 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
 
         <?php if ($es_master): ?>
             <!-- SPA SECTIONS FOR MASTER -->
-            <div id="section-usuarios" class="master-section"><div class="master-card"><h4>👥 Gestión Usuarios</h4><table class="master-table"><thead><tr><th>ID</th><th>Nombre</th><th>Nick</th><th>Teléfono</th><th>Correo</th><th>Estado de pago</th><th>Wallet</th></tr></thead><tbody id="master-users-body"></tbody></table></div></div>
+            <div id="section-usuarios" class="master-section">
+
+                    <!-- ── ENCABEZADO ───────────────────────────────────── -->
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+                        <div>
+                            <h4 style="margin:0 0 2px 0;">👥 Gestión de Usuarios Reales</h4>
+                            <div style="font-size:0.72rem; color:#555;">Filtra, busca y exporta tu red de usuarios</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span id="users-counter" style="font-size:0.78rem; color:#777; background:rgba(255,255,255,0.04); border:1px solid #222; border-radius:10px; padding:6px 14px;">
+                                <strong id="users-showing" style="color:#fff; font-size:1rem;">0</strong>
+                                <span style="color:#555;"> / </span>
+                                <strong id="users-total" style="color:#aaa;">0</strong>
+                                <span style="color:#555; font-size:0.68rem;"> usuarios</span>
+                            </span>
+                            <button onclick="exportarUsuariosCSV()"
+                                style="background:rgba(0,230,118,0.1); border:1px solid rgba(0,230,118,0.3); color:#00e676; border-radius:10px; padding:7px 16px; cursor:pointer; font-size:0.78rem; font-weight:800; display:flex; align-items:center; gap:6px;">
+                                ⬇ Exportar CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ── BARRA DE BÚSQUEDA ────────────────────────────── -->
+                    <div style="position:relative; margin-bottom:16px;">
+                        <span style="position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#555; font-size:1.1rem; pointer-events:none;">🔍</span>
+                        <input id="users-search" type="text"
+                            placeholder="Buscar por nombre, nick, wallet, correo o teléfono…"
+                            oninput="applyUserFilters()"
+                            style="width:100%; background:#0a0a14; border:2px solid #1e1e2e; color:#fff; padding:12px 16px 12px 42px; border-radius:12px; font-size:0.85rem; outline:none; box-sizing:border-box; transition:border-color 0.2s;"
+                            onfocus="this.style.borderColor='#9d00ff'" onblur="this.style.borderColor='#1e1e2e'">
+                    </div>
+
+                    <!-- ── TARJETAS DE FILTRO ────────────────────────────── -->
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:16px;">
+
+                        <!-- TARJETA: Estado de Pago -->
+                        <div style="background:#0d0d18; border:1px solid #1e1e2e; border-radius:14px; padding:14px 16px;">
+                            <div style="display:flex; align-items:center; gap:7px; margin-bottom:10px;">
+                                <span style="font-size:1rem;">💳</span>
+                                <span style="font-size:0.7rem; font-weight:800; color:#888; text-transform:uppercase; letter-spacing:1.2px;">Estado de Pago</span>
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:6px;">
+                                <?php foreach([
+                                    ['val'=>'all',       'label'=>'Todos los estados', 'dot'=>'#555'],
+                                    ['val'=>'completado','label'=>'✓  Pagado',          'dot'=>'#00e676'],
+                                    ['val'=>'pendiente', 'label'=>'⏳  Pendiente',       'dot'=>'#ffb300'],
+                                    ['val'=>'sin_pago',  'label'=>'✗  Sin registro',    'dot'=>'#ef5350'],
+                                ] as $f): ?>
+                                <button class="uf-pago" data-val="<?= $f['val'] ?>"
+                                    onclick="setUserFilter('pago','<?= $f['val'] ?>')"
+                                    style="display:flex; align-items:center; gap:8px; background:<?= $f['val']==='all'?'rgba(255,255,255,0.08)':'transparent' ?>; border:1px solid <?= $f['val']==='all'?'#444':'transparent' ?>; color:<?= $f['val']==='all'?'#fff':'#666' ?>; border-radius:8px; padding:7px 10px; cursor:pointer; font-size:0.78rem; text-align:left; width:100%; transition:all 0.15s;">
+                                    <span style="width:8px; height:8px; border-radius:50%; background:<?= $f['dot'] ?>; flex-shrink:0;"></span>
+                                    <?= $f['label'] ?>
+                                </button>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+
+                        <!-- TARJETA: Tablero Actual -->
+                        <div style="background:#0d0d18; border:1px solid #1e1e2e; border-radius:14px; padding:14px 16px;">
+                            <div style="display:flex; align-items:center; gap:7px; margin-bottom:10px;">
+                                <span style="font-size:1rem;">📊</span>
+                                <span style="font-size:0.7rem; font-weight:800; color:#888; text-transform:uppercase; letter-spacing:1.2px;">Tablero Actual</span>
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:6px;">
+                                <?php foreach([
+                                    ['val'=>'all','label'=>'Todos los tableros','dot'=>'#555'],
+                                    ['val'=>'A',  'label'=>'Tablero A',         'dot'=>'#9d00ff'],
+                                    ['val'=>'B',  'label'=>'Tablero B',         'dot'=>'#00d2ff'],
+                                    ['val'=>'C',  'label'=>'Tablero C',         'dot'=>'#00e676'],
+                                    ['val'=>'sin','label'=>'Sin tablero aún',   'dot'=>'#333'],
+                                ] as $f): ?>
+                                <button class="uf-tablero" data-val="<?= $f['val'] ?>"
+                                    onclick="setUserFilter('tablero','<?= $f['val'] ?>')"
+                                    style="display:flex; align-items:center; gap:8px; background:<?= $f['val']==='all'?'rgba(255,255,255,0.08)':'transparent' ?>; border:1px solid <?= $f['val']==='all'?'#444':'transparent' ?>; color:<?= $f['val']==='all'?'#fff':'#666' ?>; border-radius:8px; padding:7px 10px; cursor:pointer; font-size:0.78rem; text-align:left; width:100%; transition:all 0.15s;">
+                                    <span style="width:8px; height:8px; border-radius:50%; background:<?= $f['dot'] ?>; flex-shrink:0;"></span>
+                                    <?= $f['label'] ?>
+                                </button>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+
+                        <!-- TARJETA: Fase -->
+                        <div style="background:#0d0d18; border:1px solid #1e1e2e; border-radius:14px; padding:14px 16px;">
+                            <div style="display:flex; align-items:center; gap:7px; margin-bottom:10px;">
+                                <span style="font-size:1rem;">🚀</span>
+                                <span style="font-size:0.7rem; font-weight:800; color:#888; text-transform:uppercase; letter-spacing:1.2px;">Fase</span>
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:6px;">
+                                <?php foreach([
+                                    ['val'=>'all','label'=>'Todas las fases','dot'=>'#555'],
+                                    ['val'=>'0',  'label'=>'Fase 0 · $10',  'dot'=>'#00d2ff'],
+                                    ['val'=>'1',  'label'=>'Fase 1 · $100', 'dot'=>'#9d00ff'],
+                                    ['val'=>'2',  'label'=>'Fase 2 · $1K',  'dot'=>'#00e676'],
+                                    ['val'=>'3',  'label'=>'Fase 3 · $10K', 'dot'=>'#ffb300'],
+                                ] as $f): ?>
+                                <button class="uf-fase" data-val="<?= $f['val'] ?>"
+                                    onclick="setUserFilter('fase','<?= $f['val'] ?>')"
+                                    style="display:flex; align-items:center; gap:8px; background:<?= $f['val']==='all'?'rgba(255,255,255,0.08)':'transparent' ?>; border:1px solid <?= $f['val']==='all'?'#444':'transparent' ?>; color:<?= $f['val']==='all'?'#fff':'#666' ?>; border-radius:8px; padding:7px 10px; cursor:pointer; font-size:0.78rem; text-align:left; width:100%; transition:all 0.15s;">
+                                    <span style="width:8px; height:8px; border-radius:50%; background:<?= $f['dot'] ?>; flex-shrink:0;"></span>
+                                    <?= $f['label'] ?>
+                                </button>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+
+                        <!-- TARJETA: Fecha de Registro + Orden -->
+                        <div style="background:#0d0d18; border:1px solid #1e1e2e; border-radius:14px; padding:14px 16px;">
+                            <div style="display:flex; align-items:center; gap:7px; margin-bottom:10px;">
+                                <span style="font-size:1rem;">📅</span>
+                                <span style="font-size:0.7rem; font-weight:800; color:#888; text-transform:uppercase; letter-spacing:1.2px;">Fecha de Registro</span>
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px;">
+                                <?php foreach([
+                                    ['val'=>'all',  'label'=>'Todo el tiempo','dot'=>'#555'],
+                                    ['val'=>'week', 'label'=>'Esta semana',   'dot'=>'#00d2ff'],
+                                    ['val'=>'month','label'=>'Este mes',      'dot'=>'#9d00ff'],
+                                ] as $f): ?>
+                                <button class="uf-fecha" data-val="<?= $f['val'] ?>"
+                                    onclick="setUserFilter('fecha','<?= $f['val'] ?>')"
+                                    style="display:flex; align-items:center; gap:8px; background:<?= $f['val']==='all'?'rgba(255,255,255,0.08)':'transparent' ?>; border:1px solid <?= $f['val']==='all'?'#444':'transparent' ?>; color:<?= $f['val']==='all'?'#fff':'#666' ?>; border-radius:8px; padding:7px 10px; cursor:pointer; font-size:0.78rem; text-align:left; width:100%; transition:all 0.15s;">
+                                    <span style="width:8px; height:8px; border-radius:50%; background:<?= $f['dot'] ?>; flex-shrink:0;"></span>
+                                    <?= $f['label'] ?>
+                                </button>
+                                <?php endforeach; ?>
+                            </div>
+                            <!-- Ordenar (dentro de la misma tarjeta) -->
+                            <div style="border-top:1px solid #1a1a26; padding-top:12px;">
+                                <div style="display:flex; align-items:center; gap:7px; margin-bottom:8px;">
+                                    <span style="font-size:0.9rem;">↕️</span>
+                                    <span style="font-size:0.68rem; font-weight:800; color:#666; text-transform:uppercase; letter-spacing:1px;">Ordenar por</span>
+                                </div>
+                                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                    <?php foreach([
+                                        ['val'=>'recientes','label'=>'↓ Recientes'],
+                                        ['val'=>'antiguos', 'label'=>'↑ Antiguos'],
+                                        ['val'=>'nombre',   'label'=>'A–Z'],
+                                    ] as $f): ?>
+                                    <button class="uf-orden" data-val="<?= $f['val'] ?>"
+                                        onclick="setUserFilter('orden','<?= $f['val'] ?>')"
+                                        style="background:<?= $f['val']==='recientes'?'rgba(255,255,255,0.1)':'rgba(255,255,255,0.03)' ?>; border:1px solid <?= $f['val']==='recientes'?'#555':'#1e1e2e' ?>; color:<?= $f['val']==='recientes'?'#fff':'#555' ?>; border-radius:7px; padding:5px 10px; cursor:pointer; font-size:0.72rem; white-space:nowrap; transition:all 0.15s;">
+                                        <?= $f['label'] ?>
+                                    </button>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div><!-- fin grid tarjetas -->
+
+                    <!-- ── BOTÓN LIMPIAR FILTROS ────────────────────────── -->
+                    <div style="display:flex; justify-content:flex-end; margin-bottom:16px;">
+                        <button onclick="clearUserFilters()"
+                            style="background:transparent; border:1px solid #2a2a3a; color:#555; border-radius:8px; padding:6px 16px; cursor:pointer; font-size:0.75rem; display:flex; align-items:center; gap:6px; transition:all 0.15s;"
+                            onmouseover="this.style.borderColor='#555';this.style.color='#aaa'" onmouseout="this.style.borderColor='#2a2a3a';this.style.color='#555'">
+                            ✕ Limpiar todos los filtros
+                        </button>
+                    </div>
+
+                    <!-- ── TABLA DE RESULTADOS ─────────────────────────── -->
+                    <div class="master-card" style="padding:0; overflow:hidden;">
+                        <div style="overflow-x:auto;">
+                            <table class="master-table" style="margin:0;">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Nombre Completo</th>
+                                        <th>Nick</th>
+                                        <th>Teléfono</th>
+                                        <th>Correo</th>
+                                        <th>Tablero</th>
+                                        <th>Pago</th>
+                                        <th>Registro</th>
+                                        <th>Wallet</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="master-users-body"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- SIN RESULTADOS -->
+                        <div id="users-empty" style="display:none; text-align:center; padding:50px 20px; color:#444;">
+                            <div style="font-size:2.5rem; margin-bottom:12px;">🔎</div>
+                            <div style="font-size:0.85rem; margin-bottom:14px;">Ningún usuario coincide con los filtros aplicados.</div>
+                            <button onclick="clearUserFilters()" style="background:rgba(255,255,255,0.05); border:1px solid #333; color:#888; border-radius:8px; padding:7px 18px; cursor:pointer; font-size:0.78rem;">✕ Limpiar filtros</button>
+                        </div>
+                    </div>
+
+            </div>
+            <div id="section-analizador" class="master-section">
+                <div id="master-panel-stats" style="margin-bottom:20px;">
+                    <div class="master-card" style="margin-bottom:20px;">
+                        <h4>🧮 Analizador de distribución</h4>
+                        <div class="master-tree-stage">
+                            Filtra por fase, tablero, ciclo y tipo de usuario para saber a cuántos ya se les distribuyeron los $10 y cómo se mueve la red.
+                        </div>
+                        <div class="master-tree-toolbar" style="margin-bottom:20px;">
+                            <div class="master-tree-control">
+                                <label for="master-stats-phase">Fase</label>
+                                <select id="master-stats-phase"></select>
+                            </div>
+                            <div class="master-tree-control">
+                                <label for="master-stats-board">Tablero</label>
+                                <select id="master-stats-board"></select>
+                            </div>
+                            <div class="master-tree-control">
+                                <label for="master-stats-cycle">Ciclo</label>
+                                <select id="master-stats-cycle"></select>
+                            </div>
+                            <div class="master-tree-control">
+                                <label for="master-stats-user-type">Tipo usuario</label>
+                                <select id="master-stats-user-type"></select>
+                            </div>
+                        </div>
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:20px;">
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid #1a1a24; border-radius:14px; padding:16px;">
+                                <div style="font-size:0.68rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Total filtrado</div>
+                                <div id="master-filter-total" style="font-size:1.8rem; font-weight:800; color:#fff;">$0.00</div>
+                            </div>
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid #1a1a24; border-radius:14px; padding:16px;">
+                                <div style="font-size:0.68rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Beneficiarios</div>
+                                <div id="master-filter-beneficiarios" style="font-size:1.8rem; font-weight:800; color:#00d2ff;">0</div>
+                            </div>
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid #1a1a24; border-radius:14px; padding:16px;">
+                                <div style="font-size:0.68rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Usuarios con $10</div>
+                                <div id="master-filter-users-10" style="font-size:1.8rem; font-weight:800; color:#00e676;">0</div>
+                            </div>
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid #1a1a24; border-radius:14px; padding:16px;">
+                                <div style="font-size:0.68rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Pagos de $10</div>
+                                <div id="master-filter-payments-10" style="font-size:1.8rem; font-weight:800; color:#ffb300;">0</div>
+                            </div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+                            <div id="master-filter-caption" style="font-size:0.78rem; color:#888;">Vista actual: todas las fases, todos los tableros y todos los ciclos.</div>
+                            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                                <button class="btn-master" type="button" onclick="applyMasterStatsFilters()">Aplicar filtros</button>
+                                <button class="btn-master" type="button" onclick="clearMasterStatsFilters()" style="background:#1a1a28; color:#fff; border:1px solid #2a2a3a;">Limpiar filtros</button>
+                            </div>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1.35fr 1fr; gap:18px;">
+                            <div style="overflow-x:auto;">
+                                <table class="master-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Fase</th>
+                                            <th>Tablero</th>
+                                            <th>Ciclo</th>
+                                            <th>Beneficiarios</th>
+                                            <th>Pagos</th>
+                                            <th>Total</th>
+                                            <th>Usuarios $10</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="master-distribution-body"></tbody>
+                                </table>
+                            </div>
+                            <div style="overflow-x:auto;">
+                                <table class="master-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Usuario</th>
+                                            <th>Tipo</th>
+                                            <th>Veces</th>
+                                            <th>Ultima</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="master-ten-users-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="section-ledger" class="master-section">
+                <div id="master-panel-ledger" style="margin-bottom:20px;">
+                    <div class="master-card" style="margin-bottom:20px;">
+                        <h4>📒 Libro Mayor de Tesorería</h4>
+                        <div style="overflow-x:auto;"><table class="master-table"><thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th><th>Estado</th></tr></thead><tbody id="master-ledger-body"></tbody></table></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="section-mapa" class="master-section">
+                <div id="master-panel-map" style="margin-bottom:20px;">
+                    <div class="master-card" style="margin-bottom:20px;">
+                        <h4>🗺️ Mapa General de Red</h4>
+                        <div class="master-tree-stage">
+                            Vista global de la red por fase y ciclo. Puedes centrar una rama escribiendo el ID, nombre, nickname o wallet del usuario.
+                        </div>
+
+                        <div class="master-tree-toolbar">
+                            <div class="master-tree-control">
+                                <label for="master-tree-phase">Fase</label>
+                                <select id="master-tree-phase"></select>
+                            </div>
+                            <div class="master-tree-control">
+                                <label for="master-tree-cycle">Ciclo</label>
+                                <select id="master-tree-cycle"></select>
+                            </div>
+                            <div class="master-tree-control">
+                                <label for="master-tree-root">Raiz o busqueda</label>
+                                <input id="master-tree-root" type="text" placeholder="Ej: 1001, Wendy, TRON_TQ2R o wallet">
+                            </div>
+                            <div class="master-tree-actions">
+                                <button class="btn-master" type="button" onclick="aplicarFiltrosArbolMaster()">Ver arbol</button>
+                                <button class="btn-master" type="button" onclick="resetZoomMasterTree()" style="background:#1a1a28; color:#fff; border:1px solid #2a2a3a;">Reset vista</button>
+                                <button class="btn-master" type="button" onclick="limpiarFiltroArbolMaster()" style="background:rgba(255,255,255,0.08); color:#fff; border:1px solid rgba(255,255,255,0.1);">Vista general</button>
+                            </div>
+                        </div>
+
+                        <div id="master-tree-summary" class="master-tree-chip-row">
+                            <span class="master-tree-chip">Cargando arbol general...</span>
+                        </div>
+
+                        <div id="master-network-tree" class="master-network-tree">
+                            <div class="master-tree-empty">Cargando red general...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="section-clones" class="master-section">
                 <div class="master-grid-bottom">
                     <div class="master-card">
                         <h4>Control de IA</h4>
-                        <button class="btn-master" onclick="activarClonManual()">ACTIVAR AGENTE IA</button>
+                        <p style="font-size:0.72rem; color:#999; margin-bottom:12px;">Escribe el nickname del usuario que recibirá el Agente IA.</p>
+                        <input type="text" id="clon-nickname-input" placeholder="Nickname del beneficiario" style="width:100%; padding:9px 12px; background:#111; border:1px solid #333; border-radius:8px; color:#fff; font-size:0.8rem; margin-bottom:10px; box-sizing:border-box;">
+                        <button class="btn-master" onclick="activarClonManual()">⚡ ACTIVAR AGENTE IA</button>
                         <div id="clon-result" style="margin-top:10px; font-size:0.7rem;"></div>
+                        <hr style="border-color:#333; margin:18px 0;">
+                        <h4 style="margin-bottom:10px;">🔄 Reemplazar usuario por Agente IA</h4>
+                        <p style="font-size:0.72rem; color:#999; margin-bottom:12px;">Busca un usuario que se registró pero nunca pagó y reemplázalo por un Agente IA en su posición.</p>
+                        <input type="text" id="reemplazo-nickname-input" placeholder="Nickname del usuario a reemplazar" style="width:100%; padding:9px 12px; background:#111; border:1px solid #333; border-radius:8px; color:#fff; font-size:0.8rem; margin-bottom:10px; box-sizing:border-box;">
+                        <button class="btn-master" style="background:linear-gradient(135deg,#ff6b35,#ff4500); width:100%;" onclick="buscarUsuarioParaReemplazar()">🔍 BUSCAR USUARIO</button>
+                        <div id="reemplazo-preview" style="display:none; margin-top:14px; background:#1a1a1a; border:1px solid #333; border-radius:10px; padding:14px;">
+                            <div id="reemplazo-preview-info" style="font-size:0.78rem; color:#ccc; margin-bottom:12px; line-height:1.6;"></div>
+                            <div style="display:flex; gap:8px;">
+                                <button class="btn-master" style="background:linear-gradient(135deg,#00e676,#00b248); flex:1;" onclick="confirmarReemplazo()">✅ CONFIRMAR REEMPLAZO</button>
+                                <button class="btn-master" style="background:#333; flex:1;" onclick="cancelarReemplazo()">✖ CANCELAR</button>
+                            </div>
+                        </div>
+                        <div id="reemplazo-result" style="margin-top:10px; font-size:0.73rem;"></div>
                     </div>
                     <div class="master-card">
                         <h4>Historial IA</h4>
@@ -859,7 +1291,44 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                 </div>
             </div>
             <div id="section-retiros" class="master-section"><div class="master-card"><h4>💰 Retiros Full</h4><div id="master-retiros-full-list"></div></div></div>
-            <div id="section-auditoria" class="master-section"><div class="master-card"><h4>📜 Auditoría Completa</h4><table class="master-table"><thead><tr><th>Acción</th><th>Fecha</th></tr></thead><tbody id="master-auditoria-full-body"></tbody></table></div></div>
+            <div id="section-auditoria" class="master-section">
+                <div class="master-card">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+                        <h4 style="margin:0;">📜 Centro de Actividad del Sistema</h4>
+                        <button id="audit-refresh-btn" onclick="refreshAuditoria()"
+                            style="background:rgba(255,255,255,0.06); border:1px solid #333; color:#aaa; border-radius:8px; padding:6px 14px; cursor:pointer; font-size:0.8rem;">
+                            🔄 Actualizar
+                        </button>
+                    </div>
+                    <!-- Filtros -->
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+                        <?php
+                        $filtros = [
+                            ['f'=>'all',      'label'=>'🗂 Todos'],
+                            ['f'=>'tableros', 'label'=>'📊 Tableros'],
+                            ['f'=>'clones',   'label'=>'🤖 Agentes IA'],
+                            ['f'=>'retiros',  'label'=>'💸 Retiros'],
+                            ['f'=>'fases',    'label'=>'🚀 Fases'],
+                            ['f'=>'usuarios', 'label'=>'👤 Usuarios'],
+                        ];
+                        foreach($filtros as $fi): ?>
+                        <button class="audit-filter-btn" data-f="<?= $fi['f'] ?>"
+                            onclick="setAuditFiltro('<?= $fi['f'] ?>')"
+                            style="background:<?= $fi['f']==='all'?'rgba(157,0,255,0.25)':'rgba(255,255,255,0.05)' ?>; border:1px solid <?= $fi['f']==='all'?'#9d00ff':'#333' ?>; color:<?= $fi['f']==='all'?'#e040fb':'#888' ?>; border-radius:8px; padding:5px 12px; cursor:pointer; font-size:0.78rem; white-space:nowrap;">
+                            <?= $fi['label'] ?>
+                        </button>
+                        <?php endforeach; ?>
+                    </div>
+                    <!-- Leyenda de cascada -->
+                    <div style="background:rgba(255,107,0,0.04); border:1px solid rgba(255,107,0,0.12); border-radius:8px; padding:8px 12px; margin-bottom:14px; font-size:0.74rem; color:#888; line-height:1.5;">
+                        <strong style="color:#ff6d00;">⚡ Cascada automática</strong> — cuando varios eventos ocurren en menos de 30 segundos entre sí se agrupan como una cascada. Haz clic para expandir y ver cada paso.
+                    </div>
+                    <!-- Timeline -->
+                    <div id="master-auditoria-timeline" style="max-height:600px; overflow-y:auto; padding-right:4px;">
+                        <div style="text-align:center; padding:40px; color:#444;">Cargando actividad…</div>
+                    </div>
+                </div>
+            </div>
         <?php endif; ?>
     </main>
 

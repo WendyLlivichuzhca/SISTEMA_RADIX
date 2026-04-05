@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reporte Final RADIX — Análisis Completo</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#030305;color:#e0e0e0;font-family:'Outfit',sans-serif;padding:0 0 60px}
+  .hero{padding:60px 20px 30px;text-align:center;background:radial-gradient(circle at 50% -20%,#1a0a2e,transparent)}
+  .hero h1{font-size:2.2rem;font-weight:800;margin-bottom:10px;background:linear-gradient(90deg,#00d2ff,#9d00ff,#00e676);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .hero p{color:#666;font-size:.9rem}
+  .container{max-width:900px;margin:0 auto;padding:0 20px}
+  /* Score */
+  .scores{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:30px auto;max-width:900px;padding:0 20px}
+  .sc{background:#12121a;border:1px solid #2a2a3a;border-radius:12px;padding:16px;text-align:center}
+  .sc .n{font-size:2rem;font-weight:800;margin:6px 0 4px}
+  .sc .l{font-size:.7rem;color:#666;text-transform:uppercase;letter-spacing:1px}
+  .sc-r{border-color:#ff444433}.sc-r .n{color:#ff4444}
+  .sc-o{border-color:#ff980033}.sc-o .n{color:#ff9800}
+  .sc-g{border-color:#00e67633}.sc-g .n{color:#00e676}
+  .sc-b{border-color:#9d00ff33}.sc-b .n{color:#9d00ff}
+  /* Sections */
+  .sec-title{font-size:.75rem;text-transform:uppercase;letter-spacing:2px;color:#9d00ff;border-left:3px solid #9d00ff;padding-left:10px;margin:36px 0 16px}
+  /* Cards */
+  .card{background:#12121a;border:1px solid #2a2a3a;border-radius:12px;padding:20px 22px;margin-bottom:12px;position:relative}
+  .card::before{content:attr(data-tag);position:absolute;top:-10px;left:18px;font-size:.65rem;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:20px}
+  .card.bug{border-color:#ff444433}.card.bug::before{background:#ff4444;color:#fff}
+  .card.warn{border-color:#ff980033}.card.warn::before{background:#ff9800;color:#000}
+  .card.ok{border-color:#00e67633}.card.ok::before{background:#00e676;color:#000}
+  .card.mejora{border-color:#00d2ff33}.card.mejora::before{background:#00d2ff;color:#000}
+  .card.diseno{border-color:#9d00ff33}.card.diseno::before{background:#9d00ff;color:#fff}
+  .card h3{font-size:.92rem;color:#fff;margin-bottom:8px;padding-top:4px}
+  .card p{font-size:.8rem;color:#aaa;line-height:1.6;margin-bottom:6px}
+  .card p:last-child{margin-bottom:0}
+  code{font-family:monospace;font-size:.78rem;color:#cc44ff;background:#0d0d18;padding:2px 6px;border-radius:4px}
+  .file{font-family:monospace;font-size:.75rem;color:#00d2ff;background:#0a1a2e;padding:2px 7px;border-radius:4px}
+  /* 2-col code */
+  .diff{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  .dbox{background:#0d0d18;border-radius:8px;padding:12px;font-size:.75rem;line-height:1.6;border:1px solid #1e1e2e}
+  .dbox .tag{font-size:.65rem;font-weight:700;letter-spacing:1px;margin-bottom:6px;display:block}
+  .dbox pre{color:#cc44ff;white-space:pre-wrap;font-family:monospace}
+  .red{color:#ff4444}.grn{color:#00e676}.org{color:#ff9800}.wht{color:#fff}
+  /* Table */
+  table{width:100%;border-collapse:collapse;font-size:.82rem;margin-bottom:20px}
+  th{padding:10px 14px;background:#1a1a2e;color:#9d00ff;border:1px solid #2a2a3a;text-align:left;font-size:.75rem}
+  td{padding:9px 14px;border:1px solid #1e1e2e;color:#bbb;vertical-align:middle}
+  tr:nth-child(even) td{background:#0f0f1a}
+  tr:nth-child(odd) td{background:#111118}
+  .td-f{color:#fff;font-weight:600;background:#0d0d18!important}
+  .tok{color:#00e676;text-align:center;font-weight:700}
+  .tno{color:#ff4444;text-align:center;font-weight:700}
+  .twa{color:#ff9800;text-align:center;font-weight:700}
+  /* Priority */
+  .plist{counter-reset:p}
+  .pitem{display:flex;gap:12px;align-items:flex-start;background:#12121a;border:1px solid #2a2a3a;border-radius:10px;padding:14px 16px;margin-bottom:10px}
+  .pnum{min-width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.82rem;flex-shrink:0}
+  .p1 .pnum{background:#ff4444;color:#fff}
+  .p2 .pnum{background:#ff9800;color:#000}
+  .p3 .pnum{background:#00d2ff;color:#000}
+  .p4 .pnum{background:#9d00ff;color:#fff}
+  .pitem h4{font-size:.85rem;color:#fff;margin-bottom:3px}
+  .pitem p{font-size:.78rem;color:#888;line-height:1.5}
+  /* Resumen */
+  .final{background:linear-gradient(135deg,#0a1a0a,#1a0a2e);border:2px solid #9d00ff44;border-radius:14px;padding:28px;text-align:center;margin:40px 0}
+  .final h2{font-size:1.6rem;color:#fff;margin:10px 0}
+  .final p{color:#888;font-size:.85rem;max-width:600px;margin:0 auto}
+  @media(max-width:600px){.scores{grid-template-columns:1fr 1fr}.diff{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>REPORTE FINAL — RADIX APP</h1>
+  <p>Análisis completo: bugs, seguridad, funcionalidades y mejoras de diseño</p>
+</div>
+
+<div class="scores">
+  <div class="sc sc-r"><div class="l">Bugs críticos</div><div class="n">3</div><div class="l">Rompen la app</div></div>
+  <div class="sc sc-o"><div class="l">Advertencias</div><div class="n">5</div><div class="l">Afectan usuarios</div></div>
+  <div class="sc sc-b"><div class="l">Seguridad</div><div class="n">4</div><div class="l">Urgentes</div></div>
+  <div class="sc sc-g"><div class="l">Mejoras posibles</div><div class="n">8</div><div class="l">Recomendadas</div></div>
+</div>
+
+<div class="container">
+
+<!-- ============================================================ -->
+<div class="sec-title">✅ Estado actual — Lo que funciona perfecto</div>
+
+<table>
+  <thead><tr><th>Funcionalidad</th><th>Estado</th><th>Evidencia en BD</th></tr></thead>
+  <tbody>
+    <tr><td class="td-f">Progresión A → B → C</td><td class="tok">✅ OK</td><td>tableros_progreso IDs 1–9 muestran ciclo completo</td></tr>
+    <tr><td class="td-f">Tesorería: $10+$20+$40 por tablero</td><td class="tok">✅ OK</td><td>tesoreria_movimientos: $10,$10,$10,$20,$20,$40 = $110 bruto</td></tr>
+    <tr><td class="td-f">$100 para Fase 1 (Agente IA)</td><td class="tok">✅ OK</td><td>pago ID 28: tipo salto_fase_1, monto 100.00</td></tr>
+    <tr><td class="td-f">$10 re-entrada (Agente IA)</td><td class="tok">✅ OK</td><td>pago ID 29: tipo reentrada, monto 10.00</td></tr>
+    <tr><td class="td-f">$40 neto al usuario</td><td class="tok">✅ OK</td><td>$150 bruto - $110 deducciones = $40</td></tr>
+    <tr><td class="td-f">Re-entrada ciclo 2 automática</td><td class="tok">✅ OK</td><td>tablero ID 11: usuario 1, tipo A, ciclo 2, en_progreso</td></tr>
+    <tr><td class="td-f">Clones solo Nivel 2+ (ciclo>1 o B/C)</td><td class="tok">✅ OK</td><td>Clones 1016 y 1017 creados solo en ciclo 2</td></tr>
+    <tr><td class="td-f">Tesorería balance correcto</td><td class="tok">✅ OK</td><td>$120 ingresos - $20 egresos = $100 ✅</td></tr>
+    <tr><td class="td-f">Anti-auto-patrocinio</td><td class="tok">✅ OK</td><td>Validación activa en registro.php</td></tr>
+    <tr><td class="td-f">Logs de auditoría</td><td class="tok">✅ OK</td><td>auditoria_logs con 5 registros correctos</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<div class="sec-title">🔴 Bugs críticos — Rompen la lógica</div>
+
+<div class="card bug" data-tag="BUG CRÍTICO #1">
+  <h3>Se activan 2 clones en vez de 1 por tablero</h3>
+  <p>Cuando el usuario completa el Tablero C, <span class="file">matrix_logic.php</span> llama a <code>intentarActivarClon()</code> al final (línea 104). Pero <code>clon_logic.php</code> también la llama después de crear el primer clon. Resultado: se crean 2 clones seguidos para el mismo usuario (IDs 1016 y 1017 en tu BD). El diagrama dice <strong class="wht">1 clon + 2 reales</strong> por tablero.</p>
+  <p><strong class="org">Fix:</strong> Agregar una condición que verifique que el usuario no tenga ya un clon asignado en el ciclo actual antes de crear otro.</p>
+</div>
+
+<div class="card bug" data-tag="BUG CRÍTICO #2">
+  <h3>La wallet se pasa en la URL del dashboard — cualquiera puede ver el panel de otro</h3>
+  <p><span class="file">app.js</span> redirige a <code>dashboard.php?wallet=0x...</code> y <span class="file">dashboard.php</span> acepta esa wallet sin verificar si pertenece a quien la solicita. Cualquier persona que conozca la wallet de otro usuario puede entrar a su dashboard directamente escribiendo la URL.</p>
+  <p><strong class="org">Fix:</strong> Usar sesiones PHP (<code>$_SESSION</code>) para guardar la wallet autenticada. No pasarla nunca en la URL.</p>
+</div>
+
+<div class="card bug" data-tag="BUG CRÍTICO #3">
+  <h3>user_data.php llama a verificarAvanceTablero() y intentarActivarClon() en cada carga del dashboard</h3>
+  <p>Cada vez que el usuario abre su dashboard, el servidor ejecuta las funciones de avance y de clon. Si el dashboard se recarga múltiples veces en pocos segundos, podría disparar múltiples clones o avances duplicados. Estas funciones deben ejecutarse solo cuando ocurre un evento real (nuevo referido registrado).</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec-title">🟠 Advertencias — Afectan la experiencia</div>
+
+<div class="card warn" data-tag="ADVERTENCIA #1">
+  <h3>La conexión de wallet usa prompt() — no hay integración real con MetaMask/SafePal</h3>
+  <p><span class="file">app.js</span> usa <code>prompt()</code> para pedir la wallet manualmente. No hay integración con <strong class="wht">Web3.js</strong> ni <strong class="wht">ethers.js</strong>. Esto significa que cualquier persona puede escribir la wallet de otro y registrarse como si fuera ella. Para producción necesitas: <code>window.ethereum.request({ method: 'eth_requestAccounts' })</code>.</p>
+</div>
+
+<div class="card warn" data-tag="ADVERTENCIA #2">
+  <h3>Los pagos entre usuarios quedan en "pendiente" — no hay verificación blockchain</h3>
+  <p>Cuando un usuario se registra, el pago de $10 se crea como <code>estado = 'pendiente'</code>. No existe ningún mecanismo que confirme si el pago realmente ocurrió en la blockchain. El sistema asume que todos pagan. En producción, necesitas un listener de eventos del smart contract o un webhook de pago.</p>
+</div>
+
+<div class="card warn" data-tag="ADVERTENCIA #3">
+  <h3>stats.php cuenta clones como usuarios reales</h3>
+  <p>La query de estadísticas no filtra <code>tipo_usuario = 'real'</code>. El home mostraría 17 usuarios cuando en realidad solo hay 15 reales (más 2 clones más el sistema).</p>
+</div>
+
+<div class="card warn" data-tag="ADVERTENCIA #4">
+  <h3>Sub-usuarios de prueba (1007-1015) sin patrocinador_id</h3>
+  <p>Los 9 usuarios de prueba en la BD tienen <code>patrocinador_id = NULL</code>. En producción cada persona debe entrar con un referido. Estos datos de prueba deberían limpiarse antes del lanzamiento.</p>
+</div>
+
+<div class="card warn" data-tag="ADVERTENCIA #5">
+  <h3>dashboard.php mezcla PHP y HTML sin plantilla — difícil de mantener</h3>
+  <p>Todo el CSS, HTML y JS está en un solo archivo PHP de más de 300 líneas. Si necesitas cambiar el diseño en el futuro, es muy difícil de editar. Separar en archivos dedicados haría el código mucho más mantenible.</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec-title">🔵 Seguridad — Urgente para producción</div>
+
+<div class="card" style="border-color:#9d00ff33" data-tag="SEGURIDAD #1">
+  <h3>Credenciales de BD en texto plano en config.php</h3>
+  <p><span class="file">config.php</span> contiene usuario y contraseña de la BD visibles directamente. Si el repositorio es público o el archivo se expone por error, las credenciales quedan comprometidas. Usar variables de entorno o un archivo <code>.env</code> fuera del directorio web.</p>
+</div>
+
+<div class="card" style="border-color:#9d00ff33" data-tag="SEGURIDAD #2">
+  <h3>admin_actions.php accesible sin autenticación</h3>
+  <p>Cualquier persona puede hacer un POST a este endpoint y cambiar el estado de cualquier usuario. No hay verificación de sesión admin. Agregar <code>session_start()</code> y verificar el rol antes de ejecutar cualquier acción.</p>
+</div>
+
+<div class="card" style="border-color:#9d00ff33" data-tag="SEGURIDAD #3">
+  <h3>Las firmas de wallet se guardan pero nunca se verifican</h3>
+  <p><span class="file">registro.php</span> guarda <code>signature</code> y <code>message</code> en auditoría pero no verifica criptográficamente que la firma pertenezca a esa wallet. Cualquiera puede registrar la wallet de otro sin tener la clave privada.</p>
+</div>
+
+<div class="card" style="border-color:#9d00ff33" data-tag="SEGURIDAD #4">
+  <h3>Archivos de debug/test accesibles públicamente</h3>
+  <p>Existen archivos como <span class="file">debug_levels.php</span>, <span class="file">test_matrix.php</span>, <span class="file">simulate_jump_c.php</span>, <span class="file">reset_db.php</span> y <span class="file">fix_db.php</span> en el directorio público. Estos archivos pueden exponer información sensible o permitir que alguien reinicie la base de datos desde el navegador.</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec-title">🟢 Mejoras funcionales recomendadas</div>
+
+<div class="card mejora" data-tag="MEJORA #1">
+  <h3>Integrar MetaMask / SafePal real con ethers.js</h3>
+  <p>Reemplazar el <code>prompt()</code> con una conexión real a la billetera del usuario. Esto verifica automáticamente la propiedad de la wallet y añade una capa de seguridad real. Código base:</p>
+  <div class="dbox" style="margin-top:10px">
+    <pre><span class="grn">const accounts = await window.ethereum.request(
+  { method: 'eth_requestAccounts' }
+);
+const wallet = accounts[0]; // Wallet real verificada</span></pre>
+  </div>
+</div>
+
+<div class="card mejora" data-tag="MEJORA #2">
+  <h3>Sistema de notificaciones en tiempo real</h3>
+  <p>Cuando alguien se une usando tu link de referido, el usuario no recibe ninguna notificación. Implementar WebSockets o polling cada 30 segundos para notificar eventos como: <strong class="wht">"¡Nuevo referido! P1 se unió a tu red"</strong>, <strong class="wht">"Tablero A completado, avanzaste a B"</strong>, <strong class="wht">"🤖 Clon activado para ti"</strong>.</p>
+</div>
+
+<div class="card mejora" data-tag="MEJORA #3">
+  <h3>Visualización del árbol de red en el dashboard</h3>
+  <p>El dashboard actual muestra los referidos como lista. Un árbol visual interactivo (como el diagrama que tú tienes) haría la experiencia mucho más atractiva y fácil de entender para los usuarios. Librerías sugeridas: <strong class="wht">D3.js</strong> o <strong class="wht">vis.js</strong> (ambas gratuitas).</p>
+</div>
+
+<div class="card mejora" data-tag="MEJORA #4">
+  <h3>Página de retiro / historial de ganancias</h3>
+  <p>El dashboard muestra las ganancias calculadas pero no hay ninguna página donde el usuario pueda solicitar el retiro de sus $40. Necesitas una sección de <strong class="wht">"Mis Ganancias"</strong> con: saldo disponible, historial de movimientos (A, B, C) y botón de solicitar retiro.</p>
+</div>
+
+<div class="card mejora" data-tag="MEJORA #5">
+  <h3>Link de referido propio más visible y copiable</h3>
+  <p>El link <code>?ref=0x...</code> ya existe en <span class="file">user_data.php</span> pero no hay un botón visible en el dashboard para copiarlo con un click. Es la funcionalidad más importante del sistema — debe estar destacada con un botón de copiar y un contador de "Referidos invitados: 2/3".</p>
+</div>
+
+<div class="card mejora" data-tag="MEJORA #6">
+  <h3>Email / Telegram de notificación al completar tablero</h3>
+  <p>Cuando el usuario completa un tablero y avanza, no recibe ninguna notificación fuera de la app. Integrar un sistema de notificaciones (Telegram Bot API es el más fácil) para avisar: <strong class="wht">"¡Completaste Tablero A! Tus $10 están listos."</strong></p>
+</div>
+
+<div class="card mejora" data-tag="MEJORA #7">
+  <h3>Límite de 1 clon por tablero por usuario (fix del bug + mejora)</h3>
+  <p>Corregir el bug de 2 clones y además agregar un contador visible en el dashboard: <strong class="wht">"Slots: 2/3 llenos (1 real, 1 clon)"</strong> para que el usuario sepa exactamente qué le falta para avanzar.</p>
+</div>
+
+<div class="card mejora" data-tag="MEJORA #8">
+  <h3>Panel admin más completo con control de Tesorería</h3>
+  <p>El admin actual solo muestra stats básicas. Agregar: balance en tiempo real de la Tesorería, historial de clones activados, usuarios por tablero, gráfica de crecimiento diario, y botón manual de "Activar Clon" para casos de emergencia.</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec-title">🎨 Mejoras de diseño recomendadas</div>
+
+<div class="card diseno" data-tag="DISEÑO #1">
+  <h3>Landing page (index.html) — Agregar sección de ROI visual</h3>
+  <p>El landing actual explica el sistema en texto. Añadir una sección visual con el diagrama de tableros A→B→C animado, mostrando cómo el $10 se convierte en $150. Esto aumenta drásticamente la conversión de visitantes a registros. El diagrama que tú tienes en Excel podría ser esa sección.</p>
+</div>
+
+<div class="card diseno" data-tag="DISEÑO #2">
+  <h3>Mobile responsive — dashboard.php no es responsive</h3>
+  <p>El dashboard usa <code>grid-template-columns: repeat(3, 1fr)</code> sin media queries. En celular los 3 widgets se apilan deformes. La mayoría de usuarios probablemente accederán desde el celular. Agregar al menos: <code>@media(max-width:768px)</code> con columna única.</p>
+</div>
+
+<div class="card diseno" data-tag="DISEÑO #3">
+  <h3>Animación de progreso de tablero más visual</h3>
+  <p>El dashboard tiene una línea de progreso A→B→C pero es muy simple. Mejorar con: nodos animados que pulsan cuando están activos, contador de "2/3 referidos" en cada nodo, y confetti/animación cuando se completa un tablero.</p>
+</div>
+
+<div class="card diseno" data-tag="DISEÑO #4">
+  <h3>Estados de los referidos más claros visualmente</h3>
+  <p>Actualmente los referidos se muestran como lista básica. Mejorar con avatares de colores (verde=real activo, azul=clon, gris=pendiente), indicador de en qué tablero está cada referido, y chip de "Pagado ✅" vs "Pendiente ⏳".</p>
+</div>
+
+<div class="card diseno" data-tag="DISEÑO #5">
+  <h3>Página de onboarding para nuevos usuarios</h3>
+  <p>Cuando un usuario se registra por primera vez, entra directo al dashboard sin ninguna explicación. Una pantalla de bienvenida de 3 pasos (<strong class="wht">¿Qué es RADIX? → Cómo funciona → Tu primer paso</strong>) mejoraría mucho la retención y reduciría confusión.</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="sec-title">🎯 Plan de acción priorizado</div>
+<div class="plist">
+
+  <div class="pitem p1">
+    <div class="pnum">1</div>
+    <div><h4>Eliminar archivos debug/test del servidor público</h4>
+    <p>reset_db.php, test_matrix.php, simulate_jump_c.php, fix_db.php, debug_levels.php — moverlos fuera del directorio web o protegerlos con contraseña. Riesgo inmediato.</p></div>
+  </div>
+
+  <div class="pitem p1">
+    <div class="pnum">2</div>
+    <div><h4>Proteger dashboard con sesiones PHP en vez de URL</h4>
+    <p>Cambiar <code>dashboard.php?wallet=0x...</code> por sesión autenticada. Crítico para privacidad de todos los usuarios.</p></div>
+  </div>
+
+  <div class="pitem p1">
+    <div class="pnum">3</div>
+    <div><h4>Corregir el bug de 2 clones por usuario</h4>
+    <p>Limitar a 1 clon por tablero verificando antes de activar si el usuario ya tiene un clon en el ciclo actual.</p></div>
+  </div>
+
+  <div class="pitem p2">
+    <div class="pnum">4</div>
+    <div><h4>Integrar MetaMask real en app.js</h4>
+    <p>Reemplazar el prompt() con window.ethereum. Es la base de toda la seguridad del sistema.</p></div>
+  </div>
+
+  <div class="pitem p2">
+    <div class="pnum">5</div>
+    <div><h4>Proteger admin con sesiones y roles</h4>
+    <p>Agregar verificación de sesión en admin_actions.php y todos los endpoints admin.</p></div>
+  </div>
+
+  <div class="pitem p3">
+    <div class="pnum">6</div>
+    <div><h4>Hacer el dashboard mobile responsive</h4>
+    <p>Agregar media queries básicas. La mayoría de usuarios entrarán desde celular.</p></div>
+  </div>
+
+  <div class="pitem p3">
+    <div class="pnum">7</div>
+    <div><h4>Agregar botón de copiar link de referido visible</h4>
+    <p>La funcionalidad más usada del sistema debe ser la más accesible.</p></div>
+  </div>
+
+  <div class="pitem p4">
+    <div class="pnum">8</div>
+    <div><h4>Notificaciones Telegram cuando avanza tablero</h4>
+    <p>Aumenta retención y emoción del usuario al completar cada fase.</p></div>
+  </div>
+
+  <div class="pitem p4">
+    <div class="pnum">9</div>
+    <div><h4>Árbol visual de red en el dashboard</h4>
+    <p>Visualizar la red con D3.js haría el producto mucho más premium.</p></div>
+  </div>
+
+</div>
+
+<!-- Final -->
+<div class="final">
+  <p style="color:#9d00ff;font-weight:700;text-transform:uppercase;letter-spacing:2px;font-size:.75rem">Veredicto final</p>
+  <h2>La lógica del negocio está bien construida — el enfoque ahora es seguridad y experiencia</h2>
+  <p style="margin-top:12px">El flujo A→B→C, los $40 netos, los Agentes IA y la Tesorería funcionan correctamente según tu diagrama. Los 3 bugs críticos son corregibles en horas. Las mejoras de diseño y seguridad son las que van a marcar la diferencia para los usuarios reales.</p>
+</div>
+
+<div style="text-align:center;color:#333;font-size:.75rem;padding:20px 0">
+  Reporte generado por Claude · RADIX App Analysis · Marzo 2026
+</div>
+
+</div>
+</body>
+</html>

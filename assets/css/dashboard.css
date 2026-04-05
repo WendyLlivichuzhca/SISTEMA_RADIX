@@ -1273,6 +1273,20 @@ aside .user-hero-card {
    Sin tocar lógica. Solo diseño puro.
    ════════════════════════════════════════════════════════════ */
 
+/* ── 0. user-charts-grid — grid de gráficas del overview ───── */
+.user-charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin-bottom: 18px;
+    align-items: start;
+}
+@media (max-width: 1000px) {
+    .user-charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* ── 1. user-main-grid — grid Equipo + Red Visual ──────────── */
 /* Esta clase no tenía CSS. Causaba que ambas cards se apilaran */
 .user-main-grid {
@@ -1326,6 +1340,252 @@ aside .user-hero-card {
 }
 .user-feature-card .progress-container {
     padding: 16px 6% 40px;
+}
+
+.user-phase-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.phase-overview-grid,
+.phase-comparison-chart {
+    display: grid;
+    gap: 14px;
+}
+
+.phase-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.phase-summary-card {
+    --phase-accent: var(--secondary);
+    --phase-glow: rgba(0, 210, 255, 0.14);
+    --phase-soft: rgba(0, 210, 255, 0.12);
+    --phase-shadow: rgba(0, 210, 255, 0.32);
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background:
+        radial-gradient(circle at top right, var(--phase-glow), transparent 45%),
+        linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+    padding: 18px;
+    min-height: 258px;
+}
+
+.phase-summary-card.is-primary {
+    border-color: rgba(255,255,255,0.16);
+    box-shadow: 0 16px 36px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.03) inset;
+}
+
+.phase-summary-card.is-locked {
+    opacity: 0.8;
+}
+
+.phase-summary-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.phase-summary-name {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 6px;
+}
+
+.phase-summary-subtitle {
+    color: #8e94b5;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    min-height: 38px;
+}
+
+.phase-summary-badges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.phase-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    color: #d7dbef;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.phase-chip.phase-chip-accent {
+    border-color: var(--phase-soft);
+    background: var(--phase-soft);
+    color: var(--phase-accent);
+}
+
+.phase-context-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+    margin-bottom: 14px;
+}
+
+.phase-context-current {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #fff;
+}
+
+.phase-context-meta {
+    color: #9aa1bf;
+    font-size: 0.74rem;
+    text-align: right;
+}
+
+.phase-meters {
+    display: grid;
+    gap: 12px;
+}
+
+.phase-meter-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.72rem;
+    color: #969ec2;
+    margin-bottom: 6px;
+}
+
+.phase-meter-track {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    overflow: hidden;
+    position: relative;
+}
+
+.phase-meter-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--phase-accent), #ffffff);
+    box-shadow: 0 0 18px var(--phase-shadow);
+}
+
+.phase-summary-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.phase-stat {
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.03);
+    padding: 10px 12px;
+}
+
+.phase-stat-label {
+    display: block;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #71789a;
+    margin-bottom: 6px;
+}
+
+.phase-stat-value {
+    display: block;
+    font-size: 1rem;
+    font-weight: 800;
+    color: #fff;
+}
+
+.phase-comparison-chart {
+    align-content: start;
+}
+
+.phase-compare-row {
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.025);
+    padding: 14px 16px;
+}
+
+.phase-compare-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.phase-compare-name {
+    font-weight: 800;
+    color: #fff;
+}
+
+.phase-compare-state {
+    color: #9ba3c4;
+    font-size: 0.75rem;
+}
+
+.phase-compare-bars {
+    display: grid;
+    gap: 10px;
+}
+
+.phase-compare-bar-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.72rem;
+    color: #8f97ba;
+    margin-bottom: 5px;
+}
+
+.phase-compare-track {
+    height: 9px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    overflow: hidden;
+}
+
+.phase-compare-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--phase-accent), rgba(255,255,255,0.9));
+}
+
+@media (max-width: 1180px) {
+    .user-phase-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 780px) {
+    .phase-overview-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .phase-summary-stats {
+        grid-template-columns: 1fr 1fr;
+    }
 }
 
 /* ── 5. BOTÓN VERIFICAR — estaba sin clase ni estilo ────────── */
@@ -1919,4 +2179,330 @@ html {
     .profile-shell-head {
         align-items: flex-start;
     }
+}
+
+/* ══════════════════════════════════════════════════════════
+   NAVEGACIÓN POR FASES — sidebar dot + secciones
+   ══════════════════════════════════════════════════════════ */
+
+.nav-fase-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+/* Sección de cada fase */
+.user-fase-section {
+    animation: fadeInSection 0.25s ease;
+}
+
+@keyframes fadeInSection {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Header de fase */
+.fase-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    background: rgba(255,255,255,0.02);
+    border-radius: 16px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(255,255,255,0.06);
+}
+
+.fase-section-eyebrow {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.fase-section-title {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #fff;
+    margin: 0;
+}
+
+/* Badge de estado */
+.fase-section-badge {
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+}
+
+.fase-badge-en_progreso  { color: #00e676; background: rgba(0,230,118,0.08); border-color: rgba(0,230,118,0.3); }
+.fase-badge-completada   { color: #00d2ff; background: rgba(0,210,255,0.08); border-color: rgba(0,210,255,0.3); }
+.fase-badge-historial    { color: #9d00ff; background: rgba(157,0,255,0.08); border-color: rgba(157,0,255,0.3); }
+.fase-badge-sin_iniciar  { color: #555;    background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); }
+
+/* Scoreboard de fase (6 columnas) */
+.scoreboard-fase {
+    grid-template-columns: repeat(6, 1fr) !important;
+}
+@media (max-width: 1100px) { .scoreboard-fase { grid-template-columns: repeat(3, 1fr) !important; } }
+@media (max-width: 640px)  { .scoreboard-fase { grid-template-columns: repeat(2, 1fr) !important; } }
+
+/* Coming soon */
+.fase-coming-soon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 80px 20px;
+    background: rgba(255,255,255,0.01);
+    border: 1px dashed rgba(255,255,255,0.08);
+    border-radius: 20px;
+    margin-top: 10px;
+}
+
+.fase-coming-soon h3 {
+    color: #fff;
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+}
+
+.fase-coming-soon p {
+    color: #555;
+    font-size: 0.85rem;
+    max-width: 380px;
+    line-height: 1.7;
+}
+
+/* ══════════════════════════════════════════════════
+   HERO CARD V2 — Personalizada
+   ══════════════════════════════════════════════════ */
+.user-hero-card-v2 {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(0,210,255,0.07) 0%, rgba(157,0,255,0.07) 50%, rgba(0,230,118,0.05) 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 22px;
+    padding: 28px 30px 24px;
+    margin-bottom: 20px;
+}
+
+/* Glow decorativo de fondo */
+.hero-v2-glow {
+    position: absolute;
+    top: -60px;
+    right: -60px;
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,210,255,0.15) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+/* Fila superior */
+.hero-v2-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 22px;
+}
+
+.hero-v2-greeting {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.hero-v2-hi {
+    font-size: 1rem;
+    color: #888;
+    font-weight: 400;
+}
+
+.hero-v2-name {
+    font-size: 1.65rem;
+    font-weight: 800;
+    background: linear-gradient(90deg, #00d2ff, #9d00ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.5px;
+}
+
+/* Badge de fase */
+.hero-v2-fase-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 16px;
+    border-radius: 50px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.10);
+    font-size: 0.80rem;
+    font-weight: 700;
+    color: #ccc;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.hero-v2-fase-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #00d2ff;
+    box-shadow: 0 0 8px rgba(0,210,255,0.6);
+    animation: heroDotPulse 2s ease-in-out infinite;
+}
+
+@keyframes heroDotPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.6; transform: scale(0.85); }
+}
+
+/* Sección de progreso de nodos */
+.hero-v2-progress-wrap {
+    margin-bottom: 22px;
+}
+
+.hero-v2-progress-label {
+    display: block;
+    font-size: 0.68rem;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin-bottom: 14px;
+}
+
+.hero-v2-nodes {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.hero-v2-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.hero-v2-node-circle {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+    border: 2px solid rgba(255,255,255,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.80rem;
+    font-weight: 800;
+    color: #444;
+    transition: all 0.4s ease;
+}
+
+.hero-v2-node-circle.node-done {
+    background: rgba(0,210,255,0.12);
+    border-color: #00d2ff;
+    color: #00d2ff;
+    box-shadow: 0 0 14px rgba(0,210,255,0.3);
+}
+
+.hero-v2-node-circle.node-active {
+    background: rgba(157,0,255,0.14);
+    border-color: #9d00ff;
+    color: #bf6fff;
+    box-shadow: 0 0 16px rgba(157,0,255,0.4);
+    animation: heroNodePulse 1.8s ease-in-out infinite;
+}
+
+@keyframes heroNodePulse {
+    0%, 100% { box-shadow: 0 0 16px rgba(157,0,255,0.4); }
+    50%       { box-shadow: 0 0 28px rgba(157,0,255,0.65); }
+}
+
+.hero-v2-node-txt {
+    font-size: 0.65rem;
+    color: #444;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Líneas de track entre nodos */
+.hero-v2-track {
+    flex: 1;
+    height: 3px;
+    background: rgba(255,255,255,0.07);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0 6px;
+    margin-bottom: 20px; /* compensa el texto del nodo */
+}
+
+.hero-v2-track-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #00d2ff, #9d00ff);
+    border-radius: 4px;
+    transition: width 0.6s ease;
+}
+
+.hero-v2-track-fill.filled {
+    width: 100%;
+}
+
+/* Pills de stats */
+.hero-v2-pills {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.hero-v2-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 10px 16px;
+    flex: 1;
+    min-width: 100px;
+}
+
+.hero-v2-pill-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.hero-v2-pill-val {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.1;
+}
+
+.hero-v2-pill-lbl {
+    font-size: 0.62rem;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-top: 2px;
+}
+
+@media (max-width: 700px) {
+    .user-hero-card-v2 { padding: 20px 18px; }
+    .hero-v2-name      { font-size: 1.35rem; }
+    .hero-v2-pills     { flex-direction: column; gap: 8px; }
+    .hero-v2-pill      { flex: unset; }
 }

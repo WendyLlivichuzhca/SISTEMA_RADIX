@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RADIX — Análisis de Mejoras Funcionales y de Diseño</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#030305;color:#e0e0e0;font-family:'Outfit',sans-serif;padding:0 0 80px}
+
+  .hero{padding:60px 20px 30px;text-align:center;background:radial-gradient(circle at 50% -20%,#1a0a2e,transparent)}
+  .hero h1{font-size:2.2rem;font-weight:800;margin-bottom:10px;background:linear-gradient(90deg,#00d2ff,#9d00ff,#00e676);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .hero p{color:#666;font-size:.9rem;margin-top:6px}
+
+  .container{max-width:940px;margin:0 auto;padding:0 20px}
+
+  /* ── SCOREBOARD ── */
+  .scoreboard{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:940px;margin:30px auto;padding:0 20px}
+  .sb{background:#12121a;border:1px solid #2a2a3a;border-radius:14px;padding:18px;text-align:center}
+  .sb .num{font-size:2.2rem;font-weight:800;margin:6px 0 4px}
+  .sb .lbl{font-size:.68rem;color:#555;text-transform:uppercase;letter-spacing:1px}
+  .sb-green{border-color:#00e67633}.sb-green .num{color:#00e676}
+  .sb-yellow{border-color:#ff980033}.sb-yellow .num{color:#ff9800}
+  .sb-red{border-color:#ff444433}.sb-red .num{color:#ff4444}
+  .sb-blue{border-color:#00d2ff33}.sb-blue .num{color:#00d2ff}
+
+  /* ── SECTION TITLE ── */
+  .sec-title{font-size:.75rem;text-transform:uppercase;letter-spacing:2px;color:#9d00ff;border-left:3px solid #9d00ff;padding-left:10px;margin:40px 0 18px}
+
+  /* ── CARD BASE ── */
+  .card{background:#12121a;border:1px solid #2a2a3a;border-radius:14px;padding:22px 24px;margin-bottom:14px;position:relative}
+  .card::before{content:attr(data-tag);position:absolute;top:-11px;left:18px;font-size:.64rem;font-weight:700;letter-spacing:1px;padding:3px 11px;border-radius:20px}
+
+  /* Status card variants */
+  .card-ok{border-color:#00e67633}.card-ok::before{background:#00e676;color:#000}
+  .card-ok .card-header{border-left:3px solid #00e676}
+
+  .card-partial{border-color:#ff980033}.card-partial::before{background:#ff9800;color:#000}
+  .card-partial .card-header{border-left:3px solid #ff9800}
+
+  .card-pending{border-color:#ff444433}.card-pending::before{background:#ff4444;color:#fff}
+  .card-pending .card-header{border-left:3px solid #ff4444}
+
+  .card-header{padding-left:12px;margin-bottom:14px;padding-top:4px}
+  .card-header h3{font-size:.95rem;color:#fff;margin-bottom:4px}
+  .card-header .badge{font-size:.7rem;font-weight:700;padding:2px 9px;border-radius:20px;display:inline-block}
+  .badge-ok{background:rgba(0,230,118,.15);color:#00e676;border:1px solid #00e67644}
+  .badge-partial{background:rgba(255,152,0,.15);color:#ff9800;border:1px solid #ff980044}
+  .badge-pending{background:rgba(255,68,68,.15);color:#ff4444;border:1px solid #ff444444}
+
+  .card p{font-size:.82rem;color:#999;line-height:1.65;margin-bottom:8px}
+  .card p:last-child{margin-bottom:0}
+
+  /* Evidence & Task boxes */
+  .ev-box{background:#0a0a12;border:1px solid #1e1e2e;border-radius:8px;padding:12px 14px;margin:10px 0;font-size:.78rem}
+  .ev-box .ev-label{font-size:.65rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;display:block}
+  .ev-ok .ev-label{color:#00e676}
+  .ev-warn .ev-label{color:#ff9800}
+  .ev-miss .ev-label{color:#ff4444}
+  .ev-box code{color:#cc44ff;background:#06060f;padding:2px 5px;border-radius:3px;font-size:.76rem}
+  .ev-box ul{padding-left:16px;margin-top:4px}
+  .ev-box li{margin-bottom:3px;color:#888}
+  .ev-box li span.ok{color:#00e676}
+  .ev-box li span.no{color:#ff4444}
+  .ev-box li span.warn{color:#ff9800}
+
+  /* Task list (what's missing) */
+  .tasks{margin-top:12px}
+  .task-item{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #1a1a28}
+  .task-item:last-child{border-bottom:none}
+  .task-icon{font-size:1rem;flex-shrink:0;margin-top:1px}
+  .task-item p{font-size:.8rem;color:#aaa;margin:0}
+  .task-item strong{color:#fff}
+
+  /* Summary table */
+  table{width:100%;border-collapse:collapse;font-size:.82rem;margin:8px 0}
+  th{padding:10px 14px;background:#1a1a2e;color:#9d00ff;border:1px solid #2a2a3a;text-align:left;font-size:.74rem;text-transform:uppercase;letter-spacing:.5px}
+  td{padding:9px 14px;border:1px solid #1e1e2e;color:#bbb;vertical-align:middle}
+  tr:nth-child(even) td{background:#0f0f1a}
+  tr:nth-child(odd) td{background:#111118}
+  .td-name{color:#fff;font-weight:600}
+  .td-ok{color:#00e676;font-weight:700}
+  .td-warn{color:#ff9800;font-weight:700}
+  .td-no{color:#ff4444;font-weight:700}
+  .td-file{color:#00d2ff;font-family:monospace;font-size:.74rem}
+
+  /* Priority plan */
+  .plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .plan-item{background:#12121a;border:1px solid #2a2a3a;border-radius:10px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start}
+  .plan-num{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.82rem;flex-shrink:0}
+  .pr1 .plan-num{background:#00e676;color:#000}
+  .pr2 .plan-num{background:#ff9800;color:#000}
+  .pr3 .plan-num{background:#ff4444;color:#fff}
+  .plan-item h4{font-size:.84rem;color:#fff;margin-bottom:3px}
+  .plan-item p{font-size:.76rem;color:#666;line-height:1.5;margin:0}
+  .plan-est{font-size:.7rem;color:#9d00ff;margin-top:4px;display:block}
+
+  /* Final banner */
+  .final{background:linear-gradient(135deg,#0a1a0a,#1a0a2e);border:2px solid #9d00ff44;border-radius:16px;padding:30px;text-align:center;margin:40px 0}
+  .final h2{font-size:1.5rem;color:#fff;margin:10px 0}
+  .final p{color:#888;font-size:.85rem;max-width:620px;margin:0 auto}
+
+  /* Progress bar visual */
+  .progress-visual{background:#0d0d18;border-radius:10px;padding:16px;margin:10px 0}
+  .prog-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .prog-row:last-child{margin-bottom:0}
+  .prog-label{font-size:.72rem;color:#666;width:160px;flex-shrink:0}
+  .prog-bar-bg{flex:1;height:6px;background:#1a1a28;border-radius:10px;overflow:hidden}
+  .prog-bar{height:100%;border-radius:10px}
+  .prog-pct{font-size:.72rem;color:#888;width:32px;text-align:right;flex-shrink:0}
+
+  /* File chip */
+  .f{font-family:monospace;font-size:.74rem;color:#00d2ff;background:#0a1a2e;padding:2px 7px;border-radius:4px}
+
+  @media(max-width:660px){
+    .scoreboard{grid-template-columns:1fr 1fr}
+    .plan-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>RADIX — Análisis de Mejoras</h1>
+  <p>Funcionales (8) + Diseño (5) · Basado en revisión directa del código fuente · Marzo 2026</p>
+</div>
+
+<!-- ── SCOREBOARD ── -->
+<div class="scoreboard">
+  <div class="sb sb-green"><div class="lbl">Completadas</div><div class="num">3</div><div class="lbl">Funcionales</div></div>
+  <div class="sb sb-yellow"><div class="lbl">Parciales</div><div class="num">2</div><div class="lbl">Falta terminar</div></div>
+  <div class="sb sb-red"><div class="lbl">Pendientes</div><div class="num">3</div><div class="lbl">No implementadas</div></div>
+  <div class="sb sb-blue"><div class="lbl">Diseño</div><div class="num">0/5</div><div class="lbl">Ninguna completa</div></div>
+</div>
+
+<div class="container">
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="sec-title">📊 Resumen ejecutivo — Estado de las 8 mejoras funcionales</div>
+
+<table>
+  <thead>
+    <tr><th>#</th><th>Mejora</th><th>Estado</th><th>Archivo clave</th><th>Qué falta</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>#1</td>
+      <td class="td-name">MetaMask / SafePal real</td>
+      <td class="td-ok">✅ COMPLETA</td>
+      <td class="td-file">app.js</td>
+      <td>Nada — superó el requisito</td>
+    </tr>
+    <tr>
+      <td>#2</td>
+      <td class="td-name">Notificaciones en tiempo real</td>
+      <td class="td-no">❌ PENDIENTE</td>
+      <td class="td-file">dashboard.js</td>
+      <td>Polling / WebSocket + toasts</td>
+    </tr>
+    <tr>
+      <td>#3</td>
+      <td class="td-name">Árbol visual de red</td>
+      <td class="td-no">❌ PENDIENTE</td>
+      <td class="td-file">dashboard.js / dashboard.php</td>
+      <td>D3.js o vis.js, endpoint de árbol</td>
+    </tr>
+    <tr>
+      <td>#4</td>
+      <td class="td-name">Página de retiro / historial</td>
+      <td class="td-warn">⚠️ PARCIAL</td>
+      <td class="td-file">dashboard.php / radix_api/</td>
+      <td>Endpoint retiro + página historial</td>
+    </tr>
+    <tr>
+      <td>#5</td>
+      <td class="td-name">Link de referido visible y copiable</td>
+      <td class="td-ok">✅ COMPLETA</td>
+      <td class="td-file">dashboard.php / dashboard.js</td>
+      <td>Solo falta contador X/3</td>
+    </tr>
+    <tr>
+      <td>#6</td>
+      <td class="td-name">Telegram / Email al completar tablero</td>
+      <td class="td-no">❌ PENDIENTE</td>
+      <td class="td-file">matrix_logic.php</td>
+      <td>Telegram Bot API o SMTP</td>
+    </tr>
+    <tr>
+      <td>#7</td>
+      <td class="td-name">1 clon por tablero + contador visual</td>
+      <td class="td-warn">⚠️ PARCIAL</td>
+      <td class="td-file">clon_logic.php / dashboard.js</td>
+      <td>Bug corregido · falta widget Slots</td>
+    </tr>
+    <tr>
+      <td>#8</td>
+      <td class="td-name">Panel admin completo</td>
+      <td class="td-warn">⚠️ PARCIAL</td>
+      <td class="td-file">admin_dashboard.php</td>
+      <td>Gráfica + dist. tableros + btn clon</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="sec-title">🟢 Mejoras funcionales — Análisis detallado</div>
+
+<!-- MEJORA #1 -->
+<div class="card card-ok" data-tag="MEJORA #1">
+  <div class="card-header">
+    <h3>Integrar MetaMask / SafePal real con ethers.js</h3>
+    <span class="badge badge-ok">✅ COMPLETADA — Y SUPERADA</span>
+  </div>
+  <p>Esta mejora no solo está implementada — está implementada mejor de lo que pedía el reporte. Tu <span class="f">app.js</span> hace todo el flujo profesional completo.</p>
+
+  <div class="ev-box ev-ok">
+    <span class="ev-label">✅ Evidencia en app.js</span>
+    <ul>
+      <li><span class="ok">✓</span> <code>window.ethereum.request({ method: 'eth_requestAccounts' })</code> — wallet real, no prompt()</li>
+      <li><span class="ok">✓</span> Detección de SafePal (<code>isSafePal</code>) con MetaMask como respaldo</li>
+      <li><span class="ok">✓</span> Firma de nonce con <code>personal_sign</code> → prueba de ownership de wallet</li>
+      <li><span class="ok">✓</span> Cambio automático a red BSC (<code>wallet_switchEthereumChain</code>) e incluso agregar BSC si no existe</li>
+      <li><span class="ok">✓</span> Sesión PHP (<code>session_login.php</code>) → wallet NUNCA va en la URL del dashboard</li>
+      <li><span class="ok">✓</span> Listener de <code>accountsChanged</code> para cerrar sesión si cambia wallet</li>
+      <li><span class="ok">✓</span> Listener de <code>chainChanged</code> para avisar si cambia de red</li>
+    </ul>
+  </div>
+  <p style="color:#00e676;font-size:.8rem;">→ Esta mejora está al 100%. No requiere ninguna acción adicional.</p>
+</div>
+
+<!-- MEJORA #2 -->
+<div class="card card-pending" data-tag="MEJORA #2">
+  <div class="card-header">
+    <h3>Sistema de notificaciones en tiempo real</h3>
+    <span class="badge badge-pending">❌ NO IMPLEMENTADA</span>
+  </div>
+  <p>El dashboard carga los datos una sola vez al abrir la página y no vuelve a actualizarse solo. Si un referido se registra mientras el usuario tiene el dashboard abierto, no se entera hasta que recargue manualmente.</p>
+
+  <div class="ev-box ev-miss">
+    <span class="ev-label">❌ Lo que falta en dashboard.js</span>
+    <ul>
+      <li><span class="no">✗</span> No hay <code>setInterval()</code> ni polling cada 30 segundos</li>
+      <li><span class="no">✗</span> No hay <code>WebSocket</code> ni <code>EventSource</code> (SSE)</li>
+      <li><span class="no">✗</span> No existen toasts / notificaciones visuales de ningún tipo</li>
+      <li><span class="no">✗</span> Función <code>loadDashboard()</code> se llama solo en <code>window.onload</code>, una sola vez</li>
+    </ul>
+  </div>
+
+  <div class="tasks">
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Archivo a modificar:</strong> <span class="f">assets/js/dashboard.js</span> — agregar <code>setInterval(checkNotifications, 30000)</code> al final del archivo.</p></div>
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Archivo a crear:</strong> <span class="f">radix_api/check_events.php</span> — endpoint que retorna si hubo nuevos referidos, avances de tablero o clones activados desde el último check.</p></div>
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>UI a agregar:</strong> Toast de notificación flotante (elemento <code>&lt;div&gt;</code> con animación CSS) que aparece cuando el endpoint retorna eventos nuevos.</p></div>
+  </div>
+</div>
+
+<!-- MEJORA #3 -->
+<div class="card card-pending" data-tag="MEJORA #3">
+  <div class="card-header">
+    <h3>Visualización del árbol de red en el dashboard</h3>
+    <span class="badge badge-pending">❌ NO IMPLEMENTADA</span>
+  </div>
+  <p>Los referidos se muestran como una tabla HTML plana de 3 columnas: nick, estado de pago y tablero. No hay representación visual de la estructura de red.</p>
+
+  <div class="ev-box ev-miss">
+    <span class="ev-label">❌ Lo que falta</span>
+    <ul>
+      <li><span class="no">✗</span> No se importa D3.js, vis.js ni ninguna librería de grafos</li>
+      <li><span class="no">✗</span> No hay endpoint que devuelva la estructura jerárquica del árbol</li>
+      <li><span class="no">✗</span> La sección "Mi Equipo Real" es solo una tabla básica en <span class="f">dashboard.js</span> (líneas 66–88)</li>
+    </ul>
+  </div>
+
+  <div class="tasks">
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Archivo a crear:</strong> <span class="f">radix_api/network_tree.php</span> — retorna el árbol de referidos en formato JSON jerárquico (id, nickname, nivel, tablero, hijos[]).</p></div>
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Dashboard:</strong> Agregar un <code>&lt;div id="network-tree"&gt;</code> en <span class="f">dashboard.php</span> e importar D3.js desde CDN. El árbol puede ser simple: círculo → 3 hijos.</p></div>
+    <div class="task-item"><div class="task-icon">💡</div><p><strong>Alternativa más fácil:</strong> vis.js Network tiene menos curva de aprendizaje que D3.js si la estructura es pequeña (máx. 3 niveles).</p></div>
+  </div>
+</div>
+
+<!-- MEJORA #4 -->
+<div class="card card-partial" data-tag="MEJORA #4">
+  <div class="card-header">
+    <h3>Página de retiro / historial de ganancias</h3>
+    <span class="badge badge-partial">⚠️ PARCIAL — 20% hecho</span>
+  </div>
+  <p>El dashboard muestra el saldo neto calculado ($40) correctamente. Hay un botón "RETIRAR SALDO" visible en el header. Pero ese botón no hace absolutamente nada — no tiene <code>onclick</code>, no hay endpoint de retiro, y no existe la página de historial de movimientos.</p>
+
+  <div class="ev-box ev-warn">
+    <span class="ev-label">⚠️ Estado actual en el código</span>
+    <ul>
+      <li><span class="ok">✓</span> Widget de saldo en <span class="f">dashboard.php</span> muestra el monto calculado</li>
+      <li><span class="ok">✓</span> <span class="f">user_data.php</span> ya calcula correctamente bruto - deducciones = ganancia neta</li>
+      <li><span class="no">✗</span> Botón <code>.btn-withdraw</code> (línea 45 de dashboard.php) no tiene <code>onclick</code> ni función JS conectada</li>
+      <li><span class="no">✗</span> No existe <span class="f">radix_api/solicitar_retiro.php</span> ni endpoint similar</li>
+      <li><span class="no">✗</span> No hay página ni sección con historial de movimientos (A=$10, B=$20, C=$40)</li>
+    </ul>
+  </div>
+
+  <div class="tasks">
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Crear:</strong> <span class="f">radix_api/solicitar_retiro.php</span> — inserta un registro en una tabla <code>retiros</code> con estado "pendiente" y la wallet del usuario.</p></div>
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Conectar el botón:</strong> En <span class="f">dashboard.js</span> agregar función <code>solicitarRetiro()</code> y ligarla al botón existente.</p></div>
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Historial:</strong> <span class="f">user_data.php</span> ya tiene la consulta de pagos — solo falta agregar el desglose por tipo (ganancia_tablero A/B/C) al JSON de respuesta y renderizarlo como tabla en el dashboard.</p></div>
+  </div>
+</div>
+
+<!-- MEJORA #5 -->
+<div class="card card-ok" data-tag="MEJORA #5">
+  <div class="card-header">
+    <h3>Link de referido propio más visible y copiable</h3>
+    <span class="badge badge-ok">✅ COMPLETADA — Falta detalle menor</span>
+  </div>
+  <p>El link de referido está implementado correctamente: input visible, botón COPIAR funcional, y la URL se construye dinámicamente con la wallet del usuario. Falta únicamente el contador visual "Referidos invitados: X/3".</p>
+
+  <div class="ev-box ev-ok">
+    <span class="ev-label">✅ Evidencia en el código</span>
+    <ul>
+      <li><span class="ok">✓</span> <span class="f">dashboard.php</span> línea 115: input <code>id="ref-link-input"</code> con botón "COPIAR" al lado</li>
+      <li><span class="ok">✓</span> <span class="f">dashboard.js</span> línea 91: link construido como <code>${origin}/index.html?ref=${wallet}</code></li>
+      <li><span class="ok">✓</span> Función <code>copyRefLink()</code> usa <code>navigator.clipboard.writeText()</code> — API moderna</li>
+      <li><span class="warn">⚠</span> Falta el contador "Referidos invitados: X/3" junto al link (la data ya viene en <code>data.referidos.length</code>)</li>
+    </ul>
+  </div>
+
+  <div class="tasks">
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Tarea mínima:</strong> En <span class="f">dashboard.js</span> después de línea 92, agregar un <code>&lt;small&gt;</code> que muestre <code>Referidos invitados: ${data.referidos.length}/3</code>. 2 líneas de código.</p></div>
+  </div>
+</div>
+
+<!-- MEJORA #6 -->
+<div class="card card-pending" data-tag="MEJORA #6">
+  <div class="card-header">
+    <h3>Email / Telegram al completar tablero</h3>
+    <span class="badge badge-pending">❌ NO IMPLEMENTADA</span>
+  </div>
+  <p>Cuando <span class="f">matrix_logic.php</span> completa un tablero y avanza al usuario, no hay ninguna llamada a un sistema de notificación externo. El usuario solo se entera si recarga el dashboard.</p>
+
+  <div class="ev-box ev-miss">
+    <span class="ev-label">❌ Lo que falta en matrix_logic.php</span>
+    <ul>
+      <li><span class="no">✗</span> No hay ninguna función <code>sendTelegramNotification()</code> ni <code>sendEmail()</code></li>
+      <li><span class="no">✗</span> No hay tabla <code>telegram_chats</code> ni campo de email/chat_id en la tabla usuarios</li>
+      <li><span class="no">✗</span> Después del <code>$pdo->commit()</code> en línea 101 no hay ningún hook de notificación</li>
+    </ul>
+  </div>
+
+  <div class="tasks">
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Crear:</strong> <span class="f">radix_api/notificaciones.php</span> con función <code>enviarTelegram($chat_id, $mensaje)</code> usando la Bot API de Telegram (solo un <code>file_get_contents</code> a la URL del bot, sin librerías externas).</p></div>
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Modificar BD:</strong> Agregar columna <code>telegram_chat_id</code> en tabla <code>usuarios</code>. El usuario lo vincula una vez desde el dashboard.</p></div>
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Enganchar:</strong> En <span class="f">matrix_logic.php</span>, después del commit, llamar <code>enviarTelegram($chat_id, "¡Completaste Tablero $tipo_actual! Tus $monto_usuario USDT están listos.")</code></p></div>
+    <div class="task-item"><div class="task-icon">💡</div><p><strong>Es la más fácil de las pendientes:</strong> Telegram Bot no requiere servidor propio, no tiene SMTP, y la API es gratis. Un bot básico se crea en 5 minutos con @BotFather.</p></div>
+  </div>
+</div>
+
+<!-- MEJORA #7 -->
+<div class="card card-partial" data-tag="MEJORA #7">
+  <div class="card-header">
+    <h3>Límite de 1 clon por tablero + contador visual "Slots"</h3>
+    <span class="badge badge-partial">⚠️ PARCIAL — Bug corregido, UI pendiente</span>
+  </div>
+  <p>El bug de los 2 clones está corregido a nivel de lógica de base de datos. La UI del dashboard todavía no muestra el contador de slots que ayuda al usuario a saber exactamente qué le falta.</p>
+
+  <div class="ev-box ev-ok">
+    <span class="ev-label">✅ Bug corregido en clon_logic.php (líneas 33–37)</span>
+    <ul>
+      <li><span class="ok">✓</span> La consulta verifica que el usuario tenga <strong>0 clones</strong> desde que inició su tablero actual (<code>r2.fecha_union >= tp.fecha_inicio</code>)</li>
+      <li><span class="ok">✓</span> La condición <code>AND (...) = 0</code> bloquea completamente la creación de un segundo clon en el mismo tablero</li>
+    </ul>
+  </div>
+
+  <div class="ev-box ev-warn">
+    <span class="ev-label">⚠️ Lo que falta en el dashboard</span>
+    <ul>
+      <li><span class="no">✗</span> No existe ningún elemento HTML con el contador "Slots: X/3 (Y real, Z clon)"</li>
+      <li><span class="no">✗</span> <span class="f">user_data.php</span> devuelve <code>clones_count</code> pero no el desglose "reales vs clones" en el tablero actual</li>
+      <li><span class="no">✗</span> El widget "Agentes IA Activos" solo muestra el número total, sin contexto de qué slot ocupa</li>
+    </ul>
+  </div>
+
+  <div class="tasks">
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Modificar user_data.php:</strong> Agregar al JSON la cuenta de referidos reales y clones en el tablero actual para poder construir el contador.</p></div>
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Modificar dashboard.js:</strong> Con los datos anteriores, renderizar debajo del link de referido algo como: <code>Slots: 2/3 · 1 real pagado · 1 agente IA · 1 pendiente</code></p></div>
+  </div>
+</div>
+
+<!-- MEJORA #8 -->
+<div class="card card-partial" data-tag="MEJORA #8">
+  <div class="card-header">
+    <h3>Panel admin más completo con control de Tesorería</h3>
+    <span class="badge badge-partial">⚠️ PARCIAL — 55% hecho</span>
+  </div>
+  <p>El panel admin tiene una base sólida con las métricas principales. Faltan las funcionalidades avanzadas de control operativo.</p>
+
+  <div class="ev-box ev-ok">
+    <span class="ev-label">✅ Lo que ya tiene admin_dashboard.php</span>
+    <ul>
+      <li><span class="ok">✓</span> Balance de Tesorería en tiempo real vía <code>admin_global_stats.php</code></li>
+      <li><span class="ok">✓</span> Pool Fase 1 acumulado</li>
+      <li><span class="ok">✓</span> Conteo de usuarios reales vs clones con barra de ratio</li>
+      <li><span class="ok">✓</span> Ganancias del Master (ID #1)</li>
+      <li><span class="ok">✓</span> Tabla de actividad reciente (logs de auditoría)</li>
+      <li><span class="ok">✓</span> Acceso protegido con <code>requireAdminSession()</code></li>
+    </ul>
+  </div>
+
+  <div class="ev-box ev-miss">
+    <span class="ev-label">❌ Lo que falta según la mejora #8</span>
+    <ul>
+      <li><span class="no">✗</span> Historial detallado de clones activados (qué clon, para qué usuario, cuándo, cuánto costó)</li>
+      <li><span class="no">✗</span> Distribución de usuarios por tablero actual (cuántos en A, B, C y ciclo 2+)</li>
+      <li><span class="no">✗</span> Gráfica de crecimiento diario (usuarios nuevos por día)</li>
+      <li><span class="no">✗</span> Botón manual "Activar Clon" de emergencia — el botón "Retirar Mis Ganancias" existente es solo visual, sin función</li>
+    </ul>
+  </div>
+
+  <div class="tasks">
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>admin_global_stats.php:</strong> Agregar 3 queries: distribución por tablero, historial de clones (JOIN tesoreria_movimientos), y registros por día de los últimos 7 días.</p></div>
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Botón "Activar Clon":</strong> Conectar a un endpoint <span class="f">radix_api/admin_activar_clon.php</span> (protegido con sesión admin) que llame directamente a <code>intentarActivarClon($pdo)</code>.</p></div>
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Gráfica:</strong> Chart.js desde CDN (gratis, sin instalación) + la data de registros por día. Es la parte más visual y fácil de agregar.</p></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="sec-title">🎨 Mejoras de diseño — Análisis detallado</div>
+
+<table>
+  <thead>
+    <tr><th>#</th><th>Mejora</th><th>Estado</th><th>Qué falta</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>#1</td>
+      <td class="td-name">Landing page con ROI visual A→B→C</td>
+      <td class="td-no">❌ PENDIENTE</td>
+      <td>El index.html tiene texto pero ningún diagrama animado</td>
+    </tr>
+    <tr>
+      <td>#2</td>
+      <td class="td-name">Mobile responsive en dashboard</td>
+      <td class="td-no">❌ PENDIENTE</td>
+      <td>0 media queries en dashboard.css (300 líneas de CSS, ninguna con @media)</td>
+    </tr>
+    <tr>
+      <td>#3</td>
+      <td class="td-name">Animación de progreso más visual</td>
+      <td class="td-warn">⚠️ BÁSICA</td>
+      <td>Barra existe pero sin pulso en nodo activo ni confetti al completar</td>
+    </tr>
+    <tr>
+      <td>#4</td>
+      <td class="td-name">Estados de referidos más claros</td>
+      <td class="td-warn">⚠️ BÁSICA</td>
+      <td>Colores COMPLETADO/PENDIENTE pero sin avatares ni chips visuales</td>
+    </tr>
+    <tr>
+      <td>#5</td>
+      <td class="td-name">Onboarding para nuevos usuarios</td>
+      <td class="td-no">❌ PENDIENTE</td>
+      <td>El usuario entra directo al dashboard sin ninguna guía de pasos</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- DISEÑO #1 -->
+<div class="card card-pending" data-tag="DISEÑO #1">
+  <div class="card-header">
+    <h3>Landing page — Sección ROI visual A → B → C</h3>
+    <span class="badge badge-pending">❌ NO IMPLEMENTADA</span>
+  </div>
+  <p>El <span class="f">index.html</span> tiene secciones de texto "Cómo funciona" y "Beneficios" pero no hay ningún diagrama visual animado que muestre la progresión A→B→C y cómo $10 se convierte en $150. Esto es lo que más convierte visitantes en registros.</p>
+  <div class="tasks">
+    <div class="task-item"><div class="task-icon">🔧</div><p>Agregar una sección con 3 cajas animadas (CSS puro): Tablero A ($10 entrada → $10 ganancia + $10 tesorería), Tablero B (→ $20 ganancia), Tablero C (→ $40 neto final). Flechas entre ellas con animación de flujo.</p></div>
+  </div>
+</div>
+
+<!-- DISEÑO #2 -->
+<div class="card card-pending" data-tag="DISEÑO #2">
+  <div class="card-header">
+    <h3>Dashboard Mobile Responsive</h3>
+    <span class="badge badge-pending">❌ NO IMPLEMENTADA — Crítica para usuarios reales</span>
+  </div>
+  <p>El archivo <span class="f">dashboard.css</span> tiene 300 líneas y <strong style="color:#ff4444">cero media queries</strong>. El sidebar de 280px fijo + el grid de 3 columnas se verá completamente roto en cualquier celular. La mayoría de tus usuarios probablemente entrarán desde móvil.</p>
+  <div class="ev-box ev-miss">
+    <span class="ev-label">❌ Problemas concretos sin responsive</span>
+    <ul>
+      <li><span class="no">✗</span> <code>aside { width: 280px }</code> fijo — en móvil ocupa la mitad de la pantalla</li>
+      <li><span class="no">✗</span> Widgets en <code>grid-template-columns: repeat(3, 1fr)</code> — se apilan deformes</li>
+      <li><span class="no">✗</span> Layout <code>display: flex</code> del body — sidebar + main horizontales, ilegible en 375px</li>
+    </ul>
+  </div>
+  <div class="tasks">
+    <div class="task-item"><div class="task-icon">🔧</div><p><strong>Solución mínima (1 bloque de CSS):</strong> Agregar al final de <span class="f">dashboard.css</span> un <code>@media(max-width: 768px)</code> que oculte el sidebar (o lo convierta en hamburger), cambie el grid a 1 columna, y ajuste paddings. Unas 20–30 líneas.</p></div>
+  </div>
+</div>
+
+<!-- DISEÑO #3 -->
+<div class="card card-partial" data-tag="DISEÑO #3">
+  <div class="card-header">
+    <h3>Animación de progreso de tablero más visual</h3>
+    <span class="badge badge-partial">⚠️ BÁSICA — Funciona pero es simple</span>
+  </div>
+  <p>La barra de progreso A→B→C existe y funciona correctamente (los nodos cambian de clase según el nivel). Falta que el nodo activo pulse visualmente y que haya alguna celebración al completar un tablero.</p>
+  <div class="tasks">
+    <div class="task-item"><div class="task-icon">🔧</div><p>Agregar en <span class="f">dashboard.css</span> un <code>@keyframes pulse</code> aplicado a <code>.phase-node.current</code>. Es un efecto de 5 líneas que hace una diferencia enorme.</p></div>
+    <div class="task-item"><div class="task-icon">🔧</div><p>Para el contador de referidos en cada nodo: <span class="f">dashboard.js</span> ya tiene <code>data.referidos.length</code>, solo hay que renderizarlo dentro del nodo activo.</p></div>
+  </div>
+</div>
+
+<!-- DISEÑO #4 -->
+<div class="card card-partial" data-tag="DISEÑO #4">
+  <div class="card-header">
+    <h3>Estados de referidos más claros visualmente</h3>
+    <span class="badge badge-partial">⚠️ BÁSICA — Colores sí, avatares no</span>
+  </div>
+  <p>La tabla de equipo muestra COMPLETADO en verde y PENDIENTE en rojo, lo cual es correcto. Faltan los avatares de colores (verde=real activo, azul=clon, gris=pendiente) y el chip visual de estado.</p>
+  <div class="tasks">
+    <div class="task-item"><div class="task-icon">🔧</div><p>En <span class="f">dashboard.js</span> (líneas 74–82), reemplazar la fila de tabla por un card con un círculo de avatar de color generado con las iniciales del nickname y el tipo de usuario.</p></div>
+  </div>
+</div>
+
+<!-- DISEÑO #5 -->
+<div class="card card-pending" data-tag="DISEÑO #5">
+  <div class="card-header">
+    <h3>Onboarding para nuevos usuarios</h3>
+    <span class="badge badge-pending">❌ NO IMPLEMENTADA</span>
+  </div>
+  <p>Cuando un usuario se registra y accede al dashboard por primera vez, no recibe ninguna explicación. Ve widgets con $0 y una tabla vacía sin contexto. Un overlay de bienvenida de 3 pasos reduciría mucho la confusión y el abandono.</p>
+  <div class="tasks">
+    <div class="task-item"><div class="task-icon">🔧</div><p>Detectar en <span class="f">dashboard.js</span> si <code>data.referidos.length === 0</code> y <code>data.earnings === 0</code> (usuario nuevo) para mostrar un modal de bienvenida con los 3 pasos: ¿Qué es RADIX? → Cómo funciona → Tu primer paso (copiar tu link).</p></div>
+    <div class="task-item"><div class="task-icon">🔧</div><p>Guardar en <code>localStorage</code> un flag <code>radix_onboarded = true</code> para que el modal no aparezca más después de cerrarlo.</p></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="sec-title">🎯 Plan de acción priorizado — ¿Por dónde empezar?</div>
+
+<div class="progress-visual">
+  <div class="prog-row"><div class="prog-label">Funcionales completadas</div><div class="prog-bar-bg"><div class="prog-bar" style="width:37.5%;background:#00e676"></div></div><div class="prog-pct" style="color:#00e676">3/8</div></div>
+  <div class="prog-row"><div class="prog-label">Funcionales parciales</div><div class="prog-bar-bg"><div class="prog-bar" style="width:25%;background:#ff9800"></div></div><div class="prog-pct" style="color:#ff9800">2/8</div></div>
+  <div class="prog-row"><div class="prog-label">Funcionales pendientes</div><div class="prog-bar-bg"><div class="prog-bar" style="width:37.5%;background:#ff4444"></div></div><div class="prog-pct" style="color:#ff4444">3/8</div></div>
+  <div class="prog-row"><div class="prog-label">Diseño implementado</div><div class="prog-bar-bg"><div class="prog-bar" style="width:0%;background:#9d00ff"></div></div><div class="prog-pct" style="color:#ff4444">0/5</div></div>
+</div>
+
+<div class="plan-grid" style="margin-top:16px">
+
+  <div class="plan-item pr1">
+    <div class="plan-num">1</div>
+    <div>
+      <h4>Mobile Responsive (Diseño #2)</h4>
+      <p>La más crítica y la más rápida. 20–30 líneas de CSS en dashboard.css. Sin esto, la mayoría de usuarios reales tendrán una experiencia rota.</p>
+      <span class="plan-est">⏱ ~1 hora</span>
+    </div>
+  </div>
+
+  <div class="plan-item pr1">
+    <div class="plan-num">2</div>
+    <div>
+      <h4>Terminar Retiro de Ganancias (Funcional #4)</h4>
+      <p>El botón ya existe. Solo falta crear solicitar_retiro.php y conectarlo. Agrega el historial de movimientos A/B/C como tabla en el mismo dashboard.</p>
+      <span class="plan-est">⏱ ~2–3 horas</span>
+    </div>
+  </div>
+
+  <div class="plan-item pr1">
+    <div class="plan-num">3</div>
+    <div>
+      <h4>Contador Slots (Funcional #7) + Referidos X/3 (Funcional #5)</h4>
+      <p>Ambos son cambios mínimos en dashboard.js con datos que ya vienen del servidor. Se hacen en una sola sesión de trabajo.</p>
+      <span class="plan-est">⏱ ~30 min</span>
+    </div>
+  </div>
+
+  <div class="plan-item pr1">
+    <div class="plan-num">4</div>
+    <div>
+      <h4>Telegram Notifications (Funcional #6)</h4>
+      <p>La más fácil de las pendientes grandes. Bot de Telegram gratis, sin configuración de servidor. Máximo impacto en retención de usuarios.</p>
+      <span class="plan-est">⏱ ~2 horas</span>
+    </div>
+  </div>
+
+  <div class="plan-item pr2">
+    <div class="plan-num">5</div>
+    <div>
+      <h4>Terminar Panel Admin (Funcional #8)</h4>
+      <p>Agregar distribución por tableros, gráfica con Chart.js y botón manual de activar clon. Los datos ya existen en la BD.</p>
+      <span class="plan-est">⏱ ~3–4 horas</span>
+    </div>
+  </div>
+
+  <div class="plan-item pr2">
+    <div class="plan-num">6</div>
+    <div>
+      <h4>Animaciones + Estados referidos (Diseño #3 y #4)</h4>
+      <p>Pulse en nodo activo (@keyframes) y avatares de colores en la tabla de equipo. Cambios visuales que hacen la app sentirse más premium.</p>
+      <span class="plan-est">⏱ ~1–2 horas</span>
+    </div>
+  </div>
+
+  <div class="plan-item pr2">
+    <div class="plan-num">7</div>
+    <div>
+      <h4>ROI Visual en Landing (Diseño #1)</h4>
+      <p>Sección nueva en index.html con el diagrama A→B→C animado en CSS. Aumenta drásticamente la conversión de visitas a registros.</p>
+      <span class="plan-est">⏱ ~2–3 horas</span>
+    </div>
+  </div>
+
+  <div class="plan-item pr3">
+    <div class="plan-num">8</div>
+    <div>
+      <h4>Notificaciones en tiempo real (Funcional #2)</h4>
+      <p>Polling cada 30s + toasts. Requiere crear check_events.php. Buena mejora de UX pero no es bloqueante.</p>
+      <span class="plan-est">⏱ ~3 horas</span>
+    </div>
+  </div>
+
+  <div class="plan-item pr3">
+    <div class="plan-num">9</div>
+    <div>
+      <h4>Árbol visual D3.js (Funcional #3)</h4>
+      <p>La más compleja de todas. Requiere endpoint nuevo + librería + renderizado. Dejarla para cuando todo lo demás esté listo.</p>
+      <span class="plan-est">⏱ ~5–8 horas</span>
+    </div>
+  </div>
+
+  <div class="plan-item pr3">
+    <div class="plan-num">10</div>
+    <div>
+      <h4>Onboarding de bienvenida (Diseño #5)</h4>
+      <p>Modal de 3 pasos para usuarios nuevos. Útil para reducir abandono pero se puede agregar después del lanzamiento.</p>
+      <span class="plan-est">⏱ ~2 horas</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── FINAL ── -->
+<div class="final">
+  <p style="color:#9d00ff;font-weight:700;text-transform:uppercase;letter-spacing:2px;font-size:.74rem">Veredicto</p>
+  <h2>La base está muy sólida — el MVP funcional está a ~10 horas de trabajo</h2>
+  <p style="margin-top:12px">Las 3 mejoras completadas (MetaMask real, link de referido, fix del clon) son las más importantes para seguridad. Las más urgentes ahora son <strong style="color:#ff9800">responsive mobile</strong> y <strong style="color:#ff9800">terminar el botón de retiro</strong> — sin esas dos, los usuarios reales tendrán una experiencia incompleta.</p>
+</div>
+
+<div style="text-align:center;color:#2a2a3a;font-size:.72rem;padding:20px 0">
+  Análisis generado por Claude · RADIX App · Marzo 2026
+</div>
+
+</div>
+</body>
+</html>

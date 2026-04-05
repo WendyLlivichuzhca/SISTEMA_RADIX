@@ -56,7 +56,7 @@ function intentarActivarClon($pdo)
                   AND r2.ciclo = tp.ciclo
                   AND u2.tipo_usuario = 'clon'
                   AND r2.fecha_union >= tp.fecha_inicio
-              ) = 0
+              ) < 3
             ORDER BY tp.fase_numero DESC, tp.id ASC
             LIMIT 1
         ");
@@ -141,6 +141,129 @@ function intentarActivarClon($pdo)
             $pdo->rollBack();
         }
         error_log("RADIX clon_logic ERROR: " . $e->getMessage());
+        return "Error: " . $e->getMessage();
+    }
+}
+
+/**
+ * Intenta activar un clon para un usuario específico (elegido por el master).
+ * El usuario debe tener un tablero en progreso y posiciones libres.
+ */
+function intentarActivarClonParaUsuario($pdo, $nickname)
+{
+    try {
+        // 1. Buscar el usuario por nickname
+        $stmt = $pdo->prepare("SELECT id, nickname, tipo_usuario FROM usuarios WHERE nickname = ? LIMIT 1");
+        $stmt->execute([$nickname]);
+        $usuario = $stmt->fetch();
+
+        if (!$usuario) {
+            return "No se encontró ningún usuario con el nickname \"$nickname\".";
+        }
+
+        if (in_array($usuario['tipo_usuario'], ['master', 'sistema', 'clon', 'inactivo'])) {
+            return "No se puede asignar un clon a un usuario de tipo \"{$usuario['tipo_usuario']}\".";
+        }
+
+        $usuario_id = (int)$usuario['id'];
+
+        // 2. Buscar tablero activo del usuario con posiciones libres
+        $stmt = $pdo->prepare("
+            SELECT tp.fase_numero, tp.tablero_tipo, tp.ciclo,
+                   (SELECT COUNT(*) FROM referidos r WHERE r.id_padre = ? AND r.fase_numero = tp.fase_numero AND r.ciclo = tp.ciclo) AS cuenta_referidos
+            FROM tableros_progreso tp
+            WHERE tp.usuario_id = ?
+              AND tp.estado = 'en_progreso'
+            ORDER BY tp.fase_numero DESC
+            LIMIT 1
+        ");
+        $stmt->execute([$usuario_id, $usuario_id]);
+        $beneficiario = $stmt->fetch();
+
+        if (!$beneficiario) {
+            return "El usuario \"{$nickname}\" no tiene ningún tablero activo en progreso.";
+        }
+
+        if ((int)$beneficiario['cuenta_referidos'] >= 3) {
+            return "El tablero del usuario \"{$nickname}\" ya tiene las 3 posiciones llenas.";
+        }
+
+        // 3. Verificar límite de clones (máx 3 por tablero/ciclo)
+        $fase_actual  = (int)$beneficiario['fase_numero'];
+        $tablero_tipo = $beneficiario['tablero_tipo'];
+        $ciclo_actual = (int)$beneficiario['ciclo'];
+
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM referidos r2
+            JOIN usuarios u2 ON r2.id_hijo = u2.id
+            WHERE r2.id_padre = ?
+              AND r2.fase_numero = ?
+              AND r2.ciclo = ?
+              AND u2.tipo_usuario = 'clon'
+        ");
+        $stmt->execute([$usuario_id, $fase_actual, $ciclo_actual]);
+        $clones_actuales = (int)$stmt->fetchColumn();
+
+        if ($clones_actuales >= 3) {
+            return "El usuario \"{$nickname}\" ya tiene 3 Agentes IA en este tablero. No se pueden agregar más.";
+        }
+
+        // 4. Verificar fondos de tesorería
+        $stmt = $pdo->prepare("SELECT valor_decimal FROM sistema_config WHERE clave = 'tesoreria_balance'");
+        $stmt->execute();
+        $balance = (float)($stmt->fetch()['valor_decimal'] ?? 0);
+
+        $cfg_tablero = getPhaseBoardConfig($pdo, $fase_actual, $tablero_tipo);
+        $monto_clon  = (float)($cfg_tablero['clon_monto'] ?? 0);
+
+        if ($balance < $monto_clon) {
+            return "Fondos insuficientes. Tesorería tiene \$$balance pero el clon necesita \$$monto_clon.";
+        }
+
+        // 5. Crear el clon
+        $clon_wallet   = "0xCLON_" . bin2hex(random_bytes(4));
+        $clon_nickname = "RADIX_CLON_" . rand(1000, 9999);
+
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare("INSERT INTO usuarios (wallet_address, nickname, tipo_usuario, patrocinador_id) VALUES (?, ?, 'clon', ?)");
+        $stmt->execute([$clon_wallet, $clon_nickname, $usuario_id]);
+        $clon_id = (int)$pdo->lastInsertId();
+
+        $stmt = $pdo->prepare("INSERT INTO tableros_progreso (usuario_id, fase_numero, tablero_tipo, ciclo, estado) VALUES (?, ?, ?, ?, 'en_progreso')");
+        $stmt->execute([$clon_id, $fase_actual, $tablero_tipo, $ciclo_actual]);
+
+        $posicion = ((int)$beneficiario['cuenta_referidos']) + 1;
+        $stmt = $pdo->prepare("INSERT INTO referidos (id_padre, id_hijo, fase_numero, posicion, nivel_en_red, ciclo) VALUES (?, ?, ?, ?, 1, ?)");
+        $stmt->execute([$usuario_id, $clon_id, $fase_actual, $posicion, $ciclo_actual]);
+
+        $stmt = $pdo->prepare("
+            INSERT INTO pagos (id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, propietario_flujo,
+                wallet_destino_real, tablero_tipo, ciclo, origen_fondos, monto, monto_pagado, tipo, estado, fecha_confirmacion)
+            VALUES (?, ?, ?, ?, 'sistema', NULL, ?, ?, 'tesoreria', ?, ?, 'regalo', 'completado', NOW())
+        ");
+        $stmt->execute([$clon_id, $usuario_id, $usuario_id, $fase_actual, $tablero_tipo, $ciclo_actual, $monto_clon, $monto_clon]);
+
+        $stmt = $pdo->prepare("UPDATE sistema_config SET valor_decimal = valor_decimal - ? WHERE clave = 'tesoreria_balance'");
+        $stmt->execute([$monto_clon]);
+
+        $stmt = $pdo->prepare("INSERT INTO tesoreria_movimientos (tipo, monto, motivo, relacion_id) VALUES ('egreso', ?, ?, ?)");
+        $stmt->execute([$monto_clon, "Clon $clon_nickname asignado manualmente a \"$nickname\" (ID $usuario_id) en Fase $fase_actual", $usuario_id]);
+
+        $stmt = $pdo->prepare("INSERT INTO auditoria_logs (usuario_id, fase_numero, accion, tabla_afectada, detalles) VALUES (?, ?, 'ACTIVACION_CLON_MANUAL', 'usuarios', ?)");
+        $stmt->execute([$usuario_id, $fase_actual, "Clon $clon_nickname generado por master para \"$nickname\" con \$$monto_clon de tesorería."]);
+
+        $pdo->commit();
+
+        notificarClonActivado($pdo, $usuario_id, (float)$monto_clon);
+        verificarAvanceTablero($usuario_id, $pdo, false, $fase_actual, $ciclo_actual);
+        verificarCadenaAscendente($usuario_id, $pdo, 10, $fase_actual, $ciclo_actual);
+
+        return "Clon $clon_nickname activado para \"$nickname\" en Fase $fase_actual Tablero $tablero_tipo (\$$monto_clon USDT).";
+
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log("RADIX clon_logic intentarActivarClonParaUsuario ERROR: " . $e->getMessage());
         return "Error: " . $e->getMessage();
     }
 }

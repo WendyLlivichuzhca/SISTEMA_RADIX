@@ -116,7 +116,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         $stmt = $pdo->prepare("SELECT valor_decimal FROM sistema_config WHERE clave = 'tesoreria_balance'");
         $stmt->execute();
-        $tesoreria = (float)($stmt->fetch()['valor_decimal'] ?? 0);
+        $resTeso = $stmt->fetch();
+        $tesoreria = (float)($resTeso['valor_decimal'] ?? 0);
 
         $stmt = $pdo->query("SELECT COUNT(*) FROM usuarios WHERE tipo_usuario = 'real'");
         $totalReales = (int)($stmt->fetchColumn() ?: 0);
@@ -193,7 +194,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
               AND propietario_flujo = 'usuario'
               AND estado = 'completado'
         ");
-        $masterEarnings = (float)($stmt->fetch()['total'] ?? 0);
+        $resME = $stmt->fetch();
+        $masterEarnings = (float)($resME['total'] ?? 0);
 
         $stmt = $pdo->query("
             SELECT COALESCE(SUM(monto_pagado), 0) AS total
@@ -202,14 +204,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
               AND estado = 'completado'
               AND origen_fondos = 'externo'
         ");
-        $totalBlockchain = (float)($stmt->fetch()['total'] ?? 0);
+        $resTB = $stmt->fetch();
+        $totalBlockchain = (float)($resTB['total'] ?? 0);
 
         $stmt = $pdo->query("
             SELECT COALESCE(SUM(credito_saldo), 0) AS total
             FROM usuarios
             WHERE tipo_usuario = 'real'
         ");
-        $creditosExcedente = (float)($stmt->fetch()['total'] ?? 0);
+        $resCred = $stmt->fetch();
+        $creditosExcedente = (float)($resCred['total'] ?? 0);
 
         $pendienteDistribuir = max(
             0,
@@ -367,19 +371,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ");
         $crecimientoDiario = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        $hasNombreAudit = userColumnExists($pdo, 'nombre_completo');
+        $nombreExprAudit = $hasNombreAudit
+            ? "COALESCE(NULLIF(u.nombre_completo,''), u.nickname)"
+            : "u.nickname";
         $stmt = $pdo->query("
-            SELECT al.accion, al.detalles, al.fecha, al.fase_numero, u.nickname
+            SELECT al.id, al.accion, al.detalles, al.fecha, al.fase_numero,
+                   al.tabla_afectada,
+                   u.nickname, ({$nombreExprAudit}) AS nombre_completo,
+                   u.tipo_usuario
             FROM auditoria_logs al
             LEFT JOIN usuarios u ON al.usuario_id = u.id
             ORDER BY al.id DESC
-            LIMIT 20
+            LIMIT 50
         ");
         $logsActividad = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $retirosPendientes = [];
         try {
+            $hasNombre = userColumnExists($pdo, 'nombre_completo');
+            $nombreExpr = $hasNombre
+                ? "COALESCE(NULLIF(u.nombre_completo,''), u.nickname)"
+                : "u.nickname";
+            $hasFaseRetiro = false;
+            try {
+                $chk = $pdo->query("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='retiros' AND COLUMN_NAME='fase_numero'");
+                $hasFaseRetiro = (int)$chk->fetchColumn() > 0;
+            } catch (\Exception $e2) {}
+            $faseSelect = $hasFaseRetiro ? ', r.fase_numero' : ', 0 AS fase_numero';
             $stmt = $pdo->query("
-                SELECT r.id, r.monto, r.wallet_destino, r.fecha_solicitud, u.nickname
+                SELECT r.id, r.monto, r.wallet_destino, r.fecha_solicitud,
+                       u.nickname, ({$nombreExpr}) AS nombre_completo
+                       {$faseSelect}
                 FROM retiros r
                 JOIN usuarios u ON r.usuario_id = u.id
                 WHERE r.estado = 'pendiente'
@@ -417,7 +440,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                       AND p.tipo = 'regalo'
                     ORDER BY p.id DESC
                     LIMIT 1
-                ) AS pago_estado
+                ) AS pago_estado,
+                (
+                    SELECT tp.tablero_tipo
+                    FROM tableros_progreso tp
+                    WHERE tp.usuario_id = u.id
+                      AND tp.estado = 'en_progreso'
+                    ORDER BY tp.fase_numero DESC,
+                             FIELD(tp.tablero_tipo, 'C', 'B', 'A')
+                    LIMIT 1
+                ) AS tablero_actual,
+                (
+                    SELECT tp.fase_numero
+                    FROM tableros_progreso tp
+                    WHERE tp.usuario_id = u.id
+                      AND tp.estado = 'en_progreso'
+                    ORDER BY tp.fase_numero DESC,
+                             FIELD(tp.tablero_tipo, 'C', 'B', 'A')
+                    LIMIT 1
+                ) AS fase_actual,
+                (
+                    SELECT COUNT(*)
+                    FROM tableros_progreso tp2
+                    WHERE tp2.usuario_id = u.id
+                      AND tp2.estado = 'completado'
+                ) AS ciclos_completados
             FROM usuarios u
             WHERE u.tipo_usuario IN ('real', 'master')
             ORDER BY u.id ASC
@@ -431,6 +478,335 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             LIMIT 30
         ");
         $tesoreriaMovimientos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        /* ── VISTA GLOBAL: DESGLOSE POR FASE ──────────────────── */
+        $PHASE_BOARD_COSTS = [
+            0 => ['A' => 10,    'B' => 20,    'C' => 40],
+            1 => ['A' => 100,   'B' => 200,   'C' => 400],
+            2 => ['A' => 1000,  'B' => 2000,  'C' => 4000],
+            3 => ['A' => 10000, 'B' => 20000, 'C' => 40000],
+        ];
+
+        $faseBreakdown = [];
+        try {
+            $fasesConf = $pdo->query(
+                "SELECT fase_numero, nombre, activa FROM fases_config ORDER BY fase_numero ASC"
+            )->fetchAll(PDO::FETCH_ASSOC);
+
+            $distData = $pdo->query("
+                SELECT fase_numero, tablero_tipo,
+                       COALESCE(SUM(monto),0) AS total_dist,
+                       COUNT(DISTINCT COALESCE(beneficiario_usuario_id, id_receptor)) AS personas
+                FROM pagos
+                WHERE tipo='ganancia_tablero' AND estado='completado'
+                GROUP BY fase_numero, tablero_tipo
+            ")->fetchAll(PDO::FETCH_ASSOC);
+
+            $activeUsers = $pdo->query("
+                SELECT tp.fase_numero, tp.tablero_tipo, u.tipo_usuario, COUNT(*) AS cnt
+                FROM tableros_progreso tp
+                JOIN usuarios u ON u.id = tp.usuario_id
+                WHERE tp.estado = 'en_progreso'
+                GROUP BY tp.fase_numero, tp.tablero_tipo, u.tipo_usuario
+            ")->fetchAll(PDO::FETCH_ASSOC);
+
+            $completionData = $pdo->query("
+                SELECT fase_numero, COUNT(*) AS total
+                FROM auditoria_logs
+                WHERE accion LIKE 'CICLO_COMPLETADO%'
+                GROUP BY fase_numero
+            ")->fetchAll(PDO::FETCH_ASSOC);
+
+            $saltoData = $pdo->query("
+                SELECT
+                    CASE tipo
+                        WHEN 'salto_fase_1' THEN 1
+                        WHEN 'salto_fase_2' THEN 2
+                        WHEN 'salto_fase_3' THEN 3
+                    END AS fase_destino,
+                    COALESCE(SUM(monto),0) AS pool
+                FROM pagos
+                WHERE tipo IN ('salto_fase_1','salto_fase_2','salto_fase_3')
+                  AND estado = 'completado'
+                GROUP BY tipo
+            ")->fetchAll(PDO::FETCH_ASSOC);
+
+            // Retiros procesados por fase (defensivo si no existe columna)
+            $retirosData = [];
+            try {
+                $retirosData = $pdo->query("
+                    SELECT fase_numero, COUNT(*) AS cnt, COALESCE(SUM(monto),0) AS total
+                    FROM retiros WHERE estado='procesado'
+                    GROUP BY fase_numero
+                ")->fetchAll(PDO::FETCH_ASSOC);
+            } catch (\Exception $e2) {}
+
+            // Build lookup maps
+            $dMap = [];
+            foreach ($distData as $r) {
+                $dMap[$r['fase_numero']][$r['tablero_tipo']] = [
+                    'total'   => (float)$r['total_dist'],
+                    'personas'=> (int)$r['personas'],
+                ];
+            }
+            $aMap = [];
+            foreach ($activeUsers as $r) {
+                $aMap[$r['fase_numero']][$r['tablero_tipo']][$r['tipo_usuario']] = (int)$r['cnt'];
+            }
+            $cMap = [];
+            foreach ($completionData as $r) $cMap[(int)$r['fase_numero']] = (int)$r['total'];
+            $sMap = [];
+            foreach ($saltoData as $r) $sMap[(int)$r['fase_destino']] = (float)$r['pool'];
+            $rMap = [];
+            foreach ($retirosData as $r) {
+                $rMap[(int)$r['fase_numero']] = ['cnt' => (int)$r['cnt'], 'total' => (float)$r['total']];
+            }
+
+            $gd = function($fn, $tb) use ($dMap) { return $dMap[$fn][$tb] ?? ['total'=>0,'personas'=>0]; };
+            $ga = function($fn, $tb, $tipo) use ($aMap) { return $aMap[$fn][$tb][$tipo] ?? 0; };
+
+            foreach ($fasesConf as $fc) {
+                $fn = (int)$fc['fase_numero'];
+                $costs = $PHASE_BOARD_COSTS[$fn] ?? ['A'=>0,'B'=>0,'C'=>0];
+                $dA = $gd($fn,'A'); $dB = $gd($fn,'B'); $dC = $gd($fn,'C');
+                $rA = $ga($fn,'A','real'); $cA = $ga($fn,'A','clon');
+                $rB = $ga($fn,'B','real'); $cB = $ga($fn,'B','clon');
+                $rC = $ga($fn,'C','real'); $cC = $ga($fn,'C','clon');
+                $faseBreakdown[] = [
+                    'fase_numero'        => $fn,
+                    'nombre'             => $fc['nombre'],
+                    'activa'             => (bool)$fc['activa'],
+                    'costo_a'            => $costs['A'],
+                    'costo_b'            => $costs['B'],
+                    'costo_c'            => $costs['C'],
+                    'dist_a'             => $dA['total'],  'personas_a' => $dA['personas'],
+                    'dist_b'             => $dB['total'],  'personas_b' => $dB['personas'],
+                    'dist_c'             => $dC['total'],  'personas_c' => $dC['personas'],
+                    'dist_total'         => $dA['total'] + $dB['total'] + $dC['total'],
+                    'reales_en_a'        => $rA, 'clones_en_a' => $cA,
+                    'reales_en_b'        => $rB, 'clones_en_b' => $cB,
+                    'reales_en_c'        => $rC, 'clones_en_c' => $cC,
+                    'total_reales_red'   => $rA + $rB + $rC,
+                    'total_clones_red'   => $cA + $cB + $cC,
+                    'ciclos_completados' => $cMap[$fn] ?? 0,
+                    'pool_entrada'       => $sMap[$fn] ?? 0,
+                    'retiros_cnt'        => $rMap[$fn]['cnt'] ?? 0,
+                    'retiros_total'      => $rMap[$fn]['total'] ?? 0,
+                ];
+            }
+        } catch (\Exception $e) {
+            error_log('RADIX fase_breakdown ERROR: ' . $e->getMessage());
+        }
+        /* ── FIN DESGLOSE POR FASE ─────────────────────────────── */
+
+        /* ── EMBUDO DE USUARIOS ─────────────────────────────────── */
+        $embudo = ['registrados'=>$totalReales,'pagaron'=>0,'en_a'=>0,'en_b'=>0,'en_c'=>0,'completaron'=>0,'retiraron'=>0];
+        try {
+            $embudo['pagaron'] = (int)$pdo->query("
+                SELECT COUNT(DISTINCT id_emisor) FROM pagos
+                WHERE tipo='regalo' AND estado='completado'
+            ")->fetchColumn();
+
+            $boardRows = $pdo->query("
+                SELECT tp.tablero_tipo, COUNT(DISTINCT tp.usuario_id) AS cnt
+                FROM tableros_progreso tp
+                JOIN usuarios u ON u.id=tp.usuario_id
+                WHERE tp.estado='en_progreso' AND u.tipo_usuario='real'
+                GROUP BY tp.tablero_tipo
+            ")->fetchAll(PDO::FETCH_KEY_PAIR);
+            $embudo['en_a'] = (int)($boardRows['A'] ?? 0);
+            $embudo['en_b'] = (int)($boardRows['B'] ?? 0);
+            $embudo['en_c'] = (int)($boardRows['C'] ?? 0);
+
+            $embudo['completaron'] = (int)$pdo->query("
+                SELECT COUNT(DISTINCT usuario_id) FROM auditoria_logs
+                WHERE accion LIKE 'CICLO_COMPLETADO%'
+            ")->fetchColumn();
+
+            try {
+                $embudo['retiraron'] = (int)$pdo->query("
+                    SELECT COUNT(DISTINCT usuario_id) FROM retiros WHERE estado='procesado'
+                ")->fetchColumn();
+            } catch (\Exception $e2) {}
+        } catch (\Exception $e) {}
+        /* ── FIN EMBUDO ─────────────────────────────────────────── */
+
+        /* ── VELOCIDAD SEMANAL ──────────────────────────────────── */
+        $velocidad = ['usuarios_esta_semana'=>0,'usuarios_semana_pasada'=>0,'dist_esta_semana'=>0,'dist_semana_pasada'=>0,'tableros_completados_semana'=>0];
+        try {
+            $resV1 = $pdo->query("
+                SELECT
+                    COUNT(CASE WHEN fecha_registro >= DATE_SUB(NOW(), INTERVAL 7 DAY)  THEN 1 END) AS esta_semana,
+                    COUNT(CASE WHEN fecha_registro >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+                               AND fecha_registro <  DATE_SUB(NOW(), INTERVAL 7 DAY)   THEN 1 END) AS semana_pasada
+                FROM usuarios WHERE tipo_usuario='real'
+            ")->fetch(PDO::FETCH_ASSOC);
+            $velocidad['usuarios_esta_semana']    = (int)($resV1['esta_semana'] ?? 0);
+            $velocidad['usuarios_semana_pasada']  = (int)($resV1['semana_pasada'] ?? 0);
+
+            $resV2 = $pdo->query("
+                SELECT
+                    COALESCE(SUM(CASE WHEN fecha_pago >= DATE_SUB(NOW(), INTERVAL 7 DAY)  THEN monto ELSE 0 END),0) AS esta_semana,
+                    COALESCE(SUM(CASE WHEN fecha_pago >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+                               AND fecha_pago <  DATE_SUB(NOW(), INTERVAL 7 DAY) THEN monto ELSE 0 END),0) AS semana_pasada
+                FROM pagos WHERE tipo='ganancia_tablero' AND estado='completado'
+            ")->fetch(PDO::FETCH_ASSOC);
+            $velocidad['dist_esta_semana']   = (float)($resV2['esta_semana']   ?? 0);
+            $velocidad['dist_semana_pasada'] = (float)($resV2['semana_pasada'] ?? 0);
+
+            $velocidad['tableros_completados_semana'] = (int)$pdo->query("
+                SELECT COUNT(*) FROM auditoria_logs
+                WHERE accion LIKE 'CICLO_COMPLETADO%'
+                  AND fecha >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            ")->fetchColumn();
+        } catch (\Exception $e) {}
+        /* ── FIN VELOCIDAD ──────────────────────────────────────── */
+
+        /* ── SALUD FINANCIERA Y ALERTAS ────────────────────────── */
+        $totalRetirosPendientesMonto = 0.0;
+        $countRetirosPendientes      = 0;
+        $retiroMasAntiguoFecha       = null;
+        $countPagosSinConfirmar      = 0;
+        $pagoMasAntiguoFecha         = null;
+
+        // Sumar montos de retiros pendientes y detectar el más antiguo
+        foreach ($retirosPendientes as $rp) {
+            $totalRetirosPendientesMonto += (float)($rp['monto'] ?? 0);
+            $countRetirosPendientes++;
+            if (!$retiroMasAntiguoFecha || strtotime($rp['fecha_solicitud']) < strtotime($retiroMasAntiguoFecha)) {
+                $retiroMasAntiguoFecha = $rp['fecha_solicitud'];
+            }
+        }
+
+        // Pagos pendientes de usuarios reales sin confirmar (regalo pendiente)
+        try {
+            $stmtPP = $pdo->query("
+                SELECT COUNT(*) AS cnt, MIN(p.fecha_pago) AS mas_antiguo
+                FROM pagos p
+                JOIN usuarios u ON u.id = p.id_emisor
+                WHERE p.tipo = 'regalo'
+                  AND p.estado = 'pendiente'
+                  AND u.tipo_usuario = 'real'
+            ");
+            $ppRow = $stmtPP->fetch(PDO::FETCH_ASSOC);
+            $countPagosSinConfirmar = (int)($ppRow['cnt'] ?? 0);
+            $pagoMasAntiguoFecha    = $ppRow['mas_antiguo'] ?? null;
+        } catch (\Exception $e) {}
+
+        // Construir alertas automáticas
+        $alertas = [];
+        $COSTO_CLON = 10.0; // costo de activar un agente IA
+
+        // 🔴 CRÍTICO: La tesorería no alcanza para pagar los retiros pendientes
+        if ($countRetirosPendientes > 0 && $totalRetirosPendientesMonto > $tesoreria) {
+            $deficit = $totalRetirosPendientesMonto - $tesoreria;
+            $alertas[] = [
+                'nivel'    => 'critico',
+                'icono'    => '🚨',
+                'titulo'   => 'Tesorería insuficiente para retiros',
+                'mensaje'  => "Hay $" . number_format($totalRetirosPendientesMonto, 2) . " en retiros pendientes pero solo $" . number_format($tesoreria, 2) . " en tesorería. Déficit: $" . number_format($deficit, 2) . ". NO apruebes retiros hasta recibir fondos.",
+                'accion'   => 'Ver Pagos Pendientes',
+                'seccion'  => 'retiros',
+            ];
+        }
+
+        // 🔴 CRÍTICO: Retiros esperando más de 48h
+        if ($retiroMasAntiguoFecha) {
+            $horasEspera = (time() - strtotime($retiroMasAntiguoFecha)) / 3600;
+            if ($horasEspera > 48) {
+                $alertas[] = [
+                    'nivel'    => 'critico',
+                    'icono'    => '⏰',
+                    'titulo'   => 'Retiro lleva más de 48h sin procesar',
+                    'mensaje'  => "El retiro más antiguo está esperando " . round($horasEspera) . " horas. Los usuarios deben recibir su pago a tiempo.",
+                    'accion'   => 'Aprobar Retiros',
+                    'seccion'  => 'retiros',
+                ];
+            }
+        }
+
+        // 🟡 ADVERTENCIA: Retiros pendientes esperando más de 24h
+        if ($retiroMasAntiguoFecha) {
+            $horasEspera = (time() - strtotime($retiroMasAntiguoFecha)) / 3600;
+            if ($horasEspera > 24 && $horasEspera <= 48) {
+                $alertas[] = [
+                    'nivel'    => 'advertencia',
+                    'icono'    => '⚠️',
+                    'titulo'   => 'Retiros pendientes hace más de 24h',
+                    'mensaje'  => "Hay $countRetirosPendientes retiro(s) esperando más de 24 horas. Por $" . number_format($totalRetirosPendientesMonto, 2) . " total.",
+                    'accion'   => 'Revisar Retiros',
+                    'seccion'  => 'retiros',
+                ];
+            }
+        }
+
+        // 🟡 ADVERTENCIA: Hay retiros pendientes (normal — solo informativo)
+        if ($countRetirosPendientes > 0 && !array_filter($alertas, function($a) { return $a['seccion'] === 'retiros' && $a['nivel'] === 'critico'; })) {
+            $alertas[] = [
+                'nivel'    => 'info',
+                'icono'    => '💸',
+                'titulo'   => "$countRetirosPendientes retiro(s) esperando aprobación",
+                'mensaje'  => "Total a pagar: $" . number_format($totalRetirosPendientesMonto, 2) . " USDT. Tesorería disponible: $" . number_format($tesoreria, 2) . " ✓",
+                'accion'   => 'Aprobar Ahora',
+                'seccion'  => 'retiros',
+            ];
+        }
+
+        // 🟡 ADVERTENCIA: Pagos sin confirmar de usuarios reales más de 24h
+        if ($countPagosSinConfirmar > 0 && $pagoMasAntiguoFecha) {
+            $horasSinConf = (time() - strtotime($pagoMasAntiguoFecha)) / 3600;
+            $alertas[] = [
+                'nivel'    => $horasSinConf > 24 ? 'advertencia' : 'info',
+                'icono'    => '📥',
+                'titulo'   => "$countPagosSinConfirmar pago(s) de entrada sin confirmar",
+                'mensaje'  => "Hay pagos en blockchain aún con estado 'pendiente'. El más antiguo lleva " . round($horasSinConf) . "h. Revisa el verificador de pagos.",
+                'accion'   => 'Revisar Pagos',
+                'seccion'  => 'usuarios',
+            ];
+        }
+
+        // 🟡 ADVERTENCIA: Tesorería baja (menos de 2 clones de reserva)
+        if ($tesoreria < ($COSTO_CLON * 2) && $countRetirosPendientes === 0) {
+            $alertas[] = [
+                'nivel'    => 'advertencia',
+                'icono'    => '🏦',
+                'titulo'   => 'Tesorería baja',
+                'mensaje'  => "Solo quedan $" . number_format($tesoreria, 2) . " en tesorería. Considera no activar más Agentes IA hasta que ingrese nuevo capital.",
+                'accion'   => 'Ver Tesorería',
+                'seccion'  => 'ledger',
+            ];
+        }
+
+        // 🟡 ADVERTENCIA: Hay dinero sin distribuir
+        if ($pendienteDistribuir > 5.0) {
+            $alertas[] = [
+                'nivel'    => 'advertencia',
+                'icono'    => '🔄',
+                'titulo'   => "$" . number_format($pendienteDistribuir, 2) . " pendiente de distribuir",
+                'mensaje'  => "Hay fondos recibidos en blockchain que aún no se han distribuido en la red. Verifica que el motor de pagos esté funcionando.",
+                'accion'   => 'Ver Libro Mayor',
+                'seccion'  => 'ledger',
+            ];
+        }
+
+        // 🟢 Todo OK si no hay alertas críticas ni advertencias
+        $hayProblemas = !empty(array_filter($alertas, function($a) { return in_array($a['nivel'], ['critico','advertencia']); }));
+        $saludNivel = $hayProblemas
+            ? (array_filter($alertas, function($a) { return $a['nivel'] === 'critico'; }) ? 'critico' : 'advertencia')
+            : 'ok';
+
+        $saludFinanciera = [
+            'nivel'                         => $saludNivel,
+            'tesoreria'                     => $tesoreria,
+            'total_retiros_pendientes'      => $totalRetirosPendientesMonto,
+            'count_retiros_pendientes'      => $countRetirosPendientes,
+            'count_pagos_sin_confirmar'     => $countPagosSinConfirmar,
+            'retiro_mas_antiguo'            => $retiroMasAntiguoFecha,
+            'pago_sin_conf_mas_antiguo'     => $pagoMasAntiguoFecha,
+            'pendiente_distribuir'          => $pendienteDistribuir,
+            'solvente'                      => ($tesoreria >= $totalRetirosPendientesMonto),
+        ];
+        /* ── FIN SALUD FINANCIERA ──────────────────────────────── */
 
         sendResponse([
             'success' => true,
@@ -483,6 +859,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'lista_usuarios' => $listaUsuarios,
             'retiros_pendientes' => $retirosPendientes,
             'tesoreria_movimientos' => $tesoreriaMovimientos,
+            'salud_financiera' => $saludFinanciera,
+            'alertas'          => $alertas,
+            'fase_breakdown'   => $faseBreakdown,
+            'embudo'           => $embudo,
+            'velocidad'        => $velocidad,
         ]);
     } catch (PDOException $e) {
         error_log('RADIX admin_global_stats ERROR: ' . $e->getMessage());

@@ -56,6 +56,7 @@ try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS retiros (
         id INT AUTO_INCREMENT PRIMARY KEY,
         usuario_id INT NOT NULL,
+        fase_numero TINYINT NOT NULL DEFAULT 0,
         monto DECIMAL(10,2) NOT NULL,
         wallet_destino VARCHAR(100) NOT NULL,
         estado ENUM('pendiente','procesado','rechazado') DEFAULT 'pendiente',
@@ -64,6 +65,11 @@ try {
         notas TEXT,
         FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
     )");
+
+    // 7b. Agregar fase_numero a retiros si la tabla ya existia sin esa columna
+    try {
+        $pdo->exec("ALTER TABLE retiros ADD COLUMN fase_numero TINYINT NOT NULL DEFAULT 0 AFTER usuario_id");
+    } catch (Exception $e) { /* Columna ya existe — ignorar */ }
 
     // 8. Ajustar llaves unicas de referidos para fases paralelas.
     //    Un usuario puede existir bajo el mismo padre en fases distintas.

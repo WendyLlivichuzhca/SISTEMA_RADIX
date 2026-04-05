@@ -22,9 +22,10 @@ if ($retiro_id <= 0 || !in_array($accion, ['aprobar', 'rechazar'])) {
 }
 
 try {
-    // 1. Obtener retiro
+    // 1. Obtener retiro (incluye fase_numero para validación por fase)
     $stmt = $pdo->prepare("
-        SELECT r.id, r.usuario_id, r.monto, r.wallet_destino, r.estado, u.nickname, u.telegram_chat_id
+        SELECT r.id, r.usuario_id, r.monto, r.wallet_destino, r.estado, r.fase_numero,
+               u.nickname, u.telegram_chat_id
         FROM retiros r
         JOIN usuarios u ON r.usuario_id = u.id
         WHERE r.id = ? AND r.estado = 'pendiente'
@@ -37,15 +38,26 @@ try {
         sendResponse(['error' => 'Retiro no encontrado o ya fue procesado.'], 404);
     }
 
-    // 1b. Solo al APROBAR: verificar que el usuario aún tiene saldo suficiente
+    // 1b. Solo al APROBAR: verificar que el usuario aún tiene saldo suficiente en ESA FASE
     //     Protege contra el caso de 2 retiros pendientes aprobados por el admin.
     if ($accion === 'aprobar') {
-        $uid = $retiro['usuario_id'];
+        $uid        = $retiro['usuario_id'];
+        $fase_num   = (int)($retiro['fase_numero'] ?? 0);
 
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE id_receptor=? AND propietario_flujo='usuario' AND estado='completado' AND tipo='ganancia_tablero'");
-        $stmt->execute([$uid]);
+        // Ganancias brutas de esta fase específica
+        $stmt = $pdo->prepare("
+            SELECT COALESCE(SUM(monto),0) as t
+            FROM pagos
+            WHERE id_receptor=?
+              AND propietario_flujo='usuario'
+              AND estado='completado'
+              AND tipo='ganancia_tablero'
+              AND fase_numero=?
+        ");
+        $stmt->execute([$uid, $fase_num]);
         $bruto = (float)$stmt->fetch()['t'];
 
+        // Deducciones (semillas + reentradas) de esta fase
         $stmt = $pdo->prepare("
             SELECT COALESCE(SUM(monto),0) as t
             FROM pagos
@@ -53,23 +65,34 @@ try {
               AND propietario_flujo='usuario'
               AND estado='completado'
               AND (tipo LIKE 'salto_fase_%' OR tipo='reentrada')
+              AND fase_numero=?
         ");
-        $stmt->execute([$uid]);
+        $stmt->execute([$uid, $fase_num]);
         $deducciones = (float)$stmt->fetch()['t'];
 
-        $stmt = $pdo->prepare("SELECT COALESCE(credito_saldo,0) as c FROM usuarios WHERE id=?");
-        $stmt->execute([$uid]);
-        $credito = (float)$stmt->fetch()['c'];
+        // Crédito por excedente solo aplica en Fase 0
+        $credito = 0.0;
+        if ($fase_num === 0) {
+            $stmt = $pdo->prepare("SELECT COALESCE(credito_saldo,0) as c FROM usuarios WHERE id=?");
+            $stmt->execute([$uid]);
+            $credito = (float)$stmt->fetch()['c'];
+        }
 
-        // Retiros ya procesados (excluye el actual que aún está 'pendiente')
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto),0) as t FROM retiros WHERE usuario_id=? AND estado='procesado'");
-        $stmt->execute([$uid]);
+        // Retiros ya procesados de esta misma fase (excluye el actual que aún está 'pendiente')
+        $stmt = $pdo->prepare("
+            SELECT COALESCE(SUM(monto),0) as t
+            FROM retiros
+            WHERE usuario_id=?
+              AND fase_numero=?
+              AND estado='procesado'
+        ");
+        $stmt->execute([$uid, $fase_num]);
         $ya_retirado = (float)$stmt->fetch()['t'];
 
         $saldo_real = $bruto - $deducciones + $credito - $ya_retirado;
 
         if ($saldo_real < (float)$retiro['monto']) {
-            sendResponse(['error' => "Saldo insuficiente. El usuario tiene $" . number_format($saldo_real, 2) . " USDT disponible pero solicita $" . number_format($retiro['monto'], 2) . " USDT."], 400);
+            sendResponse(['error' => "Saldo insuficiente en Fase {$fase_num}. El usuario tiene $" . number_format($saldo_real, 2) . " USDT disponible pero solicita $" . number_format($retiro['monto'], 2) . " USDT."], 400);
         }
     }
 
@@ -92,28 +115,33 @@ try {
 
     // 4. Auditoría
     $accion_log = $accion === 'aprobar' ? 'RETIRO_APROBADO' : 'RETIRO_RECHAZADO';
+    $fase_log   = (int)($retiro['fase_numero'] ?? 0);
     $stmt = $pdo->prepare("
-        INSERT INTO auditoria_logs (usuario_id, accion, tabla_afectada, detalles)
-        VALUES (?, ?, 'retiros', ?)
+        INSERT INTO auditoria_logs (usuario_id, fase_numero, accion, tabla_afectada, detalles)
+        VALUES (?, ?, ?, 'retiros', ?)
     ");
     $stmt->execute([
         $retiro['usuario_id'],
+        $fase_log,
         $accion_log,
-        "Retiro ID $retiro_id de \${$retiro['monto']} USDT a {$retiro['wallet_destino']}. Notas: $notas"
+        "Retiro ID $retiro_id (Fase {$fase_log}) de \${$retiro['monto']} USDT a {$retiro['wallet_destino']}. Notas: $notas"
     ]);
 
     $pdo->commit();
 
     // 5. Notificar al usuario por Telegram si tiene vinculado
     if (!empty($retiro['telegram_chat_id'])) {
+        $fase_msg = (int)($retiro['fase_numero'] ?? 0);
         if ($accion === 'aprobar') {
             $msg = "💸 *¡Tu retiro fue aprobado!*\n\n"
+                 . "Fase: *Fase {$fase_msg}*\n"
                  . "Monto: *\${$retiro['monto']} USDT*\n"
                  . "Wallet: `{$retiro['wallet_destino']}`\n\n"
                  . "El pago será enviado en breve a tu billetera TRC-20.\n\n"
                  . "_Sistema RADIX_";
         } else {
             $msg = "⚠️ *Tu solicitud de retiro fue rechazada.*\n\n"
+                 . "Fase: *Fase {$fase_msg}*\n"
                  . "Monto: *\${$retiro['monto']} USDT*\n"
                  . ($notas ? "Motivo: $notas\n\n" : "\n")
                  . "Tu saldo sigue disponible. Puedes volver a solicitarlo.\n\n"

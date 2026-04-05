@@ -118,6 +118,46 @@ function radixDefaultPhaseBoardConfig(int $fase_numero, string $tablero_tipo): a
                 'clon_monto' => 400.00,
             ],
         ],
+        // ── FASE 2 — Radix High-Level ($1,000 entrada) ──────────────
+        // Tablero A: P0 + 3 refs → $4,000 total | $1,000 ganancia + $1,000 tesorería + $2,000 → B
+        // Tablero B: $8,000 total | $2,000 ganancia + $2,000 tesorería + $4,000 → C
+        // Tablero C: $16,000 total | $12,000 bruto − $10,000 semilla F3 − $1,000 reentrada = $1,000 neto
+        // Ganancia neta total ciclo completo: $4,000 (ROI 400%)
+        2 => [
+            'A' => [
+                'monto_entrada' => 1000.00,
+                'ganancia_directa' => 1000.00,
+                'aporte_tesoreria' => 1000.00,
+                'reserva_siguiente_tablero' => 2000.00,
+                'ganancia_bruta_cierre' => 0.00,
+                'semilla_siguiente_fase' => 0.00,
+                'monto_reentrada' => 0.00,
+                'clon_permitido' => 1,
+                'clon_monto' => 1000.00,
+            ],
+            'B' => [
+                'monto_entrada' => 2000.00,
+                'ganancia_directa' => 2000.00,
+                'aporte_tesoreria' => 2000.00,
+                'reserva_siguiente_tablero' => 4000.00,
+                'ganancia_bruta_cierre' => 0.00,
+                'semilla_siguiente_fase' => 0.00,
+                'monto_reentrada' => 0.00,
+                'clon_permitido' => 1,
+                'clon_monto' => 2000.00,
+            ],
+            'C' => [
+                'monto_entrada' => 4000.00,
+                'ganancia_directa' => 0.00,
+                'aporte_tesoreria' => 4000.00,
+                'reserva_siguiente_tablero' => 0.00,
+                'ganancia_bruta_cierre' => 12000.00,
+                'semilla_siguiente_fase' => 10000.00,
+                'monto_reentrada' => 1000.00,
+                'clon_permitido' => 1,
+                'clon_monto' => 4000.00,
+            ],
+        ],
     ];
 
     $row = $defaults[$fase_numero][$tablero_tipo] ?? null;
