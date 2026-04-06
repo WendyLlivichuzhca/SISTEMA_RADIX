@@ -173,13 +173,41 @@ try {
     }
 
     // ── 5. Ejecutar reemplazo ─────────────────────────────────────────────
+    // Pre-check rápido antes de abrir la transacción (falla rápido sin lock)
     if ($balance < $monto_clon) {
         sendResponse([
             'error' => "Fondos insuficientes. Tesorería tiene \$$balance pero el clon necesita \$$monto_clon."
         ], 400);
     }
 
+    if ($monto_clon <= 0) {
+        sendResponse([
+            'error' => "El monto del clon para este tablero es \$0. Verifica la configuración de fases_tableros_config."
+        ], 400);
+    }
+
     $pdo->beginTransaction();
+
+    // ── GUARD DE BALANCE: re-verificar tesorería dentro de la transacción ──
+    // El balance leído arriba puede haber cambiado entre la lectura y aquí.
+    // Con FOR UPDATE bloqueamos la fila para que ninguna otra solicitud
+    // simultánea pueda descontar antes de que terminemos.
+    $stmt = $pdo->prepare("
+        SELECT valor_decimal
+        FROM sistema_config
+        WHERE clave = 'tesoreria_balance'
+        FOR UPDATE
+    ");
+    $stmt->execute();
+    $balance_confirmado = (float)($stmt->fetchColumn() ?? 0);
+
+    if ($balance_confirmado < $monto_clon) {
+        $pdo->rollBack();
+        sendResponse([
+            'error' => "Fondos insuficientes (verificación final). Tesorería tiene \$$balance_confirmado pero el clon necesita \$$monto_clon."
+        ], 400);
+    }
+    // ── FIN GUARD ────────────────────────────────────────────────────────
 
     // 5a. Quitar al usuario de referidos
     $stmt = $pdo->prepare("DELETE FROM referidos WHERE id_hijo = ?");

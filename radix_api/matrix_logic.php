@@ -352,6 +352,32 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false, ?int $fase_o
 
         asegurarReservaTableroActual($pdo, $usuario_id, $tipo_actual, $ciclo_actual, $fase_actual, $propietario_usuario);
 
+        // ── INICIO DE TRANSACCIÓN ANTES DEL CONTEO ───────────────────────────
+        // Se arranca la transacción aquí (antes de contar referidos) para que el
+        // FOR UPDATE en el tablero impida que dos solicitudes simultáneas procesen
+        // el mismo tablero dos veces y generen pagos duplicados.
+        $propia_tx = !$pdo->inTransaction();
+        if ($propia_tx) {
+            $pdo->beginTransaction();
+        }
+
+        // Bloquear la fila del tablero. Si ya fue completado por otra solicitud
+        // concurrente entre el obtenerTableroEnProgresoUsuario() de arriba y este
+        // punto, el fetch() devolverá vacío y abortamos sin escribir nada.
+        $stmt = $pdo->prepare("
+            SELECT id FROM tableros_progreso
+            WHERE id = ? AND estado = 'en_progreso'
+            FOR UPDATE
+        ");
+        $stmt->execute([$tablero_id]);
+        if (!$stmt->fetch()) {
+            if ($propia_tx && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            return false; // Ya fue procesado por otra solicitud concurrente
+        }
+        // ── FIN INICIO DE TRANSACCIÓN ─────────────────────────────────────────
+
         // Conteo inteligente por fase y ciclo
         $referidos = 0;
 
@@ -406,6 +432,10 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false, ?int $fase_o
         error_log("AUDIT RADIX: Usuario $usuario_id fase $fase_actual en Tablero $tipo_actual (C$ciclo_actual) tiene $referidos referidos calificados.");
 
         if ($referidos < 3) {
+            // Sin suficientes referidos: liberar el lock sin escribir nada.
+            if ($propia_tx && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             return true;
         }
 
@@ -425,10 +455,8 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false, ?int $fase_o
             ? $monto_usuario - (float)($cfg_actual['semilla_siguiente_fase'] ?? 0.00)
             : $monto_usuario;
 
-        $propia_tx = !$pdo->inTransaction();
-        if ($propia_tx) {
-            $pdo->beginTransaction();
-        }
+        // La transacción ya fue iniciada más arriba (antes del conteo de referidos).
+        // No se repite el beginTransaction() aquí.
 
         $stmt = $pdo->prepare("UPDATE tableros_progreso SET estado = 'completado', fecha_fin = NOW() WHERE id = ?");
         $stmt->execute([$tablero_id]);
@@ -760,10 +788,12 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false, ?int $fase_o
         // Los clones no se activan automaticamente al completar tableros.
         // La tesoreria se acumula y el admin los activa desde el panel.
     } catch (Throwable $e) {
+        // Solo hacemos rollback si ESTA función inició la transacción.
+        // Si formamos parte de una transacción externa, dejamos que el caller decida.
         if (isset($propia_tx) && $propia_tx && $pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("RADIX matrix_logic ERROR (usuario $usuario_id): " . $e->getMessage());
+        error_log("RADIX matrix_logic ERROR (usuario $usuario_id, fase " . ($fase_objetivo ?? '?') . "): " . $e->getMessage());
         if ($strict) {
             throw $e;
         }

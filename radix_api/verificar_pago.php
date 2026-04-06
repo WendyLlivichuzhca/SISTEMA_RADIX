@@ -137,6 +137,43 @@ try {
 
         $pdo->beginTransaction();
 
+        // ── GUARD ANTI RACE-CONDITION ────────────────────────────────────────
+        // Dos solicitudes simultáneas con el mismo pago_id o tx_hash podrían
+        // haber superado las verificaciones previas al mismo tiempo.
+        // Aquí bloqueamos la fila del pago (FOR UPDATE) y re-verificamos su
+        // estado dentro de la transacción antes de escribir nada.
+        $stmt = $pdo->prepare("
+            SELECT p.id, p.estado, p.tx_hash, p.tx_hash_2
+            FROM pagos p
+            JOIN usuarios emisor ON p.id_emisor = emisor.id
+            WHERE p.id = ?
+              AND emisor.wallet_address = ?
+              AND p.tipo = 'regalo'
+            LIMIT 1
+            FOR UPDATE
+        ");
+        $stmt->execute([$pago_id, $_SESSION['radix_wallet']]);
+        $pago_lock = $stmt->fetch();
+
+        if (!$pago_lock || $pago_lock['estado'] !== 'pendiente') {
+            $pdo->rollBack();
+            sendResponse(['error' => 'Este pago ya fue procesado. Recarga la página para ver tu estado actual.'], 409);
+        }
+
+        // Re-verificar que el tx_hash no haya sido registrado por otra solicitud concurrente
+        $stmt = $pdo->prepare("
+            SELECT id FROM pagos
+            WHERE (tx_hash = ? OR tx_hash_2 = ?)
+              AND id != ?
+            LIMIT 1
+        ");
+        $stmt->execute([$tx_hash, $tx_hash, $pago_id]);
+        if ($stmt->fetch()) {
+            $pdo->rollBack();
+            sendResponse(['error' => 'Este hash ya fue usado para confirmar otro pago.'], 409);
+        }
+        // ── FIN GUARD ────────────────────────────────────────────────────────
+
         if ($tiene_primer_hash) {
             // Segundo hash completó el pago
             $stmt = $pdo->prepare("UPDATE pagos SET estado = 'completado', tx_hash_2 = ?, monto_pagado = ?, fecha_confirmacion = NOW() WHERE id = ?");
@@ -216,9 +253,19 @@ try {
                 'error' => "Con los 2 hashes sumaste $" . number_format($monto_total, 2) . " USDT y no alcanza para completar $" . number_format($monto_esperado, 2) . " USDT. Contacta al soporte."
             ], 422);
         } else {
-            // Primer hash con monto parcial — guardar y pedir el segundo hash
+            // Primer hash con monto parcial — guardar y pedir el segundo hash.
+            // Usamos transacción + FOR UPDATE para evitar que dos envíos parciales simultáneos
+            // corrompan el registro del pago.
+            $pdo->beginTransaction();
+            $stmt = $pdo->prepare("SELECT id FROM pagos WHERE id = ? AND estado = 'pendiente' LIMIT 1 FOR UPDATE");
+            $stmt->execute([$pago_id]);
+            if (!$stmt->fetch()) {
+                $pdo->rollBack();
+                sendResponse(['error' => 'Este pago ya fue procesado. Recarga la página.'], 409);
+            }
             $stmt = $pdo->prepare("UPDATE pagos SET tx_hash = ?, monto_pagado = ? WHERE id = ?");
             $stmt->execute([$tx_hash, $monto_recibido, $pago_id]);
+            $pdo->commit();
 
             sendResponse([
                 'success'        => false,

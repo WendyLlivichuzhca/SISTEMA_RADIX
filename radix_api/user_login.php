@@ -43,6 +43,10 @@ try {
         $params[] = $login;
     }
 
+    // Excluir cuentas inactivas, clones y sistema del login.
+    // Si un usuario fue reemplazado por un clon y se re-registró con el mismo
+    // correo, el query debe encontrar la cuenta activa más reciente (mayor ID),
+    // no la cuenta inactiva anterior.
     $stmt = $pdo->prepare("
         SELECT
             id,
@@ -52,7 +56,9 @@ try {
             tipo_usuario,
             password_hash
         FROM usuarios
-        WHERE " . implode(' OR ', $where) . "
+        WHERE (" . implode(' OR ', $where) . ")
+          AND tipo_usuario NOT IN ('inactivo', 'clon', 'sistema')
+        ORDER BY id DESC
         LIMIT 1
     ");
     $stmt->execute($params);
@@ -60,10 +66,6 @@ try {
 
     if (!$user) {
         sendResponse(['error' => 'No encontramos una cuenta con esos datos.'], 404);
-    }
-
-    if ($user['tipo_usuario'] === 'inactivo') {
-        sendResponse(['error' => 'Tu cuenta ha sido desactivada. Contacta al administrador.'], 403);
     }
 
     if (empty($user['password_hash'])) {
