@@ -777,38 +777,75 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 })();
 
-// ── NOTIFICACIONES EMERGENTES (FOMO) ─────────────────────────────
+// ── NOTIFICACIONES EMERGENTES (actividad real de la BD) ──────────────────────
 (function initNotificaciones() {
-    const nombres = ['Carlos M.','Ana R.','Luis P.','María G.','Andrés T.','Valeria S.',
-        'Juan C.','Sofía L.','Pedro H.','Daniela V.','Miguel A.','Laura F.',
-        'Diego B.','Camila O.','Roberto E.','Natalia K.','Fernando J.','Paola W.'];
-    const paises = ['🇲🇽 México','🇨🇴 Colombia','🇻🇪 Venezuela','🇵🇪 Perú','🇦🇷 Argentina',
-        '🇨🇱 Chile','🇪🇨 Ecuador','🇧🇴 Bolivia','🇵🇦 Panamá','🇩🇴 Rep. Dominicana',
-        '🇺🇸 EEUU','🇪🇸 España'];
-    const emojis = ['🚀','💰','⚡','🔥','✅','💎','🌟','🎯'];
-    const mensajes = [
+    // ── Datos de fallback (se usan cuando la API no responde) ─────────────────
+    const fallbackNombres = ['Carlos M.','Ana R.','Luis P.','María G.','Andrés T.',
+        'Valeria S.','Juan C.','Sofía L.','Pedro H.','Daniela V.'];
+    const fallbackPaises  = ['🇲🇽 México','🇨🇴 Colombia','🇻🇪 Venezuela','🇵🇪 Perú',
+        '🇦🇷 Argentina','🇨🇱 Chile','🇪🇨 Ecuador','🇩🇴 Rep. Dominicana','🇺🇸 EEUU','🇪🇸 España'];
+    const fallbackMensajes = [
         (n, p) => `${n} de ${p} acaba de registrarse`,
         (n, p) => `${n} de ${p} completó su Tablero A — <strong>+$10 USDT</strong>`,
         (n, p) => `${n} de ${p} invitó a 3 amigos hoy`,
-        (n, p) => `${n} de ${p} está en <strong>Fase 0 activa</strong>`,
         (n, p) => `${n} de ${p} cobró <strong>+$40 USDT</strong> netos`,
-        (n, p) => `${n} de ${p} se unió hace unos minutos`,
-        (n, p) => `La IA completó una red en ${p} — ganancias enviadas`,
         (n, p) => `${n} de ${p} avanzó al <strong>Tablero B</strong>`,
+        (n, p) => `La IA completó una red en ${p} — ganancias enviadas`,
     ];
 
     function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-    function crearNotif() {
+    // Cola de eventos reales cargados desde la API
+    let colaEventos = [];
+    let usandoDatosReales = false;
+
+    // ── Carga inicial de actividad real ───────────────────────────────────────
+    function cargarActividadReal() {
+        fetch('radix_api/public_activity.php', { cache: 'no-store' })
+            .then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status))
+            .then(data => {
+                if (data.success && Array.isArray(data.eventos) && data.eventos.length > 0) {
+                    colaEventos = data.eventos.slice(); // copia
+                    usandoDatosReales = true;
+                }
+            })
+            .catch(() => {
+                // Silencioso: se mantiene el fallback
+                usandoDatosReales = false;
+            });
+    }
+
+    // ── Construir notificación desde evento real ───────────────────────────────
+    function crearNotifDesdeEvento(ev) {
         const container = document.getElementById('radix-notif-container');
         if (!container) return;
-        const nombre = rand(nombres);
-        const pais = rand(paises);
-        const emoji = rand(emojis);
-        const msgFn = rand(mensajes);
-        const hace = Math.floor(Math.random() * 5) + 1;
-
         const notif = document.createElement('div');
+        notif.className = 'radix-notif';
+        notif.innerHTML = `
+            <div class="notif-avatar">${ev.emoji}</div>
+            <div class="notif-body">
+                <div class="notif-name">${ev.nombre}</div>
+                <div class="notif-msg">${ev.msg}</div>
+                <div class="notif-time">${ev.hace}</div>
+            </div>`;
+        container.appendChild(notif);
+        setTimeout(() => {
+            notif.classList.add('notif-exit');
+            setTimeout(() => notif.remove(), 380);
+        }, 5500);
+    }
+
+    // ── Construir notificación de fallback ────────────────────────────────────
+    function crearNotifFallback() {
+        const container = document.getElementById('radix-notif-container');
+        if (!container) return;
+        const emojis = ['🚀','💰','⚡','🔥','✅','💎','🌟','🎯'];
+        const nombre  = rand(fallbackNombres);
+        const pais    = rand(fallbackPaises);
+        const emoji   = rand(emojis);
+        const msgFn   = rand(fallbackMensajes);
+        const hace    = Math.floor(Math.random() * 5) + 1;
+        const notif   = document.createElement('div');
         notif.className = 'radix-notif';
         notif.innerHTML = `
             <div class="notif-avatar">${emoji}</div>
@@ -818,21 +855,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="notif-time">hace ${hace} min</div>
             </div>`;
         container.appendChild(notif);
-
         setTimeout(() => {
             notif.classList.add('notif-exit');
             setTimeout(() => notif.remove(), 380);
         }, 5500);
     }
 
-    // Contenedor fijo en el DOM
+    // ── Despachador principal ─────────────────────────────────────────────────
+    function crearNotif() {
+        if (usandoDatosReales && colaEventos.length > 0) {
+            // Tomar el siguiente evento real; al agotarse, recargar la API
+            const ev = colaEventos.shift();
+            crearNotifDesdeEvento(ev);
+            if (colaEventos.length === 0) {
+                // Recargar para el siguiente ciclo (no bloquea)
+                setTimeout(cargarActividadReal, 5000);
+            }
+        } else {
+            crearNotifFallback();
+        }
+    }
+
+    // ── Contenedor fijo en el DOM ─────────────────────────────────────────────
     if (!document.getElementById('radix-notif-container')) {
         const c = document.createElement('div');
         c.id = 'radix-notif-container';
         document.body.appendChild(c);
     }
 
-    // Primera notificación al cabo de 8s, luego cada 22-35s
+    // Cargar datos reales de inmediato (en background)
+    cargarActividadReal();
+
+    // Primera notificación a los 8s, luego cada 22-35s
     setTimeout(() => {
         crearNotif();
         setInterval(crearNotif, 22000 + Math.random() * 13000);
