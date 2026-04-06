@@ -72,7 +72,7 @@ try {
         WHERE id_emisor = ?
           AND propietario_flujo = 'usuario'
           AND estado = 'completado'
-          AND (tipo LIKE 'salto_fase_%' OR tipo = 'reentrada')
+          AND (tipo LIKE 'salto_fase_%' OR tipo = 'reentrada' OR tipo = 'utilidad_master')
           AND fase_numero = ?
     ");
     $stmt->execute([$user_id, $fase_numero]);

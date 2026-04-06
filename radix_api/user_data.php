@@ -312,7 +312,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             WHERE id_emisor = ?
               AND propietario_flujo = 'usuario'
               AND estado = 'completado'
-              AND (tipo LIKE 'salto_fase_%' OR tipo = 'reentrada')
+              AND (tipo LIKE 'salto_fase_%' OR tipo = 'reentrada' OR tipo = 'utilidad_master')
         ");
         $stmt->execute([$user_id]);
         $total_deducciones = (float)$stmt->fetch()['total'];
@@ -361,7 +361,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             FROM pagos
             WHERE id_emisor = ?
               AND propietario_flujo = 'usuario'
-              AND (tipo LIKE 'salto_fase_%' OR tipo = 'reentrada')
+              AND (tipo LIKE 'salto_fase_%' OR tipo = 'reentrada' OR tipo = 'utilidad_master')
               AND estado = 'completado'
             ORDER BY fecha DESC
             LIMIT 20
@@ -389,7 +389,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             SELECT COALESCE(SUM(monto),0) as t
             FROM pagos
             WHERE id_emisor=? AND propietario_flujo='usuario' AND estado='completado'
-              AND (tipo LIKE 'salto_fase_%' OR tipo='reentrada') AND fase_numero=?
+              AND (tipo LIKE 'salto_fase_%' OR tipo='reentrada' OR tipo='utilidad_master') AND fase_numero=?
         ");
         $stmtFaseCompletadaC = $pdo->prepare("
             SELECT COUNT(*) FROM tableros_progreso

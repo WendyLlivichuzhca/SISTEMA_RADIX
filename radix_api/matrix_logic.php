@@ -486,40 +486,98 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false, ?int $fase_o
             ");
             $stmt->execute([$usuario_id, $fase_actual, $nuevo_tipo, $ciclo_actual]);
         } elseif ($finalizado) {
-            $nuevo_ciclo = $ciclo_actual + 1;
-            $fase_siguiente = $fase_cfg['fase_siguiente'] !== null ? (int)$fase_cfg['fase_siguiente'] : ($fase_actual + 1);
-            $monto_semilla = (float)($cfg_actual['semilla_siguiente_fase'] ?? 0.00);
+            $nuevo_ciclo    = $ciclo_actual + 1;
+            // Detectar si es la FASE FINAL (fase_siguiente = NULL, ej. Fase 3).
+            // En fase final no hay salto a otra fase: la semilla_siguiente_fase va a tesorería.
+            $es_fase_final  = ($fase_cfg['fase_siguiente'] === null);
+            $fase_siguiente = !$es_fase_final
+                ? (int)$fase_cfg['fase_siguiente']
+                : ($fase_actual + 1); // solo referencia en logs, no se activa
+            $monto_semilla   = (float)($cfg_actual['semilla_siguiente_fase'] ?? 0.00);
             $monto_reentrada = (float)($cfg_actual['monto_reentrada'] ?? 0.00);
-            $tipo_salto = getPhaseSeedPaymentType($fase_actual);
+            $tipo_salto      = getPhaseSeedPaymentType($fase_actual);
 
-            if ($tipo_salto === null) {
-                throw new RuntimeException("El cierre automatico de la Fase $fase_actual aun no esta habilitado en pagos.tipo.");
+            if (!$es_fase_final) {
+                // ── Fases 0/1/2: hay fase siguiente → registrar semilla y activarla ──
+                if ($tipo_salto === null) {
+                    throw new RuntimeException("El cierre automatico de la Fase $fase_actual aun no esta habilitado en pagos.tipo.");
+                }
+
+                $stmt = $pdo->prepare("
+                    INSERT INTO pagos (
+                        id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, propietario_flujo,
+                        wallet_destino_real, tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
+                    ) VALUES (?, 1000, 1000, ?, ?, NULL, ?, ?, 'reserva_interna', ?, ?, 'completado')
+                ");
+                $stmt->execute([$usuario_id, $fase_actual, $propietario_usuario, $tipo_actual, $ciclo_actual, $monto_semilla, $tipo_salto]);
+
+                $stmt = $pdo->prepare("
+                    INSERT INTO reservas_tablero (
+                        usuario_id, fase_numero, propietario_flujo, desde_tablero, hacia_destino,
+                        ciclo_origen, ciclo_destino, monto, estado, detalle, fecha_uso
+                    ) VALUES (?, ?, ?, 'C', ?, ?, NULL, ?, 'usado', ?, NOW())
+                ");
+                $stmt->execute([
+                    $usuario_id,
+                    $fase_actual,
+                    $propietario_usuario,
+                    getPhaseReserveDestination($fase_actual),
+                    $ciclo_actual,
+                    $monto_semilla,
+                    "Semilla interna de Fase $fase_siguiente generada al cerrar ciclo $ciclo_actual",
+                ]);
+
+                $stmt = $pdo->prepare("
+                    INSERT INTO tesoreria_movimientos (tipo, monto, motivo, relacion_id)
+                    VALUES ('ingreso', ?, ?, ?)
+                ");
+                $stmt->execute([$monto_semilla, "Salto Fase $fase_siguiente - Usuario ID $usuario_id (ciclo $ciclo_actual)", $usuario_id]);
+
+            } else {
+                // ── Fase FINAL (Fase 3): no hay fase siguiente ─────────────────────
+                // La semilla_siguiente_fase se dirige a tesorería como aporte final.
+                // No se llama activarSiguienteFaseParalela().
+                if ($monto_semilla > 0) {
+                    // Actualizar saldo de tesorería operativa (el dinero fluye al balance general del sistema)
+                    $stmt = $pdo->prepare("UPDATE sistema_config SET valor_decimal = valor_decimal + ? WHERE clave = 'tesoreria_balance'");
+                    $stmt->execute([$monto_semilla]);
+
+                    // Registro contable del aporte final en pagos usando la etiqueta configurada (ej. utilidad_master)
+                    $stmt = $pdo->prepare("
+                        INSERT INTO pagos (
+                            id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, propietario_flujo,
+                            wallet_destino_real, tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
+                        ) VALUES (?, 1000, 1000, ?, ?, NULL, ?, ?, 'reserva_interna', ?, ?, 'completado')
+                    ");
+                    $stmt->execute([$usuario_id, $fase_actual, $propietario_usuario, $tipo_actual, $ciclo_actual, $monto_semilla, $tipo_salto]);
+
+                    // Registro en reservas_tablero para auditoría
+                    $stmt = $pdo->prepare("
+                        INSERT INTO reservas_tablero (
+                            usuario_id, fase_numero, propietario_flujo, desde_tablero, hacia_destino,
+                            ciclo_origen, ciclo_destino, monto, estado, detalle, fecha_uso
+                        ) VALUES (?, ?, ?, 'C', ?, ?, NULL, ?, 'usado', ?, NOW())
+                    ");
+                    $stmt->execute([
+                        $usuario_id,
+                        $fase_actual,
+                        $propietario_usuario,
+                        ($tipo_salto === 'utilidad_master' ? 'UTILIDAD_MASTER' : 'TESORERIA_FINAL'),
+                        $ciclo_actual,
+                        $monto_semilla,
+                        "Aporte final ($tipo_salto) al cerrar Fase $fase_actual ciclo $ciclo_actual",
+                    ]);
+
+                    // Log en tesoreria_movimientos
+                    $stmt = $pdo->prepare("
+                        INSERT INTO tesoreria_movimientos (tipo, monto, motivo, relacion_id)
+                        VALUES ('ingreso', ?, ?, ?)
+                    ");
+                    $stmt->execute([$monto_semilla, "Utilidad Final ($tipo_salto) - Usuario ID $usuario_id (ciclo $ciclo_actual)", $usuario_id]);
+                }
             }
 
-            $stmt = $pdo->prepare("
-                INSERT INTO pagos (
-                    id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, propietario_flujo,
-                    wallet_destino_real, tablero_tipo, ciclo, origen_fondos, monto, tipo, estado
-                ) VALUES (?, 1000, 1000, ?, ?, NULL, ?, ?, 'reserva_interna', ?, ?, 'completado')
-            ");
-            $stmt->execute([$usuario_id, $fase_actual, $propietario_usuario, $tipo_actual, $ciclo_actual, $monto_semilla, $tipo_salto]);
-
-            $stmt = $pdo->prepare("
-                INSERT INTO reservas_tablero (
-                    usuario_id, fase_numero, propietario_flujo, desde_tablero, hacia_destino,
-                    ciclo_origen, ciclo_destino, monto, estado, detalle, fecha_uso
-                ) VALUES (?, ?, ?, 'C', ?, ?, NULL, ?, 'usado', ?, NOW())
-            ");
-            $stmt->execute([
-                $usuario_id,
-                $fase_actual,
-                $propietario_usuario,
-                getPhaseReserveDestination($fase_actual),
-                $ciclo_actual,
-                $monto_semilla,
-                "Semilla interna de Fase $fase_siguiente generada al cerrar ciclo $ciclo_actual",
-            ]);
-
+            // ── Reentrada (aplica a todas las fases) ─────────────────────────────
             $stmt = $pdo->prepare("
                 INSERT INTO pagos (
                     id_emisor, id_receptor, beneficiario_usuario_id, fase_numero, propietario_flujo,
@@ -544,12 +602,7 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false, ?int $fase_o
                 "Reentrada automatica a Tablero A del ciclo $nuevo_ciclo",
             ]);
 
-            $stmt = $pdo->prepare("
-                INSERT INTO tesoreria_movimientos (tipo, monto, motivo, relacion_id)
-                VALUES ('ingreso', ?, ?, ?)
-            ");
-            $stmt->execute([$monto_semilla, "Salto Fase $fase_siguiente - Usuario ID $usuario_id (ciclo $ciclo_actual)", $usuario_id]);
-
+            // ── Crear Tablero A del nuevo ciclo ──────────────────────────────────
             $stmt = $pdo->prepare("
                 SELECT id
                 FROM tableros_progreso
@@ -632,9 +685,9 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false, ?int $fase_o
             }
             // === FIN REENLACE ===
 
-            // Apertura paralela: la siguiente fase se activa sin detener la fase actual.
+            // ── Apertura paralela de fase siguiente (solo si NO es fase final) ───
             // Se protege con SAVEPOINT para no romper el cierre vigente si la fase nueva aun no esta lista.
-            if ($monto_semilla > 0) {
+            if (!$es_fase_final && $monto_semilla > 0) {
                 $activation_info = ['status' => 'skipped', 'message' => 'Sin cambios'];
 
                 try {
@@ -658,6 +711,8 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false, ?int $fase_o
                 if (($activation_info['status'] ?? '') !== 'success') {
                     error_log("RADIX phase activation skipped (usuario $usuario_id, fase $fase_siguiente): " . ($activation_info['message'] ?? 'sin detalle'));
                 }
+            } elseif ($es_fase_final) {
+                error_log("RADIX Fase $fase_actual FINAL completada por usuario $usuario_id (ciclo $ciclo_actual). Reentrada y aporte tesoreria procesados. No hay fase siguiente.");
             }
         }
 
@@ -690,7 +745,7 @@ function verificarAvanceTablero($usuario_id, $pdo, $strict = false, ?int $fase_o
                     SELECT COALESCE(SUM(monto),0) as t FROM pagos
                     WHERE id_emisor=? AND propietario_flujo='usuario'
                       AND estado='completado'
-                      AND (tipo LIKE 'salto_fase_%' OR tipo='reentrada')
+                      AND (tipo LIKE 'salto_fase_%' OR tipo='reentrada' OR tipo='utilidad_master')
                       AND fase_numero=?
                 ");
                 $stmt_ded->execute([$usuario_id, $fase_actual]);

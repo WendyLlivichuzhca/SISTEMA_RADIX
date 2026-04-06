@@ -1435,6 +1435,154 @@ footer {
     border-radius: 14px; margin-top: 0.2rem;
 }
 
+/* ── FASE 3 PLATINUM ─────────────────────────────────── */
+.phase3-platinum-wrap {
+    position: relative; overflow: hidden;
+    margin-top: 2rem;
+    background: linear-gradient(135deg,
+        rgba(255,200,40,0.06),
+        rgba(255,160,0,0.04),
+        rgba(255,215,0,0.07));
+    border: 1px solid rgba(255,200,40,0.3);
+    border-radius: 28px;
+    padding: 2.5rem 2rem;
+    text-align: center;
+    box-shadow: 0 0 60px rgba(255,180,0,0.08), 0 20px 40px rgba(0,0,0,0.3);
+    transition: border-color 0.3s;
+}
+.phase3-platinum-wrap:hover { border-color: rgba(255,200,40,0.5); }
+
+.phase3-crown {
+    font-size: 2.2rem; margin-bottom: 0.6rem;
+    filter: drop-shadow(0 0 12px rgba(255,200,40,0.6));
+}
+.phase3-badge {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 1rem; border-radius: 20px;
+    font-size: 0.68rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 1rem;
+    background: rgba(255,200,40,0.12);
+    color: #ffd700;
+    border: 1px solid rgba(255,200,40,0.3);
+}
+.phase3-title {
+    font-size: 3rem; font-weight: 900; line-height: 1;
+    background: linear-gradient(90deg, #f5c400, #ffd700, #ffe566, #ffd700);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.6rem;
+    filter: drop-shadow(0 0 20px rgba(255,200,40,0.3));
+}
+.phase3-subtitle {
+    font-size: 0.88rem; color: #888; max-width: 580px;
+    margin: 0 auto 2rem; line-height: 1.7;
+}
+
+/* Cuerpo de dos columnas */
+.phase3-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    text-align: left;
+    margin-bottom: 1.5rem;
+}
+
+/* Columna izquierda */
+.phase3-entry-row { margin-bottom: 1.2rem; }
+.phase3-entry-label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem; }
+.phase3-entry-amount {
+    font-size: 2.2rem; font-weight: 900; color: #ffd700; line-height: 1;
+}
+.phase3-entry-amount span { font-size: 0.9rem; font-weight: 600; color: #a88a00; }
+.phase3-entry-origin { font-size: 0.72rem; color: #ffd700; font-weight: 600; margin-top: 0.3rem; opacity: 0.8; }
+
+.phase3-table { border-color: rgba(255,200,40,0.12) !important; }
+.phase3-table .pbt-val { color: #ccc; }
+
+/* Columna derecha */
+.phase3-result-box {
+    background: rgba(255,200,40,0.06);
+    border: 1px solid rgba(255,200,40,0.2);
+    border-radius: 14px; padding: 1rem 1.2rem;
+    margin-bottom: 1rem; text-align: center;
+}
+.phase3-result-label { font-size: 0.7rem; color: #a88a00; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.4rem; }
+.phase3-result-bruto {
+    font-size: 1.8rem; font-weight: 900;
+    background: linear-gradient(90deg,#f5c400,#ffe566);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Distribución */
+.phase3-distribution { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1rem; }
+.phase3-dist-title { font-size: 0.68rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.2rem; }
+.phase3-dist-row {
+    display: flex; align-items: center; gap: 0.75rem;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 12px; padding: 0.7rem 0.9rem;
+}
+.phase3-dist-row.phase3-dist-main {
+    background: rgba(255,200,40,0.07);
+    border-color: rgba(255,200,40,0.2);
+}
+.phase3-dist-icon { font-size: 1rem; flex-shrink: 0; }
+.phase3-dist-info { flex: 1; }
+.phase3-dist-name { font-size: 0.8rem; font-weight: 700; color: #ddd; }
+.phase3-dist-note { font-size: 0.68rem; color: #666; margin-top: 1px; }
+.phase3-dist-amount {
+    font-size: 1rem; font-weight: 900;
+    background: linear-gradient(90deg,#f5c400,#ffe566);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    white-space: nowrap;
+}
+.phase3-dist-row.phase3-dist-main .phase3-dist-amount { font-size: 1.15rem; }
+
+/* ROI chip */
+.phase3-roi-chip {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    background: rgba(255,200,40,0.1);
+    border: 1px solid rgba(255,200,40,0.25);
+    border-radius: 30px; padding: 0.5rem 1.2rem;
+    margin-bottom: 0.9rem;
+}
+.phase3-roi-label { font-size: 0.72rem; color: #a88a00; font-weight: 700; text-transform: uppercase; }
+.phase3-roi-value { font-size: 1.4rem; font-weight: 900; color: #ffd700; }
+
+/* Nota re-entrada */
+.phase3-reentry-note {
+    font-size: 0.78rem; color: #888; line-height: 1.6;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px; padding: 0.7rem 0.9rem;
+}
+.phase3-reentry-note strong { color: #ffd700; }
+
+/* Glow background */
+.phase3-glow-bg {
+    position: absolute; top: -60px; right: -60px;
+    width: 300px; height: 300px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,200,40,0.06), transparent 70%);
+    pointer-events: none;
+}
+
+/* Progress bar — dot platinum */
+.ppstep-platinum {
+    background: linear-gradient(135deg,#f5c400,#ffd700);
+    box-shadow: 0 0 18px rgba(255,200,40,0.6);
+    font-size: 0.7rem;
+}
+.ppstep-label-platinum { color: #ffd700 !important; font-weight: 800; }
+
+/* Responsive Fase 3 */
+@media (max-width: 768px) {
+    .phase3-body { grid-template-columns: 1fr; }
+    .phase3-title { font-size: 2.2rem; }
+    .phase3-result-bruto { font-size: 1.5rem; }
+}
+
 /* Nota resumen debajo */
 .phases-summary-note {
     max-width: 700px; margin: 2.5rem auto 0;

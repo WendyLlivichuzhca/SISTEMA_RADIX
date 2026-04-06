@@ -28,9 +28,9 @@ function radixDefaultPhaseConfig(int $fase_numero): array
         3 => [
             'fase_numero' => 3,
             'nombre' => 'Fase 3',
-            'descripcion' => 'Fase actual operativa Platinum.',
+            'descripcion' => 'Fase futura preparada a nivel de estructura.',
             'fase_siguiente' => null,
-            'activa' => 1,
+            'activa' => 0,
         ],
     ];
 
@@ -158,50 +158,6 @@ function radixDefaultPhaseBoardConfig(int $fase_numero, string $tablero_tipo): a
                 'clon_monto' => 4000.00,
             ],
         ],
-        // ── FASE 3 — Radix PLATINUM ($10,000 entrada) — FASE FINAL ──────────
-        // Tablero A: P0 + 3 refs → $40,000 total | $10,000 ganancia + $10,000 tesorería + $20,000 → B
-        // Tablero B: $80,000 total | $20,000 ganancia + $20,000 tesorería + $40,000 → C
-        // Tablero C: 3 refs × $40,000 = $120,000 bruto | $40,000 aporte tesorería (aporte_tesoreria)
-        //            + $40,000 tesorería final (semilla_siguiente_fase → tesorería, no hay fase 4)
-        //            + $10,000 reentrada | Ganancia neta C = $70,000
-        // Ganancia neta total ciclo completo (A+B+C): $100,000 (ROI 1000%)
-        // fase_siguiente = NULL → lógica especial en matrix_logic.php (sin activarSiguienteFaseParalela)
-        3 => [
-            'A' => [
-                'monto_entrada' => 10000.00,
-                'ganancia_directa' => 10000.00,
-                'aporte_tesoreria' => 10000.00,
-                'reserva_siguiente_tablero' => 20000.00,
-                'ganancia_bruta_cierre' => 0.00,
-                'semilla_siguiente_fase' => 0.00,
-                'monto_reentrada' => 0.00,
-                'clon_permitido' => 1,
-                'clon_monto' => 10000.00,
-            ],
-            'B' => [
-                'monto_entrada' => 20000.00,
-                'ganancia_directa' => 20000.00,
-                'aporte_tesoreria' => 20000.00,
-                'reserva_siguiente_tablero' => 40000.00,
-                'ganancia_bruta_cierre' => 0.00,
-                'semilla_siguiente_fase' => 0.00,
-                'monto_reentrada' => 0.00,
-                'clon_permitido' => 1,
-                'clon_monto' => 20000.00,
-            ],
-            'C' => [
-                'monto_entrada' => 40000.00,
-                'ganancia_directa' => 0.00,
-                'aporte_tesoreria' => 40000.00,
-                'reserva_siguiente_tablero' => 0.00,
-                'ganancia_bruta_cierre' => 120000.00,
-                // semilla_siguiente_fase: va a tesorería (no hay fase 4). Ver matrix_logic.php.
-                'semilla_siguiente_fase' => 40000.00,
-                'monto_reentrada' => 10000.00,
-                'clon_permitido' => 1,
-                'clon_monto' => 40000.00,
-            ],
-        ],
     ];
 
     $row = $defaults[$fase_numero][$tablero_tipo] ?? null;
@@ -325,7 +281,6 @@ function getPhaseSeedPaymentType(int $fase_numero): ?string
         0 => 'salto_fase_1',
         1 => 'salto_fase_2',
         2 => 'salto_fase_3',
-        3 => 'utilidad_master',
     ];
 
     return $map[$fase_numero] ?? null;
@@ -333,8 +288,5 @@ function getPhaseSeedPaymentType(int $fase_numero): ?string
 
 function getPhaseReserveDestination(int $fase_numero): string
 {
-    if ($fase_numero >= 3) {
-        return 'CIERRE_RADIX';
-    }
     return 'FASE' . ($fase_numero + 1);
 }
