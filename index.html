@@ -32,7 +32,9 @@
             <ul>
                 <li><a href="#home">Inicio</a></li>
                 <li><a href="#how-it-works">Cómo funciona</a></li>
+                <li><a href="#phases">Fases</a></li>
                 <li><a href="#benefits">Beneficios</a></li>
+                <li><a href="#faq">FAQ</a></li>
                 <li><button id="open-login-modal" type="button" class="nav-login-btn">Iniciar Sesión</button></li>
                 <li><a href="https://t.me/+jxoT_lB6Wm82Njgx" target="_blank" class="nav-btn">Comunidad</a></li>
                 <li><button id="open-register-modal-nav" type="button" class="nav-register-btn">Registrarme</button></li>
@@ -41,29 +43,96 @@
     </header>
 
     <main>
-        <section id="home" class="hero">
-            <div class="hero-content">
-                <div class="mobile-dapp-notice">
-                    <div class="mobile-dapp-badge">Movil + SafePal</div>
-                    <p>Si estas en celular puedes registrarte desde tu navegador normal. Solo necesitas una wallet valida de la red TRON.</p>
-                </div>
+        <!-- ── HERO ──────────────────────────────────────────── -->
+        <section id="home" class="hero" style="position:relative;overflow:hidden;">
+            <canvas id="hero-particles" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
+            <div class="hero-content" style="position:relative;z-index:1;">
+                <div class="phase-badge-hero">🔥 FASE 0 ACTIVA — Plazas Limitadas</div>
+
                 <h1 class="gradient-text">Impulsa tu Futuro Financiero</h1>
-                <p>Únete a la nueva era de la economía colaborativa impulsada por Smart Contracts. Transparencia, velocidad y crecimiento real.</p>
-                <div class="cta-group">
+
+                <p class="hero-desc">Únete a la nueva era de la economía colaborativa impulsada por Smart Contracts. Transparencia, velocidad y crecimiento real.</p>
+
+                <!-- CTAs -->
+                <div class="hero-ctas-row">
+                    <a href="#" id="hero-join-btn" class="hero-join-btn" role="button">
+                        Quiero unirme ahora →
+                    </a>
                     <a href="https://www.youtube.com/@RADIX.MASTER" target="_blank" rel="noopener noreferrer" class="secondary-btn media-cta" aria-label="Ver videos en YouTube"></a>
                 </div>
+
+                <!-- Trust badges en línea debajo del botón -->
+                <div class="trust-badges">
+                    <div class="trust-badge">✅ Smart Contract</div>
+                    <div class="trust-badge">⚡ Red TRON</div>
+                    <div class="trust-badge">🔒 Sin firma</div>
+                    <div class="trust-badge">🤖 IA Activa</div>
+                </div>
+
                 <div class="login-shortcut">
-                    <span>Â¿Ya estÃ¡s registrado?</span>
+                    <span>¿Ya estás registrado?</span>
                     <button id="copy-safe-link-hero" type="button" class="login-link-btn">Copiar enlace</button>
                 </div>
             </div>
-            <div class="hero-image">
+            <div class="hero-image" style="position:relative;z-index:1;">
                 <div class="glass-card">
                     <img id="hero-img" src="hero-img.png" alt="NFT o Cripto">
                 </div>
             </div>
         </section>
 
+        <!-- ── STATS STRIP (movido al inicio) ───────────────── -->
+        <section id="stats" class="stats-section">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <h2 id="total-users">0</h2>
+                    <p>Usuarios VIP</p>
+                </div>
+                <div class="stat-item">
+                    <h2 id="total-rewards">0 USDT</h2>
+                    <p>USDT Distribuido</p>
+                </div>
+                <div class="stat-item">
+                    <h2 id="current-level">1</h2>
+                    <p>En qué nivel nos encontramos</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── PLAZAS DISPONIBLES FASE 0 ───────────────────────── -->
+        <div class="fase0-plazas-wrap reveal-on-scroll">
+            <div class="fase0-plazas-inner">
+                <div class="fp-left">
+                    <span class="fp-fire">🔥</span>
+                    <div>
+                        <div class="fp-title">Plazas Fase 0 — <span id="fp-ocupadas">•••</span> / <span id="fp-total">300</span> ocupadas</div>
+                        <div class="fp-sub">Cuando se complete, las condiciones de entrada cambian para siempre</div>
+                    </div>
+                </div>
+                <div class="fp-right">
+                    <div class="fp-bar-wrap">
+                        <div class="fp-bar-fill" id="fp-bar" style="width:0%"></div>
+                    </div>
+                    <div class="fp-pct" id="fp-pct">0%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── TICKER DE ACTIVIDAD ───────────────────────────── -->
+        <div class="activity-ticker" aria-label="Actividad reciente">
+            <div class="ticker-track" id="ticker-track">
+                <div class="ticker-item"><span class="ticker-dot"></span>Carlos G. acaba de ganar <strong>+$10 USDT</strong> en Tablero A</div>
+                <div class="ticker-item"><span class="ticker-dot"></span>María L. completó su ciclo — <strong>+$40 USDT netos</strong></div>
+                <div class="ticker-item"><span class="ticker-dot"></span>Nuevo miembro en <strong>Fase 0</strong> desde Venezuela 🇻🇪</div>
+                <div class="ticker-item"><span class="ticker-dot"></span>Andrés P. recuperó su semilla en <strong>48 horas</strong></div>
+                <div class="ticker-item"><span class="ticker-dot"></span>5 nuevos registros en las últimas <strong>2 horas</strong></div>
+                <div class="ticker-item"><span class="ticker-dot"></span>Luisa M. activó <strong>3 referidos directos</strong> hoy</div>
+                <div class="ticker-item"><span class="ticker-dot"></span>La Tesorería distribuyó <strong>$320 USDT</strong> este día</div>
+                <div class="ticker-item"><span class="ticker-dot"></span>Agente IA completó 2 redes automáticas — <strong>ganancias garantizadas</strong></div>
+            </div>
+        </div>
+
+        <!-- ── CÓMO FUNCIONA ─────────────────────────────────── -->
         <section id="how-it-works">
             <h2 class="section-title">¿Cómo funciona?</h2>
             <div class="steps">
@@ -85,121 +154,374 @@
             </div>
         </section>
 
-        <!-- ── SECCIÓN ROI VISUAL (DISEÑO #1) ──────────────────── -->
-        <section id="roi-visual">
-            <h2 class="section-title">De <span class="gradient-text">$10</span> a <span class="gradient-text">$40</span> netos</h2>
-            <p class="roi-subtitle">Así crece tu semilla a través de los 3 tableros de RADIX Fase 0 · $150 ganancia bruta total</p>
 
-            <div class="roi-flow">
-                <!-- Semilla -->
-                <div class="roi-card roi-entrada reveal-on-scroll">
-                    <div class="roi-icon">💰</div>
-                    <div class="roi-amount roi-gold">$10</div>
-                    <div class="roi-label">Tu Semilla</div>
-                    <div class="roi-sublabel">USDT TRC-20 (Tron)</div>
+        <!-- ── FASES DEL PROYECTO ────────────────────────────── -->
+        <section id="phases">
+            <h2 class="section-title">Fases del <span class="gradient-text">Proyecto</span></h2>
+            <p style="text-align:center;color:#888;margin-bottom:0.6rem;font-size:0.97rem;max-width:680px;margin-left:auto;margin-right:auto;">
+                Cada fase se auto-financia con la semilla generada en la fase anterior. Entras con <strong style="color:#fff;">$10</strong> y el sistema construye tu camino hasta <strong style="color:#00e676;">$4,000+</strong> en ganancias.
+            </p>
+            <!-- Línea de progresión visual -->
+            <div class="phases-progress-bar">
+                <div class="phases-progress-step">
+                    <div class="ppstep-dot">0</div>
+                    <div class="ppstep-label ppstep-label-active">ACTIVA</div>
                 </div>
-
-                <div class="roi-connector">
-                    <div class="roi-arrow-line"></div>
-                    <span class="roi-arrow-tip">▶</span>
+                <div class="phases-progress-line phases-line-active"></div>
+                <div class="phases-progress-step">
+                    <div class="ppstep-dot ppstep-dot-1">1</div>
+                    <div class="ppstep-label ppstep-label-active">ACTIVA</div>
                 </div>
-
-                <!-- Tablero A -->
-                <div class="roi-card roi-a reveal-on-scroll">
-                    <div class="roi-badge roi-badge-a">Tablero A</div>
-                    <div class="roi-amount roi-green">+$10</div>
-                    <div class="roi-label">Ganancia</div>
-                    <div class="roi-sublabel">3 referidos × $10</div>
-                    <div class="roi-treasury-chip">+ $10 → 🏦 Tesorería</div>
+                <div class="phases-progress-line phases-line-active"></div>
+                <div class="phases-progress-step">
+                    <div class="ppstep-dot ppstep-dot-2">2</div>
+                    <div class="ppstep-label ppstep-label-active">ACTIVA</div>
                 </div>
-
-                <div class="roi-connector">
-                    <div class="roi-arrow-line"></div>
-                    <span class="roi-arrow-tip">▶</span>
-                </div>
-
-                <!-- Tablero B -->
-                <div class="roi-card roi-b reveal-on-scroll">
-                    <div class="roi-badge roi-badge-b">Tablero B</div>
-                    <div class="roi-amount roi-green">+$20</div>
-                    <div class="roi-label">Ganancia</div>
-                    <div class="roi-sublabel">3 referidos × $20</div>
-                    <div class="roi-treasury-chip">+ $20 → 🏦 Tesorería</div>
-                </div>
-
-                <div class="roi-connector">
-                    <div class="roi-arrow-line"></div>
-                    <span class="roi-arrow-tip">▶</span>
-                </div>
-
-                <!-- Tablero C -->
-                <div class="roi-card roi-c reveal-on-scroll">
-                    <div class="roi-badge roi-badge-c">Tablero C</div>
-                    <div class="roi-amount roi-green">+$120</div>
-                    <div class="roi-label">Ganancia Bruta</div>
-                    <div class="roi-sublabel">3 referidos × $40</div>
-                    <div class="roi-treasury-chip">+ $40 → 🏦 Tesorería</div>
-                </div>
-
-                <div class="roi-connector">
-                    <div class="roi-arrow-line"></div>
-                    <span class="roi-arrow-tip">▶</span>
-                </div>
-
-                <!-- Resultado -->
-                <div class="roi-card roi-resultado reveal-on-scroll">
-                    <div class="roi-icon">🚀</div>
-                    <div class="roi-amount roi-final">$40</div>
-                    <div class="roi-label">Ganancia Neta</div>
-                    <div class="roi-sublabel">por ciclo completo</div>
-                    <div class="roi-treasury-chip" style="color:#aaa; border-color:rgba(255,255,255,0.1);">$150 bruto − reinversión</div>
+                <div class="phases-progress-line"></div>
+                <div class="phases-progress-step">
+                    <div class="ppstep-dot ppstep-future">3</div>
+                    <div class="ppstep-label">PRÓXIMA</div>
                 </div>
             </div>
 
-            <div class="roi-note">
-                <span>💡</span>
-                <p>La <strong>Tesorería RADIX</strong> activa Agentes IA que completan tu red automáticamente, garantizando el flujo continuo del sistema.</p>
+            <div class="phases-grid">
+
+                <!-- FASE 0 — ACTIVA -->
+                <div class="phase-card phase-active">
+                    <div class="phase-badge">🔥 ACTIVA AHORA</div>
+                    <div class="phase-num">FASE 0</div>
+                    <div class="phase-entry">Semilla de entrada</div>
+                    <div class="phase-seed-amount">$10 <span>USDT</span></div>
+
+                    <div class="phase-boards-table">
+                        <div class="pbt-header">
+                            <span>Tablero</span>
+                            <span>Tu entrada</span>
+                            <span>Ganancia directa</span>
+                        </div>
+                        <div class="pbt-row">
+                            <span class="pbt-board pbt-a">A</span>
+                            <span class="pbt-val">$10</span>
+                            <span class="pbt-gain">+$10</span>
+                        </div>
+                        <div class="pbt-row">
+                            <span class="pbt-board pbt-b">B</span>
+                            <span class="pbt-val">$20</span>
+                            <span class="pbt-gain">+$20</span>
+                        </div>
+                        <div class="pbt-row">
+                            <span class="pbt-board pbt-c">C</span>
+                            <span class="pbt-val">$40</span>
+                            <span class="pbt-gain pbt-gain-c">+$120 bruto</span>
+                        </div>
+                    </div>
+
+                    <div class="phase-net-result">
+                        <div class="pnr-label">Ganancia neta por ciclo</div>
+                        <div class="pnr-value">$40 USDT</div>
+                        <div class="pnr-roi">ROI 400%</div>
+                    </div>
+
+                    <div class="phase-seed-forward">
+                        <span class="psf-icon">🌱</span>
+                        <span>Genera <strong>$100 USDT</strong> de semilla automática para Fase 1</span>
+                    </div>
+
+                    <div class="phase-glow"></div>
+                </div>
+
+                <!-- FASE 1 — ACTIVA -->
+                <div class="phase-card phase-active phase-active-1">
+                    <div class="phase-badge phase-badge-1">✅ ACTIVA</div>
+                    <div class="phase-num phase-num-1">FASE 1</div>
+                    <div class="phase-entry">Semilla de entrada</div>
+                    <div class="phase-seed-amount">$100 <span>USDT</span></div>
+                    <div class="phase-seed-origin">✨ Auto-generada por tu Fase 0</div>
+
+                    <div class="phase-boards-table">
+                        <div class="pbt-header">
+                            <span>Tablero</span>
+                            <span>Tu entrada</span>
+                            <span>Ganancia directa</span>
+                        </div>
+                        <div class="pbt-row">
+                            <span class="pbt-board pbt-a">A</span>
+                            <span class="pbt-val">$100</span>
+                            <span class="pbt-gain">+$100</span>
+                        </div>
+                        <div class="pbt-row">
+                            <span class="pbt-board pbt-b">B</span>
+                            <span class="pbt-val">$200</span>
+                            <span class="pbt-gain">+$200</span>
+                        </div>
+                        <div class="pbt-row">
+                            <span class="pbt-board pbt-c">C</span>
+                            <span class="pbt-val">$400</span>
+                            <span class="pbt-gain pbt-gain-c">+$1,200 bruto</span>
+                        </div>
+                    </div>
+
+                    <div class="phase-net-result">
+                        <div class="pnr-label">Ganancia neta por ciclo</div>
+                        <div class="pnr-value">$400 USDT</div>
+                        <div class="pnr-roi">ROI 400%</div>
+                    </div>
+
+                    <div class="phase-seed-forward">
+                        <span class="psf-icon">🌱</span>
+                        <span>Genera <strong>$1,000 USDT</strong> de semilla automática para Fase 2</span>
+                    </div>
+
+                    <div class="phase-glow phase-glow-1"></div>
+                </div>
+
+                <!-- FASE 2 — ACTIVA -->
+                <div class="phase-card phase-active phase-active-2">
+                    <div class="phase-badge phase-badge-2">✅ ACTIVA</div>
+                    <div class="phase-num phase-num-2">FASE 2</div>
+                    <div class="phase-entry">Semilla de entrada</div>
+                    <div class="phase-seed-amount">$1,000 <span>USDT</span></div>
+                    <div class="phase-seed-origin">✨ Auto-generada por tu Fase 1</div>
+
+                    <div class="phase-boards-table">
+                        <div class="pbt-header">
+                            <span>Tablero</span>
+                            <span>Tu entrada</span>
+                            <span>Ganancia directa</span>
+                        </div>
+                        <div class="pbt-row">
+                            <span class="pbt-board pbt-a">A</span>
+                            <span class="pbt-val">$1,000</span>
+                            <span class="pbt-gain">+$1,000</span>
+                        </div>
+                        <div class="pbt-row">
+                            <span class="pbt-board pbt-b">B</span>
+                            <span class="pbt-val">$2,000</span>
+                            <span class="pbt-gain">+$2,000</span>
+                        </div>
+                        <div class="pbt-row">
+                            <span class="pbt-board pbt-c">C</span>
+                            <span class="pbt-val">$4,000</span>
+                            <span class="pbt-gain pbt-gain-c">+$12,000 bruto</span>
+                        </div>
+                    </div>
+
+                    <div class="phase-net-result">
+                        <div class="pnr-label">Ganancia neta por ciclo</div>
+                        <div class="pnr-value">$4,000 USDT</div>
+                        <div class="pnr-roi">ROI 400%</div>
+                    </div>
+
+                    <div class="phase-seed-forward">
+                        <span class="psf-icon">🌱</span>
+                        <span>Genera <strong>$10,000 USDT</strong> de semilla automática para Fase 3</span>
+                    </div>
+
+                    <div class="phase-glow phase-glow-2"></div>
+                </div>
+
+            </div>
+
+            <!-- Nota importante debajo de las fases -->
+            <div class="phases-summary-note">
+                <div class="psn-icon">💡</div>
+                <div class="psn-text">
+                    <strong>¿Cómo funciona la progresión?</strong> Al completar el Tablero C de cada fase, el sistema retiene automáticamente una semilla para fondear la siguiente. No necesitas poner dinero extra — tu $10 inicial genera el capital para las siguientes fases.
+                </div>
             </div>
         </section>
 
+        <!-- ── CALCULADORA DE GANANCIAS ─────────────────────────── -->
+        <section id="calculadora" class="reveal-on-scroll">
+            <h2 class="section-title">Calcula tus <span class="gradient-text">Ganancias</span></h2>
+            <p style="text-align:center;color:#888;font-size:0.97rem;max-width:600px;margin:0 auto 0;">
+                Mueve el slider y ve cuánto ganarías con tus referidos atravesando las 3 fases — con solo $10 de entrada.
+            </p>
+            <div class="calc-box">
+                <div class="calc-input-group">
+                    <label>¿Cuántos amigos puedes invitar? <span id="calc-ref-num" style="color:#9d00ff;font-weight:900;font-size:1.2rem;">3</span></label>
+                    <input type="range" id="calc-slider" class="calc-slider" min="0" max="15" value="3">
+                    <div class="calc-cycles-display">
+                        Tiempo estimado para completar las 3 fases: <span id="calc-tiempo">~56 días</span>
+                    </div>
+                </div>
+                <div class="calc-results">
+                    <div class="calc-result-item">
+                        <div class="calc-result-label">🌱 Fase 0 · Entrada $10</div>
+                        <div class="calc-result-value">+$40</div>
+                        <div class="calc-result-days" id="calc-days-0">~21 días</div>
+                    </div>
+                    <div class="calc-result-item">
+                        <div class="calc-result-label">⚡ Fase 1 · Auto $100</div>
+                        <div class="calc-result-value">+$400</div>
+                        <div class="calc-result-days" id="calc-days-1">~30 días</div>
+                    </div>
+                    <div class="calc-result-item">
+                        <div class="calc-result-label">💎 Fase 2 · Auto $1,000</div>
+                        <div class="calc-result-value">+$4,000</div>
+                        <div class="calc-result-days" id="calc-days-2">~45 días</div>
+                    </div>
+                    <div class="calc-result-item calc-result-main">
+                        <div class="calc-result-label">🏆 TOTAL POTENCIAL</div>
+                        <div class="calc-result-value">$4,440</div>
+                        <div style="font-size:0.72rem;color:#aaa;margin-top:4px;">con solo $10 iniciales</div>
+                    </div>
+                </div>
+                <div style="margin-top:2rem;text-align:center;">
+                    <a href="#" id="calc-cta-btn" class="hero-join-btn" role="button">
+                        Quiero ganar $4,440 → Registrarme ahora
+                    </a>
+                    <p style="font-size:0.75rem;color:#555;margin-top:1rem;">
+                        * Sin referidos, la IA de RADIX completa tu red automáticamente. Los tiempos son estimados.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── BENEFICIOS VIP (mejorado) ─────────────────────── -->
         <section id="benefits">
-            <h2 class="section-title">Beneficios VIP</h2>
+            <h2 class="section-title">Beneficios <span class="gradient-text">VIP</span></h2>
             <div class="benefits-grid">
                 <div class="benefit-card">
                     <div class="icon">🚀</div>
-                    <h4>Escalabilidad</h4>
-                    <p>De Radix Seed a Radix Core de forma automatizada por código.</p>
+                    <h4>Escalabilidad Automática</h4>
+                    <p>De Radix Seed a Radix Core de forma automatizada por código inteligente. Tu red crece sola.</p>
                 </div>
                 <div class="benefit-card">
                     <div class="icon">🛡️</div>
                     <h4>Seguridad Web3</h4>
-                    <p>Auditoría de transacciones en la red Tron.</p>
+                    <p>Auditoría de transacciones en la red Tron. Smart Contracts verificados y transparentes.</p>
                 </div>
                 <div class="benefit-card">
                     <div class="icon">🔄</div>
                     <h4>Ciclo Infinito</h4>
-                    <p>Sistema de reinversión automática para generar beneficios recurrentes.</p>
+                    <p>Sistema de reinversión automática para generar beneficios recurrentes sin límite.</p>
+                </div>
+                <div class="benefit-card">
+                    <div class="icon">🤖</div>
+                    <h4>Agentes IA</h4>
+                    <p>Inteligencia artificial activa 24/7 que completa tu red y maximiza tus ganancias automáticamente.</p>
+                </div>
+                <div class="benefit-card">
+                    <div class="icon">⚡</div>
+                    <h4>Pagos Instantáneos</h4>
+                    <p>Recibe tus USDT directamente en tu wallet en segundos. Sin intermediarios ni demoras.</p>
+                </div>
+                <div class="benefit-card">
+                    <div class="icon">🌍</div>
+                    <h4>Sin Fronteras</h4>
+                    <p>Opera desde cualquier país del mundo. La blockchain no tiene restricciones geográficas.</p>
                 </div>
             </div>
         </section>
 
-        <section id="stats" class="stats-section">
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <h2 id="total-users">0</h2>
-                    <p>Usuarios VIP</p>
+
+        <!-- ── POR QUÉ AHORA ─────────────────────────────────── -->
+        <section id="why-now">
+            <h2 class="section-title">¿Por qué <span class="gradient-text">ahora</span>?</h2>
+            <div class="why-grid">
+                <div class="why-card">
+                    <div class="why-icon">⏳</div>
+                    <h4>Fase 0 tiene plazas limitadas</h4>
+                    <p>Cuando la Fase 0 se sature, las condiciones cambian. Quien entra primero aprovecha las mejores ganancias por ciclo.</p>
                 </div>
-                <div class="stat-item">
-                    <h2 id="total-rewards">0 USDT</h2>
-                    <p>USDT Distribuido</p>
+                <div class="why-card">
+                    <div class="why-icon">📈</div>
+                    <h4>El efecto de red escala exponencialmente</h4>
+                    <p>Cuanto más temprano entras, mayor es tu posición en la red. Los primeros participantes tienen ventaja estructural permanente.</p>
                 </div>
-                <div class="stat-item">
-                    <h2 id="total-days">0</h2>
-                    <p>Días en Funcionamiento</p>
+                <div class="why-card">
+                    <div class="why-icon">💡</div>
+                    <h4>Solo $10 para empezar</h4>
+                    <p>La barrera de entrada más baja de la historia del proyecto. Una inversión mínima con potencial de retorno del 400%.</p>
+                </div>
+                <div class="why-card">
+                    <div class="why-icon">🤖</div>
+                    <h4>IA trabaja por ti desde el día 1</h4>
+                    <p>Los Agentes IA de la Tesorería RADIX están activos ahora mismo completando redes. Tu cuenta se beneficia desde que te registras.</p>
                 </div>
             </div>
         </section>
 
+        <!-- ── FAQ ───────────────────────────────────────────── -->
+        <section id="faq">
+            <h2 class="section-title">Preguntas <span class="gradient-text">Frecuentes</span></h2>
+            <div class="faq-list">
+
+                <div class="faq-item">
+                    <button class="faq-q" aria-expanded="false">
+                        <span>¿Qué es RADIX y cómo funciona?</span>
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-a">
+                        RADIX es un ecosistema de economía colaborativa basado en Smart Contracts en la red TRON. Funciona a través de un sistema de 3 tableros (A, B, C) donde cada participante aporta una donación semilla de $10 USDT y puede recuperar hasta $40 netos por ciclo completo. Los Agentes IA de la Tesorería aseguran el flujo continuo de la red.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-q" aria-expanded="false">
+                        <span>¿Es seguro? ¿Dónde van mis fondos?</span>
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-a">
+                        Todas las transacciones ocurren directamente en la blockchain de TRON, que es pública y auditable. Ninguna persona ni empresa tiene acceso a tus fondos — todo está gobernado por Smart Contracts. Puedes verificar cada transacción en el explorador de TRON en tiempo real.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-q" aria-expanded="false">
+                        <span>¿Necesito experiencia en criptomonedas?</span>
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-a">
+                        No. Solo necesitas una wallet compatible con TRON (como SafePal o TronLink) y $10 USDT TRC-20. Nuestro asistente RADIX te guía paso a paso en el proceso de registro, pago y activación. Sin tecnicismos ni firmas complicadas.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-q" aria-expanded="false">
+                        <span>¿Cuánto tiempo tarda en recuperar mi inversión?</span>
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-a">
+                        El tiempo depende de la actividad de la red. Con 3 referidos directos activos, muchos participantes recuperan su inversión inicial en 24–72 horas. Los Agentes IA aceleran el proceso completando redes de forma automática cuando la actividad orgánica es menor.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-q" aria-expanded="false">
+                        <span>¿Qué wallet necesito para unirme?</span>
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-a">
+                        Necesitas una wallet con soporte USDT TRC-20 en la red TRON. Las más recomendadas son SafePal (disponible en Chrome y móvil) y TronLink (extensión para Chrome/Edge). En móvil, puedes usar directamente el navegador DApp de SafePal para registrarte sin complicaciones.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-q" aria-expanded="false">
+                        <span>¿Puedo unirme desde cualquier país?</span>
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-a">
+                        Sí. RADIX opera en la blockchain de TRON que es descentralizada y global. No hay restricciones geográficas. Participantes de América Latina, Europa, Asia y más países ya forman parte del ecosistema.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-q" aria-expanded="false">
+                        <span>¿Qué pasa cuando la Fase 0 se complete?</span>
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-a">
+                        Cuando la Fase 0 alcance su capacidad máxima, se activará la Fase 1 con nuevas condiciones y mayor potencial de ganancias. Los participantes de Fase 0 mantienen todos sus beneficios y obtienen ventaja prioritaria en las fases siguientes. Por eso es importante entrar ahora.
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ── ROADMAP ────────────────────────────────────────── -->
         <section id="roadmap">
             <h2 class="section-title">Roadmap 2026</h2>
             <div class="timeline">
@@ -224,13 +546,39 @@
                         <p>Lanzamiento de colecciones exclusivas para miembros con beneficios adicionales.</p>
                     </div>
                 </div>
+                <div class="timeline-item">
+                    <div class="time-point">Q4</div>
+                    <div class="timeline-content">
+                        <h3>Token RADIX & DAO</h3>
+                        <p>Emisión del token propio y gobernanza descentralizada para la comunidad.</p>
+                    </div>
+                </div>
             </div>
         </section>
+
+        <!-- ── CTA FINAL ─────────────────────────────────────── -->
+        <section style="padding:5rem 1rem;text-align:center;background:linear-gradient(135deg,rgba(157,0,255,0.08),rgba(0,210,255,0.06));border-top:1px solid rgba(255,255,255,0.05);">
+            <div style="max-width:600px;margin:0 auto;">
+                <div style="font-size:2.5rem;margin-bottom:1rem;">🚀</div>
+                <h2 class="gradient-text" style="font-size:clamp(1.6rem,4vw,2.4rem);margin-bottom:1rem;">Empieza hoy con solo $10 USDT</h2>
+                <p style="color:#888;margin-bottom:2rem;font-size:1rem;line-height:1.7;">Miles de personas ya están generando ingresos reales con RADIX. La Fase 0 es la oportunidad de mayor retorno. No esperes a que las condiciones cambien.</p>
+                <button class="hero-join-btn" id="final-cta-btn" style="font-size:1.1rem;padding:18px 42px;">Registrarme ahora — Es gratis →</button>
+                <p style="color:#555;font-size:0.78rem;margin-top:1rem;">Solo 10 USDT de semilla · Sin firma de wallet · Pago en TRON</p>
+            </div>
+        </section>
+
     </main>
 
     <footer>
         <p>&copy; 2026 RADIX Ecosystem. Todos los derechos reservados.</p>
     </footer>
+
+    <!-- ── STICKY CTA MÓVIL ──────────────────────────────────── -->
+    <div class="sticky-cta-mobile" id="sticky-cta">
+        <button class="hero-join-btn" id="sticky-cta-btn" style="width:100%;border-radius:14px;padding:16px;">
+            🚀 Unirme ahora — $10 USDT
+        </button>
+    </div>
 
     <!-- ── MODAL: DATOS DE CONTACTO ───────────────────────── -->
     <div id="contact-modal" class="modal-overlay" style="display:none;">
@@ -239,7 +587,7 @@
             <div style="text-align:center;margin-bottom:22px;">
                 <div style="display:inline-block;background:rgba(0,210,255,0.12);border:1px solid rgba(0,210,255,0.35);color:#00d2ff;font-size:0.72rem;font-weight:700;padding:4px 14px;border-radius:20px;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px;">Registro</div>
                 <h3 style="font-size:1.35rem;font-weight:800;color:#fff;margin-bottom:8px;">Completa tus datos</h3>
-                <p style="color:#888;font-size:0.86rem;line-height:1.6;margin:0;">Completa tu registro con una wallet valida de la red TRON. Ya no necesitas firmar para crear tu cuenta.</p>
+                <p style="color:#888;font-size:0.86rem;line-height:1.6;margin:0;">Completa tu registro con una wallet válida de la red TRON. Ya no necesitas firmar para crear tu cuenta.</p>
             </div>
 
             <form id="contact-modal-form" style="display:flex;flex-direction:column;gap:14px;">
@@ -270,47 +618,47 @@
                     <input id="contact-wallet" name="wallet" type="text" autocomplete="off" placeholder="T..." style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
                     <div id="contact-wallet-error" style="min-height:16px;margin-top:6px;color:#ff6b6b;font-size:0.74rem;line-height:1.4;"></div>
                 </div>
-                <div id="contact-wallet-hint" style="margin-top:-4px;color:#777;font-size:0.76rem;line-height:1.5;">Usa una direccion valida de la red TRON. El sistema revisa el formato antes de crear tu cuenta.</div>
+                <div id="contact-wallet-hint" style="margin-top:-4px;color:#777;font-size:0.76rem;line-height:1.5;">Usa una dirección válida de la red TRON. El sistema revisa el formato antes de crear tu cuenta.</div>
                 <div id="contact-password-wrap">
-                    <label for="contact-password" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">ContraseÃ±a de acceso</label>
+                    <label for="contact-password" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Contraseña de acceso</label>
                     <input id="contact-password" name="password" type="password" autocomplete="new-password" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
                     <div id="contact-password-error" style="min-height:16px;margin-top:6px;color:#ff6b6b;font-size:0.74rem;line-height:1.4;"></div>
                 </div>
                 <div id="contact-password-confirm-wrap">
-                    <label for="contact-password-confirm" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Confirmar contraseÃ±a</label>
+                    <label for="contact-password-confirm" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Confirmar contraseña</label>
                     <input id="contact-password-confirm" name="password_confirm" type="password" autocomplete="new-password" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
                     <div id="contact-password-confirm-error" style="min-height:16px;margin-top:6px;color:#ff6b6b;font-size:0.74rem;line-height:1.4;"></div>
                 </div>
-                <div id="contact-password-hint" style="margin-top:-4px;color:#777;font-size:0.76rem;line-height:1.5;">Esta contraseÃ±a te servirÃ¡ para volver a entrar con tu correo, telÃ©fono o wallet sin firmar de nuevo.</div>
+                <div id="contact-password-hint" style="margin-top:-4px;color:#777;font-size:0.76rem;line-height:1.5;">Esta contraseña te servirá para volver a entrar con tu correo, teléfono o wallet sin firmar de nuevo.</div>
                 <div id="contact-modal-status" style="min-height:18px;color:#ff6b6b;font-size:0.78rem;"></div>
                 <button type="submit" style="width:100%;padding:14px;border-radius:14px;background:linear-gradient(135deg,#9d00ff,#7000cc);border:none;color:#fff;font-size:0.95rem;font-weight:700;cursor:pointer;">
                     Crear cuenta
                 </button>
                 <div style="text-align:center;color:#888;font-size:0.8rem;">
-                    Â¿Ya tienes cuenta?
-                    <button id="switch-to-login" type="button" style="background:none;border:none;color:#00d2ff;font:inherit;font-weight:700;cursor:pointer;padding:0 0 0 4px;">Inicia sesiÃ³n</button>
+                    ¿Ya tienes cuenta?
+                    <button id="switch-to-login" type="button" style="background:none;border:none;color:#00d2ff;font:inherit;font-weight:700;cursor:pointer;padding:0 0 0 4px;">Inicia sesión</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- ── MODAL: BILLETERA INSTALADA PERO SIN CONFIGURAR ────────────── -->
+    <!-- ── MODAL: LOGIN ──────────────────────────────────── -->
     <div id="user-login-modal" class="modal-overlay" style="display:none;">
         <div class="modal-content" style="background:linear-gradient(145deg,#111118,#0d0d14);border:1px solid rgba(0,210,255,0.28);border-radius:24px;padding:32px 28px;max-width:470px;width:100%;position:relative;box-shadow:0 0 60px rgba(0,210,255,0.14),0 30px 60px rgba(0,0,0,0.7);">
             <button id="user-login-close" type="button" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#888;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;">✕</button>
             <div style="text-align:center;margin-bottom:22px;">
                 <div style="display:inline-block;background:rgba(0,210,255,0.12);border:1px solid rgba(0,210,255,0.35);color:#00d2ff;font-size:0.72rem;font-weight:700;padding:4px 14px;border-radius:20px;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px;">Acceso</div>
                 <h3 style="font-size:1.35rem;font-weight:800;color:#fff;margin-bottom:8px;">Ingresa a tu cuenta</h3>
-                <p style="color:#888;font-size:0.86rem;line-height:1.6;margin:0;">Si ya te registraste, entra con tu correo, telÃ©fono o wallet y tu contraseÃ±a.</p>
+                <p style="color:#888;font-size:0.86rem;line-height:1.6;margin:0;">Si ya te registraste, entra con tu correo, teléfono o wallet y tu contraseña.</p>
             </div>
 
             <form id="user-login-form" style="display:flex;flex-direction:column;gap:14px;">
                 <div>
-                    <label for="user-login-identifier" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Correo, telÃ©fono o wallet</label>
+                    <label for="user-login-identifier" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Correo, teléfono o wallet</label>
                     <input id="user-login-identifier" name="login" type="text" autocomplete="username" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
                 </div>
                 <div>
-                    <label for="user-login-password" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">ContraseÃ±a</label>
+                    <label for="user-login-password" style="display:block;color:#ccc;font-size:0.8rem;margin-bottom:6px;">Contraseña</label>
                     <input id="user-login-password" name="password" type="password" autocomplete="current-password" style="width:100%;background:#0a0a12;border:1px solid #2a2a3a;color:#fff;padding:13px 14px;border-radius:12px;font-size:0.92rem;outline:none;box-sizing:border-box;">
                 </div>
                 <div id="user-login-status" style="min-height:18px;color:#888;font-size:0.78rem;"></div>
@@ -318,13 +666,14 @@
                     Ingresar ahora
                 </button>
                 <div style="text-align:center;color:#888;font-size:0.8rem;">
-                    Â¿No tienes cuenta?
-                    <button id="switch-to-register" type="button" style="background:none;border:none;color:#9d00ff;font:inherit;font-weight:700;cursor:pointer;padding:0 0 0 4px;">RegÃ­strate</button>
+                    ¿No tienes cuenta?
+                    <button id="switch-to-register" type="button" style="background:none;border:none;color:#9d00ff;font:inherit;font-weight:700;cursor:pointer;padding:0 0 0 4px;">Regístrate</button>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- ── MODAL: WALLET SIN CONFIGURAR ─────────────────── -->
     <div id="wallet-setup-modal" class="modal-overlay" style="display:none;">
         <div class="modal-content" style="background:linear-gradient(145deg,#111118,#0d0d14);border:1px solid rgba(157,0,255,0.4);border-radius:24px;padding:32px 28px;max-width:460px;width:100%;position:relative;box-shadow:0 0 60px rgba(157,0,255,0.2),0 30px 60px rgba(0,0,0,0.7);">
             <button onclick="localStorage.setItem('radix_wallet_setup_modal_dismissed','1');document.getElementById('wallet-setup-modal').style.display='none';" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#888;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;">✕</button>
@@ -335,7 +684,6 @@
                 <p style="color:#888;font-size:0.85rem;line-height:1.5;">Tienes SafePal instalado pero sin ninguna wallet configurada. Sigue estos pasos:</p>
             </div>
 
-            <!-- Pasos -->
             <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px;">
                 <div style="display:flex;align-items:flex-start;gap:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px;">
                     <span style="background:#9d00ff;color:#fff;min-width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:900;">1</span>
@@ -366,29 +714,24 @@
         </div>
     </div>
 
-    <!-- ── MODAL: BILLETERA NO DETECTADA ────────────── -->
+    <!-- ── MODAL: SIN BILLETERA ──────────────────────────── -->
     <div id="wallet-modal" class="modal-overlay" style="display:none;">
         <div class="modal-content" style="background:linear-gradient(145deg,#111118,#0d0d14);border:1px solid rgba(157,0,255,0.4);border-radius:24px;padding:32px 28px;max-width:480px;width:100%;position:relative;box-shadow:0 0 60px rgba(157,0,255,0.2),0 30px 60px rgba(0,0,0,0.7);max-height:90vh;overflow-y:auto;">
 
-            <!-- Cerrar -->
             <button onclick="document.getElementById('wallet-modal').style.display='none'" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#888;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;">✕</button>
 
-            <!-- Header -->
             <div style="text-align:center;margin-bottom:22px;">
                 <div style="display:inline-block;background:rgba(255,180,0,0.12);border:1px solid rgba(255,180,0,0.35);color:#ffb400;font-size:0.72rem;font-weight:700;padding:4px 14px;border-radius:20px;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px;">⚠️ Sin billetera</div>
                 <h3 style="font-size:1.4rem;font-weight:800;line-height:1.3;margin-bottom:10px;color:#fff;">Necesitas una billetera<br><span style="background:linear-gradient(90deg,#9d00ff,#00d2ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">compatible con Tron</span></h3>
                 <p style="color:#888;font-size:0.87rem;line-height:1.5;margin:0;">Para unirte a RADIX necesitas una billetera con soporte <strong style="color:#fff;">USDT TRC-20</strong> en la Red Tron.</p>
             </div>
 
-            <!-- Sección PC -->
             <div style="margin-bottom:18px;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
                     <span style="background:#9d00ff;color:#fff;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900;flex-shrink:0;">1</span>
                     <span style="font-size:0.8rem;font-weight:700;color:#ccc;text-transform:uppercase;letter-spacing:1px;">💻 En tu computadora</span>
                 </div>
                 <p style="font-size:0.8rem;color:#555;margin-bottom:10px;">Instala una extensión oficial en Chrome o Edge:</p>
-
-                <!-- SafePal -->
                 <a href="https://chromewebstore.google.com/detail/safepal-extension-wallet/lgmpcpglpngdoalbgeoldeajfclnhafa" target="_blank" style="display:flex;align-items:center;gap:14px;padding:13px 15px;border-radius:13px;text-decoration:none;background:rgba(255,204,0,0.07);border:1px solid rgba(255,204,0,0.25);margin-bottom:8px;transition:0.2s;">
                     <span style="font-size:1.4rem;">🟡</span>
                     <div>
@@ -397,8 +740,6 @@
                     </div>
                     <span style="margin-left:auto;color:#555;font-size:1rem;">↗</span>
                 </a>
-
-                <!-- TronLink -->
                 <a href="https://chromewebstore.google.com/detail/tronlink/ibnejdfjmmkpcnlpebklmnkoeoihofec" target="_blank" style="display:flex;align-items:center;gap:14px;padding:13px 15px;border-radius:13px;text-decoration:none;background:rgba(231,37,37,0.07);border:1px solid rgba(231,37,37,0.25);transition:0.2s;">
                     <span style="font-size:1.4rem;">🔴</span>
                     <div>
@@ -409,14 +750,12 @@
                 </a>
             </div>
 
-            <!-- Divider -->
             <div style="display:flex;align-items:center;gap:10px;margin:16px 0;">
                 <div style="flex:1;height:1px;background:#1e1e2a;"></div>
                 <span style="color:#333;font-size:0.78rem;">ó</span>
                 <div style="flex:1;height:1px;background:#1e1e2a;"></div>
             </div>
 
-            <!-- Sección celular -->
             <div style="margin-bottom:20px;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
                     <span style="background:#9d00ff;color:#fff;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900;flex-shrink:0;">2</span>
@@ -432,13 +771,13 @@
                 </div>
             </div>
 
-            <!-- Botón recargar -->
             <button onclick="location.reload()" style="width:100%;padding:14px;border-radius:14px;background:linear-gradient(135deg,#9d00ff,#7000cc);border:none;color:#fff;font-size:0.95rem;font-weight:700;cursor:pointer;letter-spacing:0.5px;">
                 ✅ Ya la instalé — Recargar página
             </button>
-
         </div>
     </div>
+
+    <!-- ── BOTÓN WHATSAPP SOPORTE ────────────────────────── -->
     <a
         href="https://wha.link/bk8PEd"
         class="support-float"
@@ -452,5 +791,137 @@
             <path d="M27.27 4.73A15.89 15.89 0 0 0 16 0C7.16 0 0 7.16 0 16c0 2.82.74 5.58 2.15 8L0 32l8.2-2.11A15.93 15.93 0 0 0 16 32c8.84 0 16-7.16 16-16 0-4.27-1.66-8.29-4.73-11.27ZM16 29.2a13.1 13.1 0 0 1-6.68-1.82l-.48-.28-4.87 1.25 1.3-4.75-.31-.49A13.13 13.13 0 0 1 2.8 16C2.8 8.72 8.72 2.8 16 2.8c3.52 0 6.83 1.37 9.32 3.87A13.08 13.08 0 0 1 29.2 16c0 7.28-5.92 13.2-13.2 13.2Z"></path>
         </svg>
     </a>
+
+    <!-- ── JAVASCRIPT DE NUEVAS FEATURES ─────────────────── -->
+    <script>
+    // ── 1. Partículas del hero ──────────────────────────────
+    (function(){
+        const canvas = document.getElementById('hero-particles');
+        if(!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let W, H, particles = [];
+
+        function resize(){
+            W = canvas.width = canvas.offsetWidth;
+            H = canvas.height = canvas.offsetHeight;
+        }
+
+        function Particle(){
+            this.x = Math.random() * W;
+            this.y = Math.random() * H;
+            this.r = Math.random() * 1.8 + 0.4;
+            this.vx = (Math.random() - 0.5) * 0.4;
+            this.vy = (Math.random() - 0.5) * 0.4;
+            this.alpha = Math.random() * 0.5 + 0.15;
+            this.color = Math.random() > 0.5 ? '157,0,255' : '0,210,255';
+        }
+
+        function init(){
+            resize();
+            particles = [];
+            const count = Math.floor((W * H) / 9000);
+            for(let i = 0; i < count; i++) particles.push(new Particle());
+        }
+
+        function draw(){
+            ctx.clearRect(0, 0, W, H);
+            particles.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                if(p.x < 0) p.x = W; if(p.x > W) p.x = 0;
+                if(p.y < 0) p.y = H; if(p.y > H) p.y = 0;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(' + p.color + ',' + p.alpha + ')';
+                ctx.fill();
+            });
+            // líneas entre partículas cercanas
+            for(let i = 0; i < particles.length; i++){
+                for(let j = i+1; j < particles.length; j++){
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if(dist < 100){
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.strokeStyle = 'rgba(157,0,255,' + (0.06 * (1 - dist/100)) + ')';
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(draw);
+        }
+
+        init();
+        draw();
+        window.addEventListener('resize', init);
+    })();
+
+    // ── 2. Ticker animado ──────────────────────────────────
+    (function(){
+        const track = document.getElementById('ticker-track');
+        if(!track) return;
+        // duplicar items para loop continuo
+        track.innerHTML += track.innerHTML;
+        let offset = 0;
+        const speed = 0.4;
+        const totalW = track.scrollWidth / 2;
+        function tick(){
+            offset += speed;
+            if(offset >= totalW) offset = 0;
+            track.style.transform = 'translateX(-' + offset + 'px)';
+            requestAnimationFrame(tick);
+        }
+        tick();
+    })();
+
+    // ── 3. FAQ acordeón ───────────────────────────────────
+    document.querySelectorAll('.faq-q').forEach(function(btn){
+        btn.addEventListener('click', function(){
+            const item = btn.closest('.faq-item');
+            const answer = item.querySelector('.faq-a');
+            const icon = btn.querySelector('.faq-icon');
+            const isOpen = btn.getAttribute('aria-expanded') === 'true';
+
+            // cerrar todos
+            document.querySelectorAll('.faq-item').forEach(function(fi){
+                fi.querySelector('.faq-q').setAttribute('aria-expanded','false');
+                fi.querySelector('.faq-icon').textContent = '+';
+                fi.querySelector('.faq-a').style.maxHeight = '0';
+                fi.classList.remove('open');
+            });
+
+            if(!isOpen){
+                btn.setAttribute('aria-expanded','true');
+                icon.textContent = '−';
+                answer.style.maxHeight = answer.scrollHeight + 32 + 'px';
+                item.classList.add('open');
+            }
+        });
+    });
+
+    // ── 5. Botones CTA → abrir modal de registro ──────────
+    ['hero-join-btn','final-cta-btn','sticky-cta-btn'].forEach(function(id){
+        const el = document.getElementById(id);
+        if(el) el.addEventListener('click', function(e){
+            e.preventDefault();
+            const modal = document.getElementById('contact-modal');
+            if(modal) modal.style.display = 'flex';
+        });
+    });
+
+    // ── 6. Sticky CTA — ocultar en hero ──────────────────
+    (function(){
+        const sticky = document.getElementById('sticky-cta');
+        const hero = document.getElementById('home');
+        if(!sticky || !hero) return;
+        const obs = new IntersectionObserver(function(entries){
+            sticky.style.opacity = entries[0].isIntersecting ? '0' : '1';
+            sticky.style.pointerEvents = entries[0].isIntersecting ? 'none' : 'auto';
+        }, {threshold: 0.1});
+        obs.observe(hero);
+    })();
+    </script>
 </body>
 </html>

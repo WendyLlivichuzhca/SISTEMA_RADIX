@@ -680,6 +680,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 if (document.getElementById('total-users')) document.getElementById('total-users').innerText = data.total_usuarios;
                 if (document.getElementById('total-rewards')) document.getElementById('total-rewards').innerText = `$${Number(data.total_pagado).toFixed(2)} USDT`;
+                if (document.getElementById('current-level')) document.getElementById('current-level').innerText = data.nivel_actual ?? 1;
+                // Barra de plazas Fase 0
+                const ocupadas = data.total_usuarios || 0;
+                const capacidad = 300;
+                const pct = Math.min(100, Math.round((ocupadas / capacidad) * 100));
+                const fpOcupadas = document.getElementById('fp-ocupadas');
+                const fpBar = document.getElementById('fp-bar');
+                const fpPct = document.getElementById('fp-pct');
+                if (fpOcupadas) fpOcupadas.textContent = ocupadas;
+                if (fpPct) fpPct.textContent = pct + '%';
+                if (fpBar) setTimeout(() => { fpBar.style.width = pct + '%'; }, 400);
             }
         } catch (error) {
             console.log('Stats no disponibles aun.');
@@ -687,14 +698,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     loadHomeStats();
-
-    const launchDate = new Date('2026-04-01');
-    const daysSinceLaunch = document.getElementById('total-days');
-    if (daysSinceLaunch) {
-        const today = new Date();
-        const diff = Math.max(0, Math.floor((today - launchDate) / (1000 * 60 * 60 * 24)));
-        daysSinceLaunch.innerText = diff;
-    }
 
     const revealEls = document.querySelectorAll('.reveal-on-scroll');
     if (revealEls.length > 0) {
@@ -734,6 +737,106 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
         // silencioso
     }
+})();
+
+// ── CALCULADORA DE GANANCIAS ──────────────────────────────────────
+(function initCalculadora() {
+    const slider = document.getElementById('calc-slider');
+    if (!slider) return;
+
+    function calcDias(fase, refs) {
+        const base = [21, 30, 45][fase];
+        const reduccion = Math.min(refs, 10) * [1.5, 2.2, 3.5][fase];
+        return Math.max(2, Math.round(base - reduccion));
+    }
+
+    function update() {
+        const refs = parseInt(slider.value);
+        const numEl = document.getElementById('calc-ref-num');
+        if (numEl) numEl.textContent = refs;
+
+        const d0 = calcDias(0, refs);
+        const d1 = calcDias(1, refs);
+        const d2 = calcDias(2, refs);
+        const total = d0 + d1 + d2;
+
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        set('calc-days-0', '~' + d0 + ' días');
+        set('calc-days-1', '~' + d1 + ' días');
+        set('calc-days-2', '~' + d2 + ' días');
+        set('calc-tiempo', '~' + total + ' días');
+    }
+
+    slider.addEventListener('input', update);
+    update();
+
+    const cta = document.getElementById('calc-cta-btn');
+    if (cta) cta.addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('open-register-modal-nav')?.click();
+    });
+})();
+
+// ── NOTIFICACIONES EMERGENTES (FOMO) ─────────────────────────────
+(function initNotificaciones() {
+    const nombres = ['Carlos M.','Ana R.','Luis P.','María G.','Andrés T.','Valeria S.',
+        'Juan C.','Sofía L.','Pedro H.','Daniela V.','Miguel A.','Laura F.',
+        'Diego B.','Camila O.','Roberto E.','Natalia K.','Fernando J.','Paola W.'];
+    const paises = ['🇲🇽 México','🇨🇴 Colombia','🇻🇪 Venezuela','🇵🇪 Perú','🇦🇷 Argentina',
+        '🇨🇱 Chile','🇪🇨 Ecuador','🇧🇴 Bolivia','🇵🇦 Panamá','🇩🇴 Rep. Dominicana',
+        '🇺🇸 EEUU','🇪🇸 España'];
+    const emojis = ['🚀','💰','⚡','🔥','✅','💎','🌟','🎯'];
+    const mensajes = [
+        (n, p) => `${n} de ${p} acaba de registrarse`,
+        (n, p) => `${n} de ${p} completó su Tablero A — <strong>+$10 USDT</strong>`,
+        (n, p) => `${n} de ${p} invitó a 3 amigos hoy`,
+        (n, p) => `${n} de ${p} está en <strong>Fase 0 activa</strong>`,
+        (n, p) => `${n} de ${p} cobró <strong>+$40 USDT</strong> netos`,
+        (n, p) => `${n} de ${p} se unió hace unos minutos`,
+        (n, p) => `La IA completó una red en ${p} — ganancias enviadas`,
+        (n, p) => `${n} de ${p} avanzó al <strong>Tablero B</strong>`,
+    ];
+
+    function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    function crearNotif() {
+        const container = document.getElementById('radix-notif-container');
+        if (!container) return;
+        const nombre = rand(nombres);
+        const pais = rand(paises);
+        const emoji = rand(emojis);
+        const msgFn = rand(mensajes);
+        const hace = Math.floor(Math.random() * 5) + 1;
+
+        const notif = document.createElement('div');
+        notif.className = 'radix-notif';
+        notif.innerHTML = `
+            <div class="notif-avatar">${emoji}</div>
+            <div class="notif-body">
+                <div class="notif-name">${nombre}</div>
+                <div class="notif-msg">${msgFn(nombre, pais)}</div>
+                <div class="notif-time">hace ${hace} min</div>
+            </div>`;
+        container.appendChild(notif);
+
+        setTimeout(() => {
+            notif.classList.add('notif-exit');
+            setTimeout(() => notif.remove(), 380);
+        }, 5500);
+    }
+
+    // Contenedor fijo en el DOM
+    if (!document.getElementById('radix-notif-container')) {
+        const c = document.createElement('div');
+        c.id = 'radix-notif-container';
+        document.body.appendChild(c);
+    }
+
+    // Primera notificación al cabo de 8s, luego cada 22-35s
+    setTimeout(() => {
+        crearNotif();
+        setInterval(crearNotif, 22000 + Math.random() * 13000);
+    }, 8000);
 })();
 
 function mostrarToastLanding(msg, color = '#ff5252') {

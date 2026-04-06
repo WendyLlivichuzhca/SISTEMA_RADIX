@@ -58,10 +58,40 @@ try {
     ");
     $total_pagado = (float)$stmt->fetchColumn();
 
+    // Nivel actual: profundidad máxima del árbol de red (igual a "Niveles" en Mapa de Red)
+    try {
+        $stmt = $pdo->query("
+            WITH RECURSIVE depth_calc AS (
+                SELECT r.id_padre AS nid, 1 AS lvl
+                FROM referidos r
+                LEFT JOIN referidos r2
+                    ON r2.id_hijo = r.id_padre
+                    AND r2.fase_numero = r.fase_numero
+                    AND r2.ciclo = r.ciclo
+                WHERE r.fase_numero = 0 AND r.ciclo = 1 AND r2.id IS NULL
+                GROUP BY r.id_padre
+
+                UNION ALL
+
+                SELECT r.id_hijo, dc.lvl + 1
+                FROM depth_calc dc
+                JOIN referidos r ON r.id_padre = dc.nid
+                    AND r.fase_numero = 0 AND r.ciclo = 1
+                WHERE dc.lvl < 30
+            )
+            SELECT COALESCE(MAX(lvl), 1) FROM depth_calc
+        ");
+        $nivel_actual = (int)$stmt->fetchColumn();
+        if ($nivel_actual < 1) $nivel_actual = 1;
+    } catch (Exception $e) {
+        $nivel_actual = 1;
+    }
+
     sendResponse([
         'success'        => true,
         'total_usuarios' => $total_usuarios,
         'total_pagado'   => $total_pagado,
+        'nivel_actual'   => $nivel_actual,
     ]);
 
 } catch (PDOException $e) {
