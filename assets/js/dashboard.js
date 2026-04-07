@@ -1859,13 +1859,25 @@ async function loadMasterAdvancedData() {
         // B. Retiros Pendientes (Mini)
         const retirosMini = document.getElementById('master-retiros-mini-list');
         if (retirosMini) {
-            retirosMini.innerHTML = (data.retiros_pendientes || []).slice(0, 3).map(r => `
-                <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:8px; border-left:2px solid var(--accent); margin-bottom:5px;">
-                    <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
-                        <span style="color:#ddd;">${r.nickname}</span>
-                        <span style="color:var(--accent); font-weight:800;">$${parseFloat(r.monto).toFixed(2)}</span>
+            const _fc = fn => ({0:'#00d2ff',1:'#9d00ff',2:'#00e676',3:'#ffb300'})[fn] || '#aaa';
+            retirosMini.innerHTML = (data.retiros_pendientes || []).slice(0, 5).map(r => {
+                const fn    = parseInt(r.fase_numero ?? 0);
+                const fc    = _fc(fn);
+                const horas = parseInt(r.horas_esperando ?? 0);
+                const urg   = horas >= 20 ? '🔴' : horas >= 12 ? '🟡' : '🟢';
+                const nombre = escapeHtml(r.nombre_completo || r.nickname || '—');
+                return `
+                <div style="background:rgba(255,255,255,0.02); padding:12px; border-radius:10px; border-left:3px solid ${fc}; margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <span style="color:#ddd; font-weight:700; font-size:0.82rem;">${nombre}</span>
+                        <span style="color:#00e676; font-weight:800; font-size:0.85rem;">$${parseFloat(r.monto).toFixed(2)}</span>
                     </div>
-                </div>`).join('') || '<div style="color:#444; font-size:0.8rem; text-align:center;">Todo al día</div>';
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.68rem; color:${fc}; font-weight:700;">Fase ${fn}</span>
+                        <span style="font-size:0.68rem; color:#555;">${urg} ${horas}h esperando</span>
+                    </div>
+                </div>`;
+            }).join('') || '<div style="color:#444; font-size:0.8rem; text-align:center; padding:10px;">Todo al día ✅</div>';
         }
 
         // C. Actividad Reciente del Sistema — mini widget
@@ -2238,12 +2250,20 @@ function abrirRetiro(faseNum) {
     const statusEl = document.getElementById('retiro-status');
     if (statusEl) statusEl.innerText = '';
 
+    // Resetear input de monto personalizado
+    const montoInput = document.getElementById('retiro-monto-input');
+    if (montoInput) {
+        montoInput.value = '';
+        montoInput.max   = fasePay.saldo_disponible;
+        montoInput.style.borderColor = '#2a2a3a';
+    }
+
     // Habilitar botón
     const btn = document.getElementById('btn-solicitar-retiro');
     if (btn) btn.disabled = false;
 
-    // Renderizar historial dentro del modal
-    renderHistorial();
+    // Renderizar historial filtrado por fase dentro del modal
+    renderHistorial(faseNum);
 
     // Abrir modal
     const modal = document.getElementById('retiro-modal');
@@ -2263,6 +2283,12 @@ async function solicitarRetiro() {
     try {
         const formData = new FormData();
         formData.append('fase_numero', _retiroFaseActual);
+        // Si el usuario ingresó un monto personalizado, enviarlo
+        const montoInput = document.getElementById('retiro-monto-input');
+        const montoVal   = montoInput ? montoInput.value.trim() : '';
+        if (montoVal !== '' && parseFloat(montoVal) > 0) {
+            formData.append('monto', montoVal);
+        }
         const res  = await fetch('radix_api/solicitar_retiro.php', { method: 'POST', body: formData });
         const data = await res.json();
         if (data.success) {
@@ -2534,20 +2560,28 @@ function renderMasterRetirosFull() {
     const faseLabel = fn => { const m = {0:'Fase 0 · $40',1:'Fase 1 · $400',2:'Fase 2',3:'Fase 3'}; return m[fn] || `Fase ${fn}`; };
     const faseColor = fn => { const m = {0:'#00d2ff',1:'#9d00ff',2:'#00e676',3:'#ffb300'}; return m[fn] || '#aaa'; };
     box.innerHTML = _masterRetirosList.map((r, idx) => {
-        const nombre = escapeHtml(r.nombre_completo || r.nickname || '—');
-        const nick   = escapeHtml(r.nickname || '');
-        const wallet = escapeHtml(r.wallet_destino || '');
-        const fecha  = (r.fecha_solicitud || '').split(' ')[0];
-        const monto  = parseFloat(r.monto).toFixed(2);
-        const fn     = parseInt(r.fase_numero ?? 0);
-        const fc     = faseColor(fn);
+        const nombre  = escapeHtml(r.nombre_completo || r.nickname || '—');
+        const nick    = escapeHtml(r.nickname || '');
+        const wallet  = escapeHtml(r.wallet_destino || '');
+        const fecha   = (r.fecha_solicitud || '').split(' ')[0];
+        const monto   = parseFloat(r.monto).toFixed(2);
+        const fn      = parseInt(r.fase_numero ?? 0);
+        const fc      = faseColor(fn);
+        const horas   = parseInt(r.horas_esperando ?? 0);
+        const urgIcon = horas >= 20 ? '🔴' : horas >= 12 ? '🟡' : '🟢';
+        const urgLabel = horas >= 20 ? 'URGENTE' : horas >= 12 ? 'En espera' : 'Reciente';
+        const urgColor = horas >= 20 ? '#ff5252' : horas >= 12 ? '#ffb300' : '#00e676';
+        // Contacto
+        const tel  = escapeHtml(r.telefono || '');
+        const mail = escapeHtml(r.correo_electronico || '');
+        const tg   = escapeHtml(r.telegram_username || '');
         return `
-        <div id="retiro-master-${r.id}" style="background:#0d0d1a; border:1px solid rgba(255,255,255,0.06); border-radius:16px; margin-bottom:14px; overflow:hidden;">
+        <div id="retiro-master-${r.id}" style="background:#0d0d1a; border:1px solid rgba(255,255,255,0.06); border-radius:16px; margin-bottom:16px; overflow:hidden;">
             <!-- Header de la tarjeta -->
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid rgba(255,255,255,0.04); gap:10px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid rgba(255,255,255,0.05); gap:10px; flex-wrap:wrap; background:rgba(255,255,255,0.015);">
                 <div style="display:flex; align-items:center; gap:12px;">
                     <!-- Avatar -->
-                    <div style="width:42px; height:42px; border-radius:50%; background:rgba(157,0,255,0.15); border:2px solid rgba(157,0,255,0.3); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.85rem; flex-shrink:0; color:#9d00ff;">
+                    <div style="width:44px; height:44px; border-radius:50%; background:rgba(157,0,255,0.15); border:2px solid rgba(157,0,255,0.3); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.88rem; flex-shrink:0; color:#9d00ff;">
                         ${nombre.substring(0,2).toUpperCase()}
                     </div>
                     <div>
@@ -2555,8 +2589,13 @@ function renderMasterRetirosFull() {
                         <div style="font-size:0.7rem; color:#555; margin-top:1px;">@${nick}</div>
                     </div>
                 </div>
-                <!-- Badge de fase y número -->
-                <div style="display:flex; align-items:center; gap:8px;">
+                <!-- Badges -->
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <!-- Urgencia -->
+                    <span style="background:rgba(0,0,0,0.5); border:1px solid ${urgColor}44; color:${urgColor}; font-size:0.62rem; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap;">
+                        ${urgIcon} ${urgLabel} · ${horas}h
+                    </span>
+                    <!-- Fase -->
                     <span style="background:rgba(0,0,0,0.4); border:1px solid ${fc}33; color:${fc}; font-size:0.65rem; font-weight:700; padding:3px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:1px;">
                         ${faseLabel(fn)}
                     </span>
@@ -2565,13 +2604,28 @@ function renderMasterRetirosFull() {
             </div>
             <!-- Cuerpo -->
             <div style="padding:14px 18px;">
+                <!-- Contacto -->
+                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px; margin-bottom:12px;">
+                    ${tel ? `<div style="background:rgba(255,255,255,0.03); border-radius:8px; padding:8px 10px; border:1px solid rgba(255,255,255,0.05);">
+                        <div style="font-size:0.58rem; color:#444; text-transform:uppercase; letter-spacing:1px; margin-bottom:3px;">📞 Teléfono</div>
+                        <div style="font-size:0.78rem; color:#ccc; font-weight:600;">${tel}</div>
+                    </div>` : ''}
+                    ${mail ? `<div style="background:rgba(255,255,255,0.03); border-radius:8px; padding:8px 10px; border:1px solid rgba(255,255,255,0.05);">
+                        <div style="font-size:0.58rem; color:#444; text-transform:uppercase; letter-spacing:1px; margin-bottom:3px;">✉️ Correo</div>
+                        <div style="font-size:0.75rem; color:#ccc; font-weight:600; word-break:break-all;">${mail}</div>
+                    </div>` : ''}
+                    ${tg ? `<div style="background:rgba(255,255,255,0.03); border-radius:8px; padding:8px 10px; border:1px solid rgba(255,255,255,0.05);">
+                        <div style="font-size:0.58rem; color:#444; text-transform:uppercase; letter-spacing:1px; margin-bottom:3px;">✈️ Telegram</div>
+                        <div style="font-size:0.78rem; color:#00d2ff; font-weight:600;">@${tg}</div>
+                    </div>` : ''}
+                </div>
                 <!-- Wallet destino -->
-                <div style="margin-bottom:10px;">
+                <div style="margin-bottom:12px;">
                     <div style="font-size:0.6rem; color:#444; text-transform:uppercase; letter-spacing:1px; margin-bottom:3px;">Wallet destino (TRC-20)</div>
                     <div style="font-family:monospace; font-size:0.75rem; color:#00d2ff; word-break:break-all; background:rgba(0,210,255,0.05); border-radius:8px; padding:8px 10px; border:1px solid rgba(0,210,255,0.1);">${wallet}</div>
                 </div>
                 <!-- Fila: monto + fecha + botones -->
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:12px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:4px;">
                     <div>
                         <div style="font-size:0.6rem; color:#444; text-transform:uppercase; letter-spacing:1px;">Monto a transferir</div>
                         <div style="font-size:1.5rem; font-weight:800; color:#00e676; line-height:1.2;">$${monto} <span style="font-size:0.7rem; font-weight:600; color:#555;">USDT</span></div>
@@ -3720,14 +3774,23 @@ function copyRefLink() {
 
 // ─── HISTORIAL DE GANANCIAS Y RETENCIONES (Issue 18) ───────────────────────
 // Diferencia ganancias de tablero de retenciones automáticas del sistema.
-function renderHistorial() {
+function renderHistorial(faseNum = null) {
     const box = document.getElementById('historial-list');
     if (!box) return;
-    if (!_historialData || _historialData.length === 0) {
-        box.innerHTML = '<div style="color:#444; text-align:center; padding:10px;">Sin movimientos aún.</div>';
+
+    let data = _historialData || [];
+    
+    // Si se pasa una fase (ej: al abrir modal de retiro), filtramos
+    if (faseNum !== null) {
+        data = data.filter(m => Number(m.fase_numero) === Number(faseNum));
+    }
+
+    if (data.length === 0) {
+        box.innerHTML = '<div style="color:#444; text-align:center; padding:10px;">Sin movimientos en esta fase.</div>';
         return;
     }
-    box.innerHTML = _historialData.map(m => {
+    
+    box.innerHTML = data.map(m => {
         const esIngreso = m.direccion === 'ingreso';
         const color = esIngreso ? '#00e676' : '#ff7043';
         const signo = esIngreso ? '+' : '−';

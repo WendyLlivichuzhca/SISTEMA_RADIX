@@ -205,7 +205,18 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                 <div style="font-size:0.7rem; color:#555; text-transform:uppercase; margin-bottom:4px;">Saldo disponible en esta fase</div>
                 <div id="retiro-saldo" style="font-size:1.8rem; font-weight:800; color:var(--accent);">$0.00 USDT</div>
             </div>
-            <div id="historial-list" style="max-height:180px; overflow-y:auto; margin-bottom:20px; font-size:0.8rem;"></div>
+            <div id="historial-list" style="max-height:160px; overflow-y:auto; margin-bottom:20px; font-size:0.8rem;"></div>
+            <!-- Monto personalizado (opcional) -->
+            <div style="margin-bottom:18px;">
+                <label style="font-size:0.68rem; color:#555; text-transform:uppercase; letter-spacing:1px; display:block; margin-bottom:8px;">Monto a retirar — opcional (vacío = todo el saldo)</label>
+                <div style="position:relative;">
+                    <span style="position:absolute; left:13px; top:50%; transform:translateY(-50%); color:#666; font-size:0.95rem; pointer-events:none;">$</span>
+                    <input type="number" id="retiro-monto-input" min="10" step="0.01" placeholder="Ej: 25.00"
+                        style="width:100%; background:#0a0a12; border:1px solid #2a2a3a; color:#fff; padding:11px 14px 11px 28px; border-radius:10px; font-size:0.92rem; outline:none; box-sizing:border-box; transition:border-color 0.2s;"
+                        oninput="this.style.borderColor='var(--accent)'">
+                </div>
+                <div style="font-size:0.68rem; color:#444; margin-top:5px;">Mínimo $10.00 · Máximo = saldo disponible de esta fase</div>
+            </div>
             <button id="btn-solicitar-retiro" onclick="solicitarRetiro()" style="width:100%; padding:14px; background:var(--accent); border:none; border-radius:12px; color:#000; font-weight:800; font-size:0.95rem; cursor:pointer;">CONFIRMAR RETIRO</button>
             <div id="retiro-status" style="margin-top:10px; font-size:0.8rem; text-align:center;"></div>
         </div>

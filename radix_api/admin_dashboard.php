@@ -454,28 +454,60 @@ async function loadAdminStats() {
         // ── Retiros pendientes ──
         const retirosEl = document.getElementById('retiros-list');
         if (data.retiros_pendientes && data.retiros_pendientes.length > 0) {
-            retirosEl.innerHTML = data.retiros_pendientes.map(r => `
-                <div class="retiro-item" id="retiro-${r.id}" style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.04);gap:10px;">
-                    <div style="flex:1;">
-                        <div style="font-size:0.85rem;color:#ddd;font-weight:700;">${r.nickname}</div>
-                        <div style="font-size:0.7rem;color:#555;margin-top:2px;word-break:break-all;">${r.wallet_destino||''}</div>
-                        <div style="font-size:0.68rem;color:#444;margin-top:2px;">${(r.fecha_solicitud||'').split(' ')[0]}</div>
-                    </div>
-                    <div style="text-align:right;flex-shrink:0;">
-                        <div style="font-size:1.1rem;font-weight:800;color:var(--gold);margin-bottom:8px;">$${parseFloat(r.monto).toFixed(2)} USDT</div>
-                        <div style="display:flex;gap:6px;justify-content:flex-end;">
-                            <button onclick="procesarRetiro(${r.id},'aprobar')"
-                                style="background:#00e676;color:#000;border:none;border-radius:8px;padding:6px 14px;font-size:0.72rem;font-weight:800;cursor:pointer;">
-                                ✅ APROBAR
-                            </button>
-                            <button onclick="procesarRetiro(${r.id},'rechazar')"
-                                style="background:rgba(255,82,82,0.15);color:#ff5252;border:1px solid rgba(255,82,82,0.3);border-radius:8px;padding:6px 14px;font-size:0.72rem;font-weight:800;cursor:pointer;">
-                                ❌ RECHAZAR
-                            </button>
+            retirosEl.innerHTML = data.retiros_pendientes.map(r => {
+                const fase       = parseInt(r.fase_numero ?? 0);
+                const faseLabel  = `Fase ${fase}`;
+                const horas      = parseInt(r.horas_esperando ?? 0);
+                const tiempoLabel = horas < 1   ? 'Hace menos de 1h'
+                                  : horas < 24  ? `Hace ${horas}h`
+                                  : `Hace ${Math.floor(horas/24)} día(s)`;
+                const urgente    = horas >= 20;
+
+                // Contactos disponibles
+                const tel      = r.telefono       || '';
+                const correo   = r.correo_electronico || '';
+                const telegram = r.telegram_username  || '';
+                const nombre   = r.nombre_completo || r.nickname;
+
+                const contactoHTML = [
+                    tel      ? `📞 <a href="tel:${tel}" style="color:#aaa;">${tel}</a>` : '',
+                    correo   ? `✉️ <a href="mailto:${correo}" style="color:#aaa;">${correo}</a>` : '',
+                    telegram ? `💬 @${telegram}` : '',
+                ].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;');
+
+                return `
+                <div id="retiro-${r.id}" style="border:1px solid ${urgente ? 'rgba(255,82,82,0.35)' : 'rgba(255,255,255,0.05)'}; border-radius:14px; padding:16px; margin-bottom:12px; background:rgba(255,255,255,0.01);">
+                    <!-- Fila superior: nombre + monto -->
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;">
+                        <div>
+                            <div style="font-size:0.95rem;color:#fff;font-weight:700;">${nombre}</div>
+                            <div style="font-size:0.72rem;color:#777;margin-top:1px;">@${r.nickname}</div>
+                        </div>
+                        <div style="text-align:right;flex-shrink:0;">
+                            <div style="font-size:1.2rem;font-weight:800;color:var(--gold);">$${parseFloat(r.monto).toFixed(2)} USDT</div>
+                            <div style="font-size:0.68rem;color:${urgente ? '#ff5252' : '#555'};margin-top:2px;">${tiempoLabel}${urgente ? ' ⚠️' : ''}</div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                    <!-- Fase + Wallet -->
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                        <span style="background:rgba(157,0,255,0.15);color:#c77dff;border:1px solid rgba(157,0,255,0.3);border-radius:6px;padding:2px 10px;font-size:0.7rem;font-weight:700;">${faseLabel}</span>
+                        <span style="background:rgba(255,255,255,0.03);color:#555;border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:2px 10px;font-size:0.68rem;word-break:break-all;">${r.wallet_destino || '—'}</span>
+                    </div>
+                    <!-- Contactos -->
+                    ${contactoHTML ? `<div style="font-size:0.72rem;color:#666;margin-bottom:10px;">${contactoHTML}</div>` : ''}
+                    <!-- Botones -->
+                    <div style="display:flex;gap:8px;">
+                        <button onclick="procesarRetiro(${r.id},'aprobar')"
+                            style="flex:1;background:#00e676;color:#000;border:none;border-radius:8px;padding:8px 0;font-size:0.75rem;font-weight:800;cursor:pointer;">
+                            ✅ APROBAR
+                        </button>
+                        <button onclick="procesarRetiro(${r.id},'rechazar')"
+                            style="flex:1;background:rgba(255,82,82,0.12);color:#ff5252;border:1px solid rgba(255,82,82,0.3);border-radius:8px;padding:8px 0;font-size:0.75rem;font-weight:800;cursor:pointer;">
+                            ❌ RECHAZAR
+                        </button>
+                    </div>
+                </div>`;
+            }).join('');
         } else {
             retirosEl.innerHTML = '<p style="color:#444;font-size:0.8rem;text-align:center;padding:20px 0;">Sin solicitudes pendientes.</p>';
         }

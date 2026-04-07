@@ -345,13 +345,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         // 5e. Historial de movimientos (ganancias + retenciones) para mostrar en el dashboard
         $stmt = $pdo->prepare("
-            SELECT tipo, monto, fecha_pago AS fecha, estado, tablero_tipo,
+            SELECT tipo, monto, fecha_pago AS fecha, estado, tablero_tipo, fase_numero,
                    CONCAT('Ganancia Tablero ', tablero_tipo) AS tipo_label,
                    'ingreso' AS direccion
             FROM pagos
             WHERE id_receptor = ? AND propietario_flujo = 'usuario' AND tipo = 'ganancia_tablero' AND estado = 'completado'
             UNION ALL
-            SELECT tipo, monto, fecha_pago AS fecha, estado, tablero_tipo,
+            SELECT tipo, monto, fecha_pago AS fecha, estado, tablero_tipo, fase_numero,
                    CASE tipo
                      WHEN 'salto_fase_1' THEN 'Reserva automatica Fase 1'
                      WHEN 'reentrada'    THEN 'Reentrada ciclo siguiente'

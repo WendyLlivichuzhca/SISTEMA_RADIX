@@ -389,20 +389,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         $retirosPendientes = [];
         try {
-            $hasNombre = userColumnExists($pdo, 'nombre_completo');
-            $nombreExpr = $hasNombre
-                ? "COALESCE(NULLIF(u.nombre_completo,''), u.nickname)"
-                : "u.nickname";
+            $hasNombre   = userColumnExists($pdo, 'nombre_completo');
+            $hasTelefono = userColumnExists($pdo, 'telefono');
+            $hasCorreo   = userColumnExists($pdo, 'correo_electronico');
+            $hasTelegram = userColumnExists($pdo, 'telegram_username');
+
+            $nombreExpr   = $hasNombre   ? "COALESCE(NULLIF(u.nombre_completo,''), u.nickname)" : "u.nickname";
+            $telefonoSel  = $hasTelefono ? 'u.telefono'           : "'' AS telefono";
+            $correoSel    = $hasCorreo   ? 'u.correo_electronico' : "'' AS correo_electronico";
+            $telegramSel  = $hasTelegram ? 'u.telegram_username'  : "'' AS telegram_username";
+
             $hasFaseRetiro = false;
             try {
                 $chk = $pdo->query("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='retiros' AND COLUMN_NAME='fase_numero'");
                 $hasFaseRetiro = (int)$chk->fetchColumn() > 0;
             } catch (\Exception $e2) {}
             $faseSelect = $hasFaseRetiro ? ', r.fase_numero' : ', 0 AS fase_numero';
+
             $stmt = $pdo->query("
-                SELECT r.id, r.monto, r.wallet_destino, r.fecha_solicitud,
-                       u.nickname, ({$nombreExpr}) AS nombre_completo
-                       {$faseSelect}
+                SELECT
+                    r.id,
+                    r.monto,
+                    r.wallet_destino,
+                    r.fecha_solicitud,
+                    u.id        AS usuario_id,
+                    u.nickname,
+                    ({$nombreExpr}) AS nombre_completo,
+                    ({$telefonoSel}),
+                    ({$correoSel}),
+                    ({$telegramSel}),
+                    TIMESTAMPDIFF(HOUR, r.fecha_solicitud, NOW()) AS horas_esperando
+                    {$faseSelect}
                 FROM retiros r
                 JOIN usuarios u ON r.usuario_id = u.id
                 WHERE r.estado = 'pendiente'
