@@ -2576,74 +2576,85 @@ function renderMasterRetirosFull() {
         const mail = escapeHtml(r.correo_electronico || '');
         const tg   = escapeHtml(r.telegram_username || '');
         return `
-        <div id="retiro-master-${r.id}" style="background:#0d0d1a; border:1px solid rgba(255,255,255,0.06); border-radius:16px; margin-bottom:16px; overflow:hidden;">
+        <div id="retiro-master-${r.id}" style="background:#0d0d1a; border:1px solid rgba(255,255,255,0.06); border-radius:16px; margin-bottom:16px; overflow:hidden; transition: 0.3s; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
             <!-- Header de la tarjeta -->
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid rgba(255,255,255,0.05); gap:10px; flex-wrap:wrap; background:rgba(255,255,255,0.015);">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 18px; border-bottom:1px solid rgba(255,255,255,0.05); gap:10px; flex-wrap:wrap; background:rgba(255,255,255,0.01);">
                 <div style="display:flex; align-items:center; gap:12px;">
-                    <!-- Avatar -->
-                    <div style="width:44px; height:44px; border-radius:50%; background:rgba(157,0,255,0.15); border:2px solid rgba(157,0,255,0.3); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.88rem; flex-shrink:0; color:#9d00ff;">
+                    <!-- Avatar con gradiente -->
+                    <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg, rgba(157,0,255,0.25), rgba(0,210,255,0.25)); border:1px solid rgba(157,0,255,0.4); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.85rem; flex-shrink:0; color:#fff; text-shadow: 0 0 10px rgba(157,0,255,0.5);">
                         ${nombre.substring(0,2).toUpperCase()}
                     </div>
                     <div>
-                        <div style="font-weight:800; color:#fff; font-size:0.95rem; line-height:1.2;">${nombre}</div>
-                        <div style="font-size:0.7rem; color:#555; margin-top:1px;">@${nick}</div>
+                        <div style="font-weight:700; color:#fff; font-size:0.92rem; line-height:1.2;">${nombre}</div>
+                        <div style="font-size:0.68rem; color:#666; margin-top:1px;">@${nick}</div>
                     </div>
                 </div>
-                <!-- Badges -->
-                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <!-- Urgencia -->
-                    <span style="background:rgba(0,0,0,0.5); border:1px solid ${urgColor}44; color:${urgColor}; font-size:0.62rem; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap;">
-                        ${urgIcon} ${urgLabel} · ${horas}h
+                <!-- Badges de estado -->
+                <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                    <span style="background:${urgColor}15; border:1px solid ${urgColor}33; color:${urgColor}; font-size:0.6rem; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap; letter-spacing:0.5px; display:flex; align-items:center; gap:4px;">
+                        <span>${urgIcon}</span> ${urgLabel}
                     </span>
-                    <!-- Fase -->
-                    <span style="background:rgba(0,0,0,0.4); border:1px solid ${fc}33; color:${fc}; font-size:0.65rem; font-weight:700; padding:3px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:1px;">
+                    <span style="background:${fc}15; border:1px solid ${fc}33; color:${fc}; font-size:0.6rem; font-weight:700; padding:3px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:0.5px;">
                         ${faseLabel(fn)}
                     </span>
-                    <span style="font-size:0.65rem; color:#444;">#${r.id}</span>
+                    <span style="font-size:0.6rem; color:#333; font-weight:700; margin-left:4px;">#${r.id}</span>
                 </div>
             </div>
+            
             <!-- Cuerpo -->
-            <div style="padding:14px 18px;">
-                <!-- Contacto -->
-                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px; margin-bottom:12px;">
-                    ${tel ? `<div style="background:rgba(255,255,255,0.03); border-radius:8px; padding:8px 10px; border:1px solid rgba(255,255,255,0.05);">
-                        <div style="font-size:0.58rem; color:#444; text-transform:uppercase; letter-spacing:1px; margin-bottom:3px;">📞 Teléfono</div>
-                        <div style="font-size:0.78rem; color:#ccc; font-weight:600;">${tel}</div>
-                    </div>` : ''}
-                    ${mail ? `<div style="background:rgba(255,255,255,0.03); border-radius:8px; padding:8px 10px; border:1px solid rgba(255,255,255,0.05);">
-                        <div style="font-size:0.58rem; color:#444; text-transform:uppercase; letter-spacing:1px; margin-bottom:3px;">✉️ Correo</div>
-                        <div style="font-size:0.75rem; color:#ccc; font-weight:600; word-break:break-all;">${mail}</div>
-                    </div>` : ''}
-                    ${tg ? `<div style="background:rgba(255,255,255,0.03); border-radius:8px; padding:8px 10px; border:1px solid rgba(255,255,255,0.05);">
-                        <div style="font-size:0.58rem; color:#444; text-transform:uppercase; letter-spacing:1px; margin-bottom:3px;">✈️ Telegram</div>
-                        <div style="font-size:0.78rem; color:#00d2ff; font-weight:600;">@${tg}</div>
-                    </div>` : ''}
-                </div>
-                <!-- Wallet destino -->
-                <div style="margin-bottom:12px;">
-                    <div style="font-size:0.6rem; color:#444; text-transform:uppercase; letter-spacing:1px; margin-bottom:3px;">Wallet destino (TRC-20)</div>
-                    <div style="font-family:monospace; font-size:0.75rem; color:#00d2ff; word-break:break-all; background:rgba(0,210,255,0.05); border-radius:8px; padding:8px 10px; border:1px solid rgba(0,210,255,0.1);">${wallet}</div>
-                </div>
-                <!-- Fila: monto + fecha + botones -->
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:4px;">
-                    <div>
-                        <div style="font-size:0.6rem; color:#444; text-transform:uppercase; letter-spacing:1px;">Monto a transferir</div>
-                        <div style="font-size:1.5rem; font-weight:800; color:#00e676; line-height:1.2;">$${monto} <span style="font-size:0.7rem; font-weight:600; color:#555;">USDT</span></div>
-                        <div style="font-size:0.68rem; color:#444; margin-top:2px;">📅 Solicitado: ${fecha}</div>
+            <div style="padding:16px 18px;">
+                <!-- Grid de Información -->
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:18px;">
+                    <!-- Columna: Contacto -->
+                    <div style="display:flex; flex-direction:column; gap:8px; background:rgba(255,255,255,0.015); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.03);">
+                        <div style="font-size:0.55rem; color:#444; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; font-weight:700;">Información de Contacto</div>
+                        ${tel ? `<div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-size:0.85rem; opacity:0.7;">📞</span>
+                            <span style="font-size:0.78rem; color:#ccc; font-weight:600;">${tel}</span>
+                        </div>` : ''}
+                        ${mail ? `<div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-size:0.85rem; opacity:0.7;">✉️</span>
+                            <span style="font-size:0.72rem; color:#999; word-break:break-all;">${mail}</span>
+                        </div>` : ''}
+                        ${tg ? `<div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-size:0.85rem; opacity:0.7;">✈️</span>
+                            <span style="font-size:0.78rem; color:#00d2ff; font-weight:600;">@${tg}</span>
+                        </div>` : ''}
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+                    
+                    <!-- Columna: Wallet -->
+                    <div style="background:rgba(0,0,0,0.25); border:1px solid rgba(0,210,255,0.1); border-radius:12px; padding:12px; display:flex; flex-direction:column;">
+                        <div style="font-size:0.55rem; color:#00d2ff; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; font-weight:700; opacity:0.6;">Wallet Destino (TRC-20)</div>
+                        <div style="font-family:'Courier New', monospace; font-size:0.72rem; color:#00d2ff; word-break:break-all; line-height:1.5; background:rgba(0,210,255,0.03); border-radius:6px; padding:6px;">
+                            ${wallet}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer: Monto y Acciones -->
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:15px; flex-wrap:wrap; padding-top:12px; border-top:1px solid rgba(255,255,255,0.04);">
+                    <div>
+                        <div style="font-size:0.55rem; color:#444; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:2px; font-weight:700;">Monto a Transferir</div>
+                        <div style="display:flex; align-items:baseline; gap:5px;">
+                            <span style="font-size:1.8rem; font-weight:900; color:#00e676; letter-spacing:-0.5px;">$${monto}</span>
+                            <span style="font-size:0.75rem; font-weight:800; color:#00e676; opacity:0.6;">USDT</span>
+                        </div>
+                        <div style="font-size:0.68rem; color:#444; margin-top:2px;">Solicitado: <span style="color:#666;">${fecha}</span> · <span style="color:${urgColor};">${horas}h en espera</span></div>
+                    </div>
+                    
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <button onclick="procesarRetiroDashboard(${r.id},'rechazar')"
+                            style="background:rgba(255,82,82,0.05); color:#ff5252; border:1px solid rgba(255,82,82,0.2); border-radius:10px; padding:10px 18px; font-size:0.75rem; font-weight:800; cursor:pointer; transition:0.2s; white-space:nowrap;">
+                            RECHAZAR
+                        </button>
                         <button onclick="procesarRetiroDashboard(${r.id},'aprobar')"
-                            style="background:linear-gradient(135deg,#00e676,#00c853); color:#000; border:none; border-radius:10px; padding:10px 22px; font-size:0.8rem; font-weight:800; cursor:pointer; white-space:nowrap; width:160px;">
+                            style="background:linear-gradient(135deg,#00e676,#00c853); color:#000; border:none; border-radius:10px; padding:12px 24px; font-size:0.8rem; font-weight:900; cursor:pointer; transition:0.2s; white-space:nowrap; box-shadow: 0 4px 15px rgba(0,230,118,0.25);">
                             ✅ APROBAR RETIRO
                         </button>
-                        <button onclick="procesarRetiroDashboard(${r.id},'rechazar')"
-                            style="background:rgba(255,82,82,0.08); color:#ff5252; border:1px solid rgba(255,82,82,0.25); border-radius:10px; padding:10px 22px; font-size:0.8rem; font-weight:800; cursor:pointer; white-space:nowrap; width:160px;">
-                            ❌ RECHAZAR
-                        </button>
                     </div>
                 </div>
             </div>
-        </div>`;
+        </div>`;;
     }).join('');
 }
 

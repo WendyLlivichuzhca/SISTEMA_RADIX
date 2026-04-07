@@ -1301,7 +1301,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                         </table>
                 </div>
             </div>
-            <div id="section-retiros" class="master-section"><div class="master-card"><h4>💰 Retiros Full</h4><div id="master-retiros-full-list"></div></div></div>
+            <div id="section-retiros" class="master-section"><div class="master-card"><h3>💰 Retiros Full</h3><div id="master-retiros-full-list"></div></div></div>
             <div id="section-auditoria" class="master-section">
                 <div class="master-card">
                     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
