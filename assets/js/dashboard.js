@@ -2663,7 +2663,7 @@ function renderMasterRetirosFull() {
                         </button>
                         <button onclick="procesarRetiroDashboard(${r.id},'aprobar')"
                             style="background:linear-gradient(135deg,#00e676,#00c853); color:#000; border:none; border-radius:10px; padding:12px 24px; font-size:0.8rem; font-weight:900; cursor:pointer; transition:0.2s; white-space:nowrap; box-shadow: 0 4px 15px rgba(0,230,118,0.25);">
-                            ✅ APROBAR RETIRO
+                            PAGADO
                         </button>
                     </div>
                 </div>
@@ -2673,8 +2673,25 @@ function renderMasterRetirosFull() {
 }
 
 async function procesarRetiroDashboard(retiroId, accion) {
-    const etiqueta = accion === 'aprobar' ? 'APROBAR' : 'RECHAZAR';
+    const etiqueta = accion === 'aprobar' ? 'MARCAR COMO PAGADO' : 'RECHAZAR';
     let notas = '';
+    let txHash = '';
+
+    if (accion === 'aprobar') {
+        txHash = prompt('Pega el TX hash real del pago en blockchain:') || '';
+        txHash = txHash.trim().replace(/^0x/i, '');
+
+        if (!txHash) {
+            mostrarToast('Debes pegar el tx hash para continuar.', '#ff5252');
+            return;
+        }
+
+        if (!/^[A-Fa-f0-9]{64}$/.test(txHash)) {
+            mostrarToast('El tx hash debe tener 64 caracteres hexadecimales.', '#ff5252');
+            return;
+        }
+    }
+
     if (accion === 'rechazar') {
         notas = prompt('Motivo del rechazo (opcional):') || '';
     }
@@ -2687,13 +2704,16 @@ async function procesarRetiroDashboard(retiroId, accion) {
     fd.append('retiro_id', retiroId);
     fd.append('accion', accion);
     fd.append('notas', notas);
+    if (accion === 'aprobar') {
+        fd.append('tx_hash', txHash);
+    }
 
     try {
         const res  = await fetch('radix_api/procesar_retiro.php', { method: 'POST', body: fd });
         const data = await res.json();
         if (data.success) {
             if (el) el.innerHTML = `<div style="text-align:center; padding:12px; font-size:0.85rem; color:${accion==='aprobar'?'#00e676':'#ff5252'}; font-weight:700;">
-                ${accion === 'aprobar' ? '✅ Aprobado y notificado' : '❌ Rechazado y notificado'}
+                ${accion === 'aprobar' ? 'Pagado con TX hash y notificado' : 'Rechazado y notificado'}
             </div>`;
             mostrarToast(data.mensaje, accion === 'aprobar' ? '#00e676' : '#ff5252');
             // Quitar de la lista interna

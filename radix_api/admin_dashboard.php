@@ -499,7 +499,7 @@ async function loadAdminStats() {
                     <div style="display:flex;gap:8px;">
                         <button onclick="procesarRetiro(${r.id},'aprobar')"
                             style="flex:1;background:#00e676;color:#000;border:none;border-radius:8px;padding:8px 0;font-size:0.75rem;font-weight:800;cursor:pointer;">
-                            ✅ APROBAR
+                            PAGADO
                         </button>
                         <button onclick="procesarRetiro(${r.id},'rechazar')"
                             style="flex:1;background:rgba(255,82,82,0.12);color:#ff5252;border:1px solid rgba(255,82,82,0.3);border-radius:8px;padding:8px 0;font-size:0.75rem;font-weight:800;cursor:pointer;">
@@ -892,8 +892,24 @@ async function activarClonManual() {
 }
 
 async function procesarRetiro(retiroId, accion) {
-    const etiqueta = accion === 'aprobar' ? 'APROBAR' : 'RECHAZAR';
+    const etiqueta = accion === 'aprobar' ? 'MARCAR COMO PAGADO' : 'RECHAZAR';
     let notas = '';
+    let txHash = '';
+
+    if (accion === 'aprobar') {
+        txHash = prompt('Pega el TX hash real del pago en blockchain:') || '';
+        txHash = txHash.trim().replace(/^0x/i, '');
+
+        if (!txHash) {
+            alert('Debes pegar el tx hash para continuar.');
+            return;
+        }
+
+        if (!/^[A-Fa-f0-9]{64}$/.test(txHash)) {
+            alert('El tx hash debe tener 64 caracteres hexadecimales.');
+            return;
+        }
+    }
 
     if (accion === 'rechazar') {
         notas = prompt('Motivo del rechazo (opcional):') || '';
@@ -909,6 +925,9 @@ async function procesarRetiro(retiroId, accion) {
         fd.append('retiro_id', retiroId);
         fd.append('accion', accion);
         fd.append('notas', notas);
+        if (accion === 'aprobar') {
+            fd.append('tx_hash', txHash);
+        }
 
         const res  = await fetch('radix_api/procesar_retiro.php', { method: 'POST', body: fd });
         const data = await res.json();
@@ -917,7 +936,7 @@ async function procesarRetiro(retiroId, accion) {
             if (el) {
                 el.style.opacity = '1';
                 el.innerHTML = `<div style="width:100%;text-align:center;padding:10px 0;font-size:0.82rem;color:${accion==='aprobar'?'#00e676':'#ff5252'};">
-                    ${accion === 'aprobar' ? '✅ Aprobado y notificado' : '❌ Rechazado y notificado'}
+                    ${accion === 'aprobar' ? 'Pagado con TX hash y notificado' : 'Rechazado y notificado'}
                 </div>`;
             }
             setTimeout(() => loadAdminStats(), 2000);

@@ -252,15 +252,19 @@ try {
             estado ENUM('pendiente','procesado','rechazado') DEFAULT 'pendiente',
             fecha_solicitud TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
             fecha_proceso TIMESTAMP NULL DEFAULT NULL,
+            tx_hash VARCHAR(66) DEFAULT NULL,
             notas TEXT DEFAULT NULL,
             KEY usuario_id (usuario_id),
+            UNIQUE KEY uk_retiros_tx_hash (tx_hash),
             CONSTRAINT retiros_ibfk_1 FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
         ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
     ");
 
     if (tableExists($pdo, 'retiros')) {
         ensureColumn($pdo, 'retiros', 'fase_numero', "TINYINT NOT NULL DEFAULT 0");
+        ensureColumn($pdo, 'retiros', 'tx_hash', "VARCHAR(66) DEFAULT NULL");
         ensureIndex($pdo, 'retiros', 'usuario_id', "KEY `usuario_id` (`usuario_id`)");
+        ensureIndex($pdo, 'retiros', 'uk_retiros_tx_hash', "UNIQUE KEY `uk_retiros_tx_hash` (`tx_hash`)");
     }
 
     $pdo->exec("
