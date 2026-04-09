@@ -39,11 +39,11 @@ if ($appJson !== false && $contentJson !== false) {
         // Ambos roots requeridos por el JS — fixed-root oculto para no mostrar panel fijo
         '<div id="radix-bot-floating-root"></div>' .
         '<div id="radix-bot-fixed-root" style="display:none!important"></div>' .
-        // Mover bot a la izquierda para no tapar el WhatsApp + cerrar panel al cargar
+        // Estilos del bot — ahora en la derecha (WhatsApp eliminado)
         '<style>' .
-            // Mover bot a la izquierda
-            '.rb-floating-wrap{right:auto!important;left:18px!important}' .
-            '@media(max-width:600px){.rb-floating-wrap{right:auto!important;left:12px!important}}' .
+            // Bot en la derecha (posición por defecto)
+            '.rb-floating-wrap{right:18px!important;left:auto!important}' .
+            '@media(max-width:600px){.rb-floating-wrap{right:12px!important;left:auto!important}}' .
             // Forzar color de texto oscuro — el sitio RADIX hereda color:white que hace el texto invisible
             '#radix-bot-floating-root,#radix-bot-fixed-root{color:#16203a!important}' .
             '#radix-bot-floating-root *,#radix-bot-fixed-root *{color:inherit}' .

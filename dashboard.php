@@ -335,6 +335,9 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                 <a href="#" class="nav-item" id="nav-user-fase-2" onclick="switchUserSection('fase-2'); return false;"><span class="nav-fase-dot" style="background:#00e676;"></span> Fase 2</a>
                 <a href="#" class="nav-item" id="nav-user-fase-3" onclick="switchUserSection('fase-3'); return false;"><span class="nav-fase-dot" style="background:#ffb300;"></span> Fase 3</a>
                 <a href="#" class="nav-item" onclick="openProfileModal(); return false;">👤 Mi Perfil</a>
+                <a href="https://t.me/+jxoT_lB6Wm82Njgx" target="_blank" rel="noopener noreferrer" class="nav-item" style="margin-top:8px; background:linear-gradient(135deg,#0088cc22,#0088cc11); border:1px solid #0088cc55; border-radius:8px; color:#29b6f6; font-weight:700; text-align:center; padding:10px 8px;">
+                    📢 Comunidad Telegram
+                </a>
                 </div>
             <?php endif; ?>
             <a href="radix_api/session_logout.php" class="nav-item" style="margin-top:auto; color:#ff4444;">🚪 Cerrar Sesión</a>
@@ -375,7 +378,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                         <!-- Métricas rápidas -->
                         <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:center;">
                             <div style="text-align:center;">
-                                <div style="font-size:0.62rem; color:#555; text-transform:uppercase; letter-spacing:1px;">Tesorería</div>
+                                <div style="font-size:0.62rem; color:#555; text-transform:uppercase; letter-spacing:1px;">Tesorería clones</div>
                                 <div id="hb-tesoreria" style="font-size:1rem; font-weight:800; color:#00e676;">$—</div>
                             </div>
                             <div style="width:1px; height:30px; background:#1e1e2e;"></div>
@@ -385,7 +388,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                             </div>
                             <div style="width:1px; height:30px; background:#1e1e2e;"></div>
                             <div style="text-align:center;">
-                                <div style="font-size:0.62rem; color:#555; text-transform:uppercase; letter-spacing:1px;">Solvencia</div>
+                                <div style="font-size:0.62rem; color:#555; text-transform:uppercase; letter-spacing:1px;">Referencia</div>
                                 <div id="hb-solvencia" style="font-size:0.78rem; font-weight:800; color:#555;">—</div>
                             </div>
                             <div style="width:1px; height:30px; background:#1e1e2e;"></div>
@@ -412,6 +415,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                     <div class="widget"><h4>Usuarios Reales</h4><div id="val-usuarios-reales" class="value">0</div><div class="trend">Crecimiento Orgánico</div></div>
                     <div class="widget"><h4>📊 Ganancia Red</h4><div id="val-master-earnings" class="value">$0.00</div><div class="trend">Generado por la red (ref.)</div></div>
                     <div class="widget" style="border-left: 3px solid #00d2ff;"><h4>💎 Total Blockchain</h4><div id="val-total-blockchain" class="value">$0.00</div><div class="trend">Recibido en tu wallet</div></div>
+                    <div class="widget" style="border-left: 3px solid #00bcd4;"><h4>Saldo Wallet Estimado</h4><div id="val-wallet-estimado" class="value">$0.00</div><div class="trend">Total blockchain - retiros pagados</div></div>
                     <div class="widget" style="border-left: 3px solid #ffab00;"><h4>⏳ Saldo Adeudado</h4><div id="val-pendiente-dist" class="value">$0.00</div><div class="trend">Usuarios aún no retiran</div></div>
                     <div class="widget" style="border-left: 3px solid #39d98a;"><h4>🧾 Créditos Excedente</h4><div id="val-creditos-excedente" class="value">$0.00</div><div class="trend">Saldo a favor de usuarios</div></div>
                 </div>

@@ -248,6 +248,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $retirosProcessados = (float)($stmt->fetchColumn() ?: 0);
         } catch (Exception $e) { /* tabla puede no existir en instalaciones antiguas */ }
 
+        $saldoWalletEstimado = max(0.0, $totalBlockchain - $retirosProcessados);
+
         // ─── FÓRMULA CORRECTA DE INTEGRIDAD ───────────────────────────────────
         // La obligación con usuarios se calcula DESDE el blockchain hacia abajo,
         // NO desde ganancia_tablero (que puede acumularse por ciclos internos).
@@ -756,19 +758,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $alertas = [];
         $COSTO_CLON = 10.0; // costo de activar un agente IA
 
-        // 🔴 CRÍTICO: La tesorería no alcanza para pagar los retiros pendientes
-        if ($countRetirosPendientes > 0 && $totalRetirosPendientesMonto > $tesoreria) {
-            $deficit = $totalRetirosPendientesMonto - $tesoreria;
-            $alertas[] = [
-                'nivel'    => 'critico',
-                'icono'    => '🚨',
-                'titulo'   => 'Tesorería insuficiente para retiros',
-                'mensaje'  => "Hay $" . number_format($totalRetirosPendientesMonto, 2) . " en retiros pendientes pero solo $" . number_format($tesoreria, 2) . " en tesorería. Déficit: $" . number_format($deficit, 2) . ". NO apruebes retiros hasta recibir fondos.",
-                'accion'   => 'Ver Pagos Pendientes',
-                'seccion'  => 'retiros',
-            ];
-        }
-
         // 🔴 CRÍTICO: Retiros esperando más de 48h
         if ($retiroMasAntiguoFecha) {
             $horasEspera = (time() - strtotime($retiroMasAntiguoFecha)) / 3600;
@@ -799,13 +788,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             }
         }
 
-        // 🟡 ADVERTENCIA: Hay retiros pendientes (normal — solo informativo)
+        // 🟡 ADVERTENCIA: Hay retiros pendientes (informativo)
         if ($countRetirosPendientes > 0 && !array_filter($alertas, function($a) { return $a['seccion'] === 'retiros' && $a['nivel'] === 'critico'; })) {
             $alertas[] = [
                 'nivel'    => 'info',
                 'icono'    => '💸',
                 'titulo'   => "$countRetirosPendientes retiro(s) esperando aprobación",
-                'mensaje'  => "Total a pagar: $" . number_format($totalRetirosPendientesMonto, 2) . " USDT. Tesorería disponible: $" . number_format($tesoreria, 2) . " ✓",
+                'mensaje'  => "Total a pagar: $" . number_format($totalRetirosPendientesMonto, 2) . " USDT. La tesorería mostrada en este panel corresponde a clones/agentes IA y no se descuenta con retiros.",
                 'accion'   => 'Aprobar Ahora',
                 'seccion'  => 'retiros',
             ];
@@ -863,7 +852,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'retiro_mas_antiguo'            => $retiroMasAntiguoFecha,
             'pago_sin_conf_mas_antiguo'     => $pagoMasAntiguoFecha,
             'pendiente_distribuir'          => $pendienteDistribuir,
-            'solvente'                      => ($tesoreria >= $totalRetirosPendientesMonto),
+            'solvente'                      => null,
         ];
         /* ── FIN SALUD FINANCIERA ──────────────────────────────── */
 
@@ -883,6 +872,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'reservas_pendientes' => $reservasPendientes,
             'master_id1_earnings' => $masterEarnings,
             'retiros_procesados' => $retirosProcessados,
+            'saldo_wallet_estimado' => $saldoWalletEstimado,
             'obligacion_usuarios' => $obligacionUsuarios,
             'total_blockchain' => $totalBlockchain,
             'creditos_excedente' => $creditosExcedente,

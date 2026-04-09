@@ -1731,13 +1731,15 @@ function renderHealthBar(salud) {
         if (el) { el.innerText = val; if (color) el.style.color = color; }
     };
 
-    const solv = salud.solvente;
     setEl('hb-tesoreria',  '$' + parseFloat(salud.tesoreria || 0).toFixed(2),                 '#00e676');
     setEl('hb-retiros',    salud.count_retiros_pendientes > 0
                                ? '$' + parseFloat(salud.total_retiros_pendientes || 0).toFixed(2) + ` (${salud.count_retiros_pendientes})`
                                : '$0.00 ✓',
                            salud.count_retiros_pendientes > 0 ? '#ffb300' : '#00e676');
-    setEl('hb-solvencia',  solv ? '✅ Cubierto' : '❌ Insuficiente', solv ? '#00e676' : '#ef5350');
+    setEl('hb-solvencia',
+        salud.count_retiros_pendientes > 0 ? 'ℹ️ Pago manual' : '✅ Sin pendientes',
+        salud.count_retiros_pendientes > 0 ? '#00d2ff' : '#00e676'
+    );
     setEl('hb-pagos-sc',   salud.count_pagos_sin_confirmar > 0
                                ? salud.count_pagos_sin_confirmar + ' sin confirmar'
                                : '✓ Al día',
@@ -1828,6 +1830,7 @@ async function loadMasterAdvancedData() {
 
         animateValue(document.getElementById('val-master-earnings'),    data.master_id1_earnings || 0,   '$', '', true);
         animateValue(document.getElementById('val-total-blockchain'),  data.total_blockchain || 0,      '$', '', true);
+        animateValue(document.getElementById('val-wallet-estimado'),   data.saldo_wallet_estimado || 0, '$', '', true);
         animateValue(document.getElementById('val-pendiente-dist'),    data.obligacion_usuarios ?? data.pendiente_distribuir ?? 0, '$', '', true);
         animateValue(document.getElementById('val-creditos-excedente'), data.creditos_excedente || 0,  '$', '', true);
         animateValue(document.getElementById('val-usuarios-reales'),   data.usuarios?.reales || 0,      '',  '', false);
