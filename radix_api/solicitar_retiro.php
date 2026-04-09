@@ -15,6 +15,8 @@
  *   solicitud ya enviada.
  */
 require_once 'config.php';
+require_once __DIR__ . '/notificaciones.php';
+require_once __DIR__ . '/master_notif.php';
 session_start();
 
 if (empty($_SESSION['radix_wallet'])) {
@@ -44,7 +46,7 @@ if ($monto_solicitado !== null && $monto_solicitado < 10) {
 
 try {
     // 1. Obtener usuario (fuera de transacción — solo lectura rápida)
-    $stmt = $pdo->prepare("SELECT id, tipo_usuario, credito_saldo FROM usuarios WHERE wallet_address = ?");
+    $stmt = $pdo->prepare("SELECT id, tipo_usuario, credito_saldo, nickname FROM usuarios WHERE wallet_address = ?");
     $stmt->execute([$wallet]);
     $user = $stmt->fetch();
     if (!$user) sendResponse(['error' => 'Usuario no encontrado'], 404);
@@ -192,6 +194,12 @@ try {
 
     $pdo->commit();
     // ── FIN DE TRANSACCIÓN ───────────────────────────────────────────────────
+
+    // Notificar al master (no bloquea la respuesta si falla)
+    try {
+        $nick_retiro = $user['nickname'] ?? $wallet;
+        notificarMasterRetiroSolicitado($pdo, $nick_retiro, $monto_retiro, $wallet, $fase_numero);
+    } catch (Exception $e) { /* silencioso — no interrumpir al usuario */ }
 
     sendResponse([
         'success'          => true,

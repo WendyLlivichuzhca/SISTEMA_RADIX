@@ -57,14 +57,14 @@ try {
         $stmt->execute([$uid, $fase_num]);
         $bruto = (float)$stmt->fetch()['t'];
 
-        // Deducciones (semillas + reentradas) de esta fase
+        // Deducciones (semillas + reentradas + utilidad final) de esta fase
         $stmt = $pdo->prepare("
             SELECT COALESCE(SUM(monto),0) as t
             FROM pagos
             WHERE id_emisor=?
               AND propietario_flujo='usuario'
               AND estado='completado'
-              AND (tipo LIKE 'salto_fase_%' OR tipo='reentrada')
+              AND (tipo LIKE 'salto_fase_%' OR tipo='reentrada' OR tipo='utilidad_master')
               AND fase_numero=?
         ");
         $stmt->execute([$uid, $fase_num]);
@@ -132,19 +132,23 @@ try {
     // 5. Notificar al usuario por Telegram si tiene vinculado
     if (!empty($retiro['telegram_chat_id'])) {
         $fase_msg = (int)($retiro['fase_numero'] ?? 0);
+        $nombre   = !empty($retiro['nickname']) ? $retiro['nickname'] : 'Usuario';
+
         if ($accion === 'aprobar') {
-            $msg = "💸 *¡Tu retiro fue aprobado!*\n\n"
-                 . "Fase: *Fase {$fase_msg}*\n"
-                 . "Monto: *\${$retiro['monto']} USDT*\n"
-                 . "Wallet: `{$retiro['wallet_destino']}`\n\n"
+            $msg = "💸 *¡RETIRO APROBADO!*\n\n"
+                 . "Hola *{$nombre}*, tu retiro fue aprobado.\n\n"
+                 . "📌 Fase: *Fase {$fase_msg}*\n"
+                 . "💵 Monto: *\$" . number_format((float)$retiro['monto'], 2) . " USDT*\n"
+                 . "🏦 Wallet destino:\n`{$retiro['wallet_destino']}`\n\n"
                  . "El pago será enviado en breve a tu billetera TRC-20.\n\n"
                  . "_Sistema RADIX_";
         } else {
-            $msg = "⚠️ *Tu solicitud de retiro fue rechazada.*\n\n"
-                 . "Fase: *Fase {$fase_msg}*\n"
-                 . "Monto: *\${$retiro['monto']} USDT*\n"
-                 . ($notas ? "Motivo: $notas\n\n" : "\n")
-                 . "Tu saldo sigue disponible. Puedes volver a solicitarlo.\n\n"
+            $msg = "⚠️ *RETIRO RECHAZADO*\n\n"
+                 . "Hola *{$nombre}*, tu solicitud fue rechazada.\n\n"
+                 . "📌 Fase: *Fase {$fase_msg}*\n"
+                 . "💵 Monto: *\$" . number_format((float)$retiro['monto'], 2) . " USDT*\n"
+                 . ($notas ? "📋 Motivo: _{$notas}_\n\n" : "\n")
+                 . "Tu saldo sigue disponible. Puedes volver a solicitarlo desde el dashboard.\n\n"
                  . "_Sistema RADIX_";
         }
         enviarTelegram($retiro['telegram_chat_id'], $msg);

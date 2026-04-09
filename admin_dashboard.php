@@ -232,9 +232,9 @@ elseif (!empty($_SESSION['radix_admin_id'])) {
             <div class="sub">Crecimiento orgánico</div>
         </div>
         <div class="card">
-            <h4>💰 GANANCIA RED</h4>
+            <h4>📊 GANANCIA RED</h4>
             <div class="value" id="stat-master">$0.00</div>
-            <div class="sub">Distribuido a usuarios</div>
+            <div class="sub">Generado por la red (ref.)</div>
         </div>
     </div>
 
@@ -501,6 +501,7 @@ async function loadAdminStats() {
                 const nombre = user.nombre_completo || 'Sin nombre registrado';
                 const telefono = user.telefono || 'Sin teléfono';
                 const correo = user.correo_electronico || 'Sin correo';
+                const telegram = user.telegram_username ? `@${user.telegram_username}` : 'No vinculado';
                 const pago = user.pago_estado === 'completado'
                     ? '<span class="ok">PAGÓ</span>'
                     : '<span class="pend">PENDIENTE</span>';
@@ -515,6 +516,7 @@ async function loadAdminStats() {
                         <div style="flex:1;">
                             <div style="font-size:0.78rem;color:#ddd;">Tel: ${telefono}</div>
                             <div style="font-size:0.78rem;color:#ddd;margin-top:4px;">Correo: ${correo}</div>
+                            <div style="font-size:0.78rem;color:#00d2ff;margin-top:4px;">TG: ${telegram}</div>
                             <div style="font-size:0.75rem;margin-top:8px;">${pago}</div>
                         </div>
                     </div>

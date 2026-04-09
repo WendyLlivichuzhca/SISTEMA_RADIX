@@ -984,7 +984,7 @@ async function loadDashboard() {
             // MASTER MODE
             actualizarEstadoTelegram(data.user.has_telegram || false);
             animateValue(document.getElementById('val-balance'),          data.treasury.tesoreria_balance, '$', '', true);
-            animateValue(document.getElementById('val-fase'),             data.treasury.fase1_pool,        '$', '', true);
+            animateValue(document.getElementById('val-fase'),             data.treasury.phase_pool_total ?? data.treasury.fase1_pool ?? 0, '$', '', true);
             animateValue(document.getElementById('val-usuarios-reales'),  data.treasury.total_reales,      '',  '', false);
             
             // Master Ledger (Libro Mayor)
@@ -1479,7 +1479,8 @@ function buildMasterStatsCaption(filters) {
         real: 'solo reales',
         clon: 'solo clones',
         master: 'solo master',
-        sistema: 'solo sistema'
+        sistema: 'solo sistema',
+        inactivo: 'solo inactivos'
     };
     const typeLabel = typeMap[filters.tipo_usuario] || 'todos los usuarios';
     return `Vista actual: ${phaseLabel}, ${boardLabel}, ${cycleLabel}, ${typeLabel}.`;
@@ -1827,11 +1828,11 @@ async function loadMasterAdvancedData() {
 
         animateValue(document.getElementById('val-master-earnings'),    data.master_id1_earnings || 0,   '$', '', true);
         animateValue(document.getElementById('val-total-blockchain'),  data.total_blockchain || 0,      '$', '', true);
-        animateValue(document.getElementById('val-pendiente-dist'),    data.pendiente_distribuir || 0,  '$', '', true);
+        animateValue(document.getElementById('val-pendiente-dist'),    data.obligacion_usuarios ?? data.pendiente_distribuir ?? 0, '$', '', true);
         animateValue(document.getElementById('val-creditos-excedente'), data.creditos_excedente || 0,  '$', '', true);
         animateValue(document.getElementById('val-usuarios-reales'),   data.usuarios?.reales || 0,      '',  '', false);
         animateValue(document.getElementById('val-balance'),           data.tesoreria || 0,             '$', '', true);
-        animateValue(document.getElementById('val-fase'),              data.fase1_pool || 0,            '$', '', true);
+        animateValue(document.getElementById('val-fase'),              data.phase_pool_total ?? data.fase1_pool ?? 0, '$', '', true);
         
         renderMasterCharts(data.crecimiento_diario || []);
 
@@ -2491,6 +2492,19 @@ function renderMasterUsers() {
     };
 
     const walletShort = w => w ? w.substring(0,6) + '…' + w.slice(-4) : '—';
+    const userTypeBadge = (type) => {
+        const normalized = String(type || '').toLowerCase();
+        if (!normalized || normalized === 'real') return '';
+        const map = {
+            master:   { label: 'MASTER', color: '#00d2ff' },
+            inactivo: { label: 'INACTIVO', color: '#ffb300' },
+            clon:     { label: 'CLON', color: '#9d00ff' },
+            sistema:  { label: 'SISTEMA', color: '#00e676' }
+        };
+        const meta = map[normalized];
+        if (!meta) return '';
+        return ` <span style="display:inline-block; margin-left:6px; padding:1px 6px; border-radius:999px; border:1px solid ${meta.color}44; background:${meta.color}14; color:${meta.color}; font-size:0.63rem; font-weight:800; vertical-align:middle;">${meta.label}</span>`;
+    };
 
     // Highlight de texto buscado
     const highlight = txt => {
@@ -2505,7 +2519,7 @@ function renderMasterUsers() {
         return `<tr style="background:${rowBg};">
             <td style="color:#555; font-size:0.75rem;">#${u.id}</td>
             <td style="color:#fff; font-weight:700; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                ${highlight(u.nombre_completo) || '<span style="color:#444;">Sin dato</span>'}
+                ${highlight(u.nombre_completo) || '<span style="color:#444;">Sin dato</span>'}${userTypeBadge(u.tipo_usuario)}
             </td>
             <td style="color:#aaa;">${highlight(u.nickname) || '—'}</td>
             <td style="color:#888; font-size:0.78rem;">${highlight(u.telefono) || '<span style="color:#333;">—</span>'}</td>
@@ -3096,24 +3110,32 @@ function renderVelocidad(v) {
 
 /**
  * Verifica que los números financieros cuadren
- * Blockchain recibido = Distribuido + Tesorería + Pools + Pendiente
+ * Blockchain recibido = Retiros procesados + Tesorería + Pools + Créditos + Saldo adeudado
  */
 function renderIntegridad(data) {
     const el = document.getElementById('integridad-content');
     if (!el) return;
 
-    const blockchain  = parseFloat(data.total_blockchain         || 0);
-    const distribuido = parseFloat(data.master_id1_earnings      || 0);
-    const tesoreria   = parseFloat(data.tesoreria                || 0);
-    const fase1Pool   = parseFloat(data.fase1_pool               || 0);
-    const reentrada   = parseFloat(data.reentrada_pool           || 0);
-    const creditos    = parseFloat(data.creditos_excedente       || 0);
-    const pendiente   = parseFloat(data.pendiente_distribuir     || 0);
+    const blockchain     = parseFloat(data.total_blockchain     || 0);
+    const tesoreria      = parseFloat(data.tesoreria             || 0);
+    const phasePoolsMap  = data.phase_pools || {};
+    const phasePoolF1    = parseFloat(phasePoolsMap.fase_1 ?? data.fase1_pool ?? 0);
+    const phasePoolF2    = parseFloat(phasePoolsMap.fase_2 ?? 0);
+    const phasePoolF3    = parseFloat(phasePoolsMap.fase_3 ?? 0);
+    const phasePools     = parseFloat(data.phase_pool_total ?? (phasePoolF1 + phasePoolF2 + phasePoolF3));
+    const utilidadMaster = parseFloat(data.utilidad_master_total || 0);
+    const reentrada      = parseFloat(data.reentrada_pool        || 0);
+    const creditos       = parseFloat(data.creditos_excedente    || 0);
+    const retirados      = parseFloat(data.retiros_procesados    || 0);
+    // Obligación con usuarios: derivada desde blockchain (evita doble conteo de ciclos internos)
+    const obligacion     = parseFloat(data.obligacion_usuarios   ||
+        Math.max(0, blockchain - retirados - tesoreria - phasePools - reentrada - creditos));
 
-    const suma    = distribuido + tesoreria + fase1Pool + reentrada + creditos + pendiente;
-    const diff    = Math.abs(blockchain - suma);
-    const ok      = diff < 0.05; // tolerancia de 5 centavos
-    const fmt     = n => '$' + parseFloat(n).toFixed(2);
+    // La suma SIEMPRE debe cuadrar con el blockchain recibido
+    const suma = obligacion + retirados + tesoreria + phasePools + reentrada + creditos;
+    const diff = Math.abs(blockchain - suma);
+    const ok   = diff < 0.05;
+    const fmt  = n => '$' + parseFloat(n).toFixed(2);
 
     el.innerHTML = `
         <div style="background:${ok ? 'rgba(0,230,118,0.06)' : 'rgba(239,83,80,0.06)'}; border:1px solid ${ok ? 'rgba(0,230,118,0.25)' : 'rgba(239,83,80,0.3)'}; border-radius:8px; padding:10px 12px; margin-bottom:12px; text-align:center;">
@@ -3123,20 +3145,32 @@ function renderIntegridad(data) {
         </div>
         <div style="font-size:0.68rem; color:#555; margin-bottom:6px;">Blockchain total recibido: <strong style="color:#00d2ff;">${fmt(blockchain)}</strong></div>
         ${[
-            ['Distribuido red',  distribuido, '#9d00ff'],
-            ['Tesorería',        tesoreria,   '#00e676'],
-            ['Pool Fase 1',      fase1Pool,   '#ffb300'],
-            ['Pool Reentrada',   reentrada,   '#ff6d00'],
-            ['Créditos excedente',creditos,   '#4fc3f7'],
-            ['Por distribuir',   pendiente,   '#ef5350'],
-        ].map(([lbl, val, col]) => `
+            ['Saldo adeudado usuarios', obligacion,  '#9d00ff'],
+            ['Ya pagado a usuarios',    retirados,   '#c47aff'],
+            ['Tesorería',               tesoreria,   '#00e676'],
+            ['Pools Fases 1-3',         phasePools,  '#ffb300'],
+            ['Pool Reentrada',          reentrada,   '#ff6d00'],
+            ['Créditos excedente',      creditos,    '#4fc3f7'],
+        ].filter(([,val]) => val > 0 || val === obligacion || val === tesoreria)
+         .map(([lbl, val, col]) => `
             <div style="display:flex; justify-content:space-between; padding:4px 0;">
                 <span style="font-size:0.68rem; color:#555;">+ ${lbl}</span>
                 <span style="font-size:0.7rem; color:${col}; font-weight:700;">${fmt(val)}</span>
             </div>`).join('')}
+        ${phasePools > 0 ? `
+            <div style="margin-top:8px; padding:6px 8px; background:rgba(255,179,0,0.05); border:1px solid rgba(255,179,0,0.12); border-radius:6px; color:#8c6b1f; font-size:0.66rem;">
+                Desglose pools: F1 ${fmt(phasePoolF1)} · F2 ${fmt(phasePoolF2)} · F3 ${fmt(phasePoolF3)}
+            </div>` : ''}
+        ${utilidadMaster > 0 ? `
+            <div style="margin-top:6px; color:#666; font-size:0.65rem;">
+                Utilidad Master registrada: <strong style="color:#00e676;">${fmt(utilidadMaster)}</strong> · ya está incluida dentro de Tesorería.
+            </div>` : ''}
         <div style="border-top:1px solid #1a1a26; margin-top:6px; padding-top:6px; display:flex; justify-content:space-between;">
             <span style="font-size:0.7rem; color:#666; font-weight:700;">= SUMA</span>
             <span style="font-size:0.75rem; color:${ok ? '#00e676' : '#ffb300'}; font-weight:800;">${fmt(suma)}</span>
+        </div>
+        <div style="margin-top:6px; padding:4px 6px; background:rgba(255,255,255,0.02); border-radius:4px;">
+            <span style="font-size:0.62rem; color:#444;">ℹ️ Ganancia acumulada red (referencia): <strong style="color:#666;">${fmt(parseFloat(data.master_id1_earnings||0))}</strong></span>
         </div>`;
 }
 
@@ -3419,13 +3453,13 @@ function cancelarReemplazo() {
     if (input) input.value = '';
 }
 
-function mostrarToast(msg, color = 'var(--primary)') {
+function mostrarToast(msg, color = 'var(--primary)', duracion = 4000) {
     const c = document.getElementById('toast-container');
     const t = document.createElement('div');
     t.style.cssText = `background:#000; color:#fff; padding:12px 20px; border-radius:10px; border-left:3px solid ${color}; margin-bottom:10px; animation: fadeIn 0.3s;`;
     t.innerText = msg;
     c.appendChild(t);
-    setTimeout(() => t.remove(), 4000);
+    setTimeout(() => t.remove(), duracion);
 }
 
 var _pagoPendienteId = null;
@@ -3900,6 +3934,51 @@ window.onload = loadDashboard;
     }, 35000);
 })();
 
+// ─── POLLING DE EVENTOS ADMIN EN TIEMPO REAL (check_events_admin.php cada 30s) ──
+// Solo activo cuando el usuario es RADIX_MASTER.
+// Muestra toasts de: nuevo usuario, pago confirmado, retiro solicitado, tesorería baja.
+(function iniciarPollingEventosAdmin() {
+    // Solo correr si existe el panel de admin (indicador de que es el master)
+    if (!document.getElementById('alerts-panel')) return;
+
+    let _lastAdminTimestamp = Math.floor(Date.now() / 1000) - 60;
+    // Rastrea cuáles alertas de tesorería baja ya se mostraron (evita spam)
+    let _tesoreriaBajaYaMostrada = false;
+
+    async function verificarEventosAdmin() {
+        try {
+            const res = await fetch(`radix_api/check_events_admin.php?since=${_lastAdminTimestamp}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data || !Array.isArray(data.eventos)) return;
+
+            data.eventos.forEach(e => {
+                if (!e.mensaje) return;
+                // Tesorería baja: solo mostrar una vez por sesión para no spamear
+                if (e.tipo === 'tesoreria_baja') {
+                    if (_tesoreriaBajaYaMostrada) return;
+                    _tesoreriaBajaYaMostrada = true;
+                }
+                mostrarToast(e.mensaje, e.color || '#ffb300', e.urgente ? 8000 : 5000);
+            });
+
+            // Refrescar las alertas del panel si hubo eventos críticos
+            const hayUrgentes = data.eventos.some(e => e.urgente);
+            if (hayUrgentes) loadDashboard();
+
+            if (data.timestamp) _lastAdminTimestamp = data.timestamp;
+        } catch (_) {
+            // Silencioso — no interrumpir nada si falla
+        }
+    }
+
+    // Primer check a los 40s (después del polling de usuarios), luego cada 30s
+    setTimeout(() => {
+        verificarEventosAdmin();
+        setInterval(verificarEventosAdmin, 30000);
+    }, 40000);
+})();
+
 // ─── TELEGRAM ───────────────────────────────────────────────────────────────
 
 function actualizarEstadoTelegram(hastelegram) {
@@ -3926,8 +4005,8 @@ async function vincularTelegram() {
         return;
     }
 
-    statusEl.style.color = '#888';
-    statusEl.innerText   = 'Vinculando...';
+    statusEl.style.color   = '#888';
+    statusEl.innerText     = 'Vinculando...';
 
     try {
         const fd = new FormData();
@@ -3936,14 +4015,13 @@ async function vincularTelegram() {
         const data = await res.json();
 
         if (data.success) {
+            statusEl.style.color = '#00e676';
+            statusEl.innerText   = data.mensaje || data.advertencia || '✅ Telegram vinculado.';
             actualizarEstadoTelegram(true);
-            mostrarToast('✅ ¡Telegram vinculado! Revisa tu chat.', '#00e676');
-        } else if (data.advertencia) {
-            statusEl.style.color = '#ffaa00';
-            statusEl.innerText   = '⚠️ ' + data.advertencia;
+            if (input) input.value = '';
         } else {
             statusEl.style.color = '#ff4444';
-            statusEl.innerText   = '❌ ' + (data.error || 'Error al vincular.');
+            statusEl.innerText   = data.error || '❌ No se pudo vincular. Intenta de nuevo.';
         }
     } catch (e) {
         statusEl.style.color = '#ff4444';
@@ -3952,16 +4030,22 @@ async function vincularTelegram() {
 }
 
 async function desvincularTelegram() {
-    if (!confirm('¿Desvincular Telegram? Dejarás de recibir notificaciones.')) return;
+    const statusEl = document.getElementById('tg-status');
+    if (statusEl) { statusEl.style.color = '#888'; statusEl.innerText = 'Desvinculando...'; }
+
     try {
         const fd = new FormData();
-        fd.append('chat_id', '');
         fd.append('desvincular', '1');
         const res  = await fetch('radix_api/vincular_telegram.php', { method: 'POST', body: fd });
         const data = await res.json();
-        actualizarEstadoTelegram(false);
-        mostrarToast('Telegram desvinculado.', '#888');
-    } catch(e) {
-        mostrarToast('Error al desvincular.', '#ff4444');
+
+        if (data.success) {
+            if (statusEl) { statusEl.style.color = '#ffb300'; statusEl.innerText = 'Telegram desvinculado.'; }
+            actualizarEstadoTelegram(false);
+        } else {
+            if (statusEl) { statusEl.style.color = '#ff4444'; statusEl.innerText = data.error || '❌ Error al desvincular.'; }
+        }
+    } catch (e) {
+        if (statusEl) { statusEl.style.color = '#ff4444'; statusEl.innerText = '❌ Error de conexión.'; }
     }
 }

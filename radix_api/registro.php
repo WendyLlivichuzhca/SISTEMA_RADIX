@@ -1,6 +1,8 @@
 <?php
 require_once 'config.php';
 require_once 'network_placement.php';
+require_once __DIR__ . '/notificaciones.php';
+require_once __DIR__ . '/master_notif.php';
 session_start();
 
 function obtenerCicloActivoUsuario(PDO $pdo, int $usuario_id): int
@@ -530,6 +532,25 @@ try {
     }
 
     $pdo->commit();
+
+    // Notificar al master sobre el nuevo usuario (solo en registro real, no login)
+    try {
+        $stmt_pat = $pdo->prepare("SELECT nickname FROM usuarios WHERE id = ? LIMIT 1");
+        $stmt_pat->execute([$patrocinador_id ?? 0]);
+        $pat_row = $stmt_pat->fetch();
+        $pat_nick = $pat_row ? ($pat_row['nickname'] ?? 'Directo') : 'Directo';
+
+        $stmt_total = $pdo->query("SELECT COUNT(*) FROM usuarios WHERE tipo_usuario = 'real'");
+        $total_reales = (int)$stmt_total->fetchColumn();
+
+        notificarMasterNuevoUsuario($pdo, $nickname, $pat_nick, $total_reales);
+    } catch (Exception $e) { /* silencioso — no interrumpir el registro */ }
+
+    // Mensaje de bienvenida al nuevo usuario (si ya vinculó Telegram)
+    try {
+        notificarBienvenida($pdo, $new_user_id);
+    } catch (Exception $e) { /* silencioso */ }
+
     radix_finalizar_acceso($pdo, $new_user_id, 'Bienvenido a RADIX. Registro exitoso.');
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) {

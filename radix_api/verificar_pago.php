@@ -14,6 +14,8 @@
  */
 require_once 'config.php';
 require_once 'matrix_logic.php';
+require_once __DIR__ . '/notificaciones.php';
+require_once __DIR__ . '/master_notif.php';
 session_start();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -220,6 +222,14 @@ try {
         );
 
         $pdo->commit();
+
+        // Notificar al master sobre el pago confirmado (no bloquea si falla)
+        try {
+            $stmt_nick = $pdo->prepare("SELECT nickname FROM usuarios WHERE id = ? LIMIT 1");
+            $stmt_nick->execute([$pago['id_emisor']]);
+            $nick_pago = $stmt_nick->fetchColumn() ?: 'Usuario';
+            notificarMasterPagoConfirmado($pdo, $nick_pago, $monto_total, (int)($pago['fase_numero'] ?? 0));
+        } catch (Exception $e) { /* silencioso */ }
 
         // Disparar avance del PATRÓN (id_receptor)
         verificarCadenaAscendente(

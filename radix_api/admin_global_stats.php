@@ -34,7 +34,7 @@ function readNullableBoardFilter(string $key): ?string
 function readNullableUserTypeFilter(string $key): ?string
 {
     $value = strtolower(trim((string)($_GET[$key] ?? 'all')));
-    return in_array($value, ['real', 'clon', 'master', 'sistema'], true) ? $value : null;
+    return in_array($value, ['real', 'clon', 'master', 'sistema', 'inactivo'], true) ? $value : null;
 }
 
 function addPhaseBoardCycleFilters(
@@ -125,8 +125,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $stmt = $pdo->query("SELECT COUNT(*) FROM usuarios WHERE tipo_usuario = 'clon'");
         $totalClones = (int)($stmt->fetchColumn() ?: 0);
 
-        $stmt = $pdo->query("SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE tipo = 'salto_fase_1' AND estado = 'completado'");
-        $fase1Pool = (float)($stmt->fetchColumn() ?: 0);
+        $phasePools = [
+            'salto_fase_1' => 0.0,
+            'salto_fase_2' => 0.0,
+            'salto_fase_3' => 0.0,
+        ];
+        $utilidadMasterTotal = 0.0;
+        $stmt = $pdo->query("
+            SELECT tipo, COALESCE(SUM(monto), 0) AS total
+            FROM pagos
+            WHERE tipo IN ('salto_fase_1','salto_fase_2','salto_fase_3','utilidad_master')
+              AND estado = 'completado'
+            GROUP BY tipo
+        ");
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $poolRow) {
+            $tipoPool = (string)($poolRow['tipo'] ?? '');
+            $montoPool = (float)($poolRow['total'] ?? 0);
+            if ($tipoPool === 'utilidad_master') {
+                $utilidadMasterTotal = $montoPool;
+                continue;
+            }
+            if (array_key_exists($tipoPool, $phasePools)) {
+                $phasePools[$tipoPool] = $montoPool;
+            }
+        }
+        $fase1Pool = (float)$phasePools['salto_fase_1'];
+        $fase2Pool = (float)$phasePools['salto_fase_2'];
+        $fase3Pool = (float)$phasePools['salto_fase_3'];
+        $phasePoolTotal = $fase1Pool + $fase2Pool + $fase3Pool;
 
         $stmt = $pdo->query("SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE tipo = 'reentrada' AND estado = 'completado'");
         $reentradaPool = (float)($stmt->fetchColumn() ?: 0);
@@ -215,16 +241,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $resCred = $stmt->fetch();
         $creditosExcedente = (float)($resCred['total'] ?? 0);
 
-        $pendienteDistribuir = max(
+        // Retiros ya pagados a usuarios (salieron físicamente del sistema)
+        $retirosProcessados = 0.0;
+        try {
+            $stmt = $pdo->query("SELECT COALESCE(SUM(monto), 0) FROM retiros WHERE estado = 'procesado'");
+            $retirosProcessados = (float)($stmt->fetchColumn() ?: 0);
+        } catch (Exception $e) { /* tabla puede no existir en instalaciones antiguas */ }
+
+        // ─── FÓRMULA CORRECTA DE INTEGRIDAD ───────────────────────────────────
+        // La obligación con usuarios se calcula DESDE el blockchain hacia abajo,
+        // NO desde ganancia_tablero (que puede acumularse por ciclos internos).
+        // blockchain = retiros_ya_pagados + tesoreria + pools + creditos + saldo_adeudado_usuarios
+        // → saldo_adeudado_usuarios = blockchain - retiros - tesoreria - pools - creditos
+        // utilidad_master ya entra a tesoreria_balance, por eso no se descuenta aparte.
+        $obligacionUsuarios = max(
             0,
             $totalBlockchain
-            - $masterEarnings
+            - $retirosProcessados
             - $tesoreria
-            - $reservasAplicadas
-            - $fase1Pool
+            - $phasePoolTotal
             - $reentradaPool
             - $creditosExcedente
         );
+
+        // pendienteDistribuir ya no se necesita en la vista de integridad;
+        // se mantiene en 0 para no romper otras partes del sistema.
+        $pendienteDistribuir = 0;
 
         $progressConditions = ["tp.estado = 'en_progreso'"];
         $progressParams = [];
@@ -483,7 +525,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                       AND tp2.estado = 'completado'
                 ) AS ciclos_completados
             FROM usuarios u
-            WHERE u.tipo_usuario IN ('real', 'master')
+            WHERE u.tipo_usuario IN ('real', 'master', 'inactivo')
             ORDER BY u.id ASC
         ");
         $listaUsuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -829,10 +871,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'success' => true,
             'tesoreria' => $tesoreria,
             'fase1_pool' => $fase1Pool,
+            'phase_pool_total' => $phasePoolTotal,
+            'phase_pools' => [
+                'fase_1' => $fase1Pool,
+                'fase_2' => $fase2Pool,
+                'fase_3' => $fase3Pool,
+            ],
+            'utilidad_master_total' => $utilidadMasterTotal,
             'reentrada_pool' => $reentradaPool,
             'reservas_aplicadas' => $reservasAplicadas,
             'reservas_pendientes' => $reservasPendientes,
             'master_id1_earnings' => $masterEarnings,
+            'retiros_procesados' => $retirosProcessados,
+            'obligacion_usuarios' => $obligacionUsuarios,
             'total_blockchain' => $totalBlockchain,
             'creditos_excedente' => $creditosExcedente,
             'pendiente_distribuir' => $pendienteDistribuir,
@@ -867,6 +918,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     ['value' => 'clon', 'label' => 'Clones'],
                     ['value' => 'master', 'label' => 'Master'],
                     ['value' => 'sistema', 'label' => 'Sistema'],
+                    ['value' => 'inactivo', 'label' => 'Inactivos'],
                 ],
             ],
             'crecimiento_diario' => $crecimientoDiario,

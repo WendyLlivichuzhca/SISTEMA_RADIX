@@ -63,21 +63,35 @@ function notificarAvanceTablero(PDO $pdo, int $user_id, string $tablero, float $
     $chat_id = obtenerChatId($pdo, $user_id);
     if (!$chat_id) return;
 
+    // Obtener nombre del usuario
+    try {
+        $stmt = $pdo->prepare("SELECT nombre_completo, nickname FROM usuarios WHERE id = ? LIMIT 1");
+        $stmt->execute([$user_id]);
+        $u = $stmt->fetch();
+        $nombre = ($u && !empty($u['nombre_completo'])) ? $u['nombre_completo'] : ($u['nickname'] ?? 'Usuario');
+    } catch (Exception $e) { $nombre = 'Usuario'; }
+
     if ($ciclo_completo) {
-        // Mensaje especial para cierre de ciclo (Tablero C)
-        $mensaje = "🏆 *¡CICLO COMPLETADO!*\n\n"
-                 . "Completaste los 3 tableros de tu ciclo RADIX.\n\n"
-                 . "💸 *Saldo disponible para retiro: \${$ganancia} USDT*\n\n"
-                 . "Ingresa a tu dashboard para solicitar tu retiro.\n\n"
-                 . "_Sistema RADIX — Fase 0_";
+        $mensaje = "🏆 *¡CICLO COMPLETADO, {$nombre}!*\n\n"
+                 . "Completaste los 3 tableros (A → B → C) de tu ciclo RADIX.\n\n"
+                 . "💸 *Saldo disponible para retiro:*\n"
+                 . "   *\$" . number_format($ganancia, 2) . " USDT*\n\n"
+                 . "👉 Ingresa a tu dashboard y solicita tu retiro.\n\n"
+                 . "_Sistema RADIX_";
     } else {
+        $siguiente = ['A' => 'Tablero B', 'B' => 'Tablero C'];
+        $sig_txt   = isset($siguiente[$tablero])
+                   ? "📌 Siguiente: *{$siguiente[$tablero]}*"
+                   : "✅ ¡Listo para retirar!";
+
         $emojis = ['A' => '🅰️', 'B' => '🅱️'];
         $emoji  = $emojis[$tablero] ?? '🎉';
 
         $mensaje = "🎉 *¡Tablero {$tablero} completado!*\n\n"
-                 . "{$emoji} Ganaste *\${$ganancia} USDT* en este tablero.\n"
-                 . "📈 Tu ciclo continúa avanzando.\n\n"
-                 . "_Sistema RADIX — Fase 0_";
+                 . "Hola *{$nombre}*\n"
+                 . "{$emoji} Ganaste *\$" . number_format($ganancia, 2) . " USDT* en este tablero.\n"
+                 . $sig_txt . "\n\n"
+                 . "_Sistema RADIX_";
     }
 
     enviarTelegram($chat_id, $mensaje);
@@ -113,10 +127,58 @@ function notificarNuevoReferido(PDO $pdo, int $user_id, string $nuevo_nick): voi
     $chat_id = obtenerChatId($pdo, $user_id);
     if (!$chat_id) return;
 
-    $mensaje = "👤 *¡Nuevo referido en tu red!*\n\n"
-             . "*{$nuevo_nick}* acaba de unirse usando tu link.\n"
-             . "⏳ Espera a que realice su pago de \$10 USDT para activar el slot.\n\n"
-             . "_Sistema RADIX — Fase 0_";
+    // Obtener datos completos del nuevo referido
+    try {
+        $stmt = $pdo->prepare("SELECT nombre_completo, telefono, correo_electronico FROM usuarios WHERE nickname = ? LIMIT 1");
+        $stmt->execute([$nuevo_nick]);
+        $ref = $stmt->fetch();
+    } catch (Exception $e) { $ref = null; }
+
+    $nombre   = ($ref && !empty($ref['nombre_completo'])) ? $ref['nombre_completo'] : '—';
+    $telefono = ($ref && !empty($ref['telefono']))         ? $ref['telefono']        : '—';
+    $correo   = ($ref && !empty($ref['correo_electronico'])) ? $ref['correo_electronico'] : '—';
+
+    $mensaje = "👤 *¡NUEVO REFERIDO EN TU RED!*\n\n"
+             . "👤 Nickname: *{$nuevo_nick}*\n"
+             . "📝 Nombre: *{$nombre}*\n"
+             . "📞 Teléfono: *{$telefono}*\n"
+             . "📧 Correo: *{$correo}*\n\n"
+             . "⏳ Esperando su pago de \$10 USDT para activar su slot.\n\n"
+             . "_Sistema RADIX_";
+
+    enviarTelegram($chat_id, $mensaje);
+}
+
+/**
+ * Notifica al usuario con un mensaje de bienvenida al registrarse.
+ * Se llama una sola vez, justo después del registro exitoso.
+ *
+ * @param PDO $pdo      Conexión BD
+ * @param int $user_id  ID del nuevo usuario
+ */
+function notificarBienvenida(PDO $pdo, int $user_id): void {
+    $chat_id = obtenerChatId($pdo, $user_id);
+    if (!$chat_id) return;
+
+    try {
+        $stmt = $pdo->prepare("SELECT nickname, nombre_completo, wallet_address FROM usuarios WHERE id = ? LIMIT 1");
+        $stmt->execute([$user_id]);
+        $u = $stmt->fetch();
+    } catch (Exception $e) { return; }
+
+    if (!$u) return;
+
+    $nombre  = !empty($u['nombre_completo']) ? $u['nombre_completo'] : $u['nickname'];
+    $wallet  = $u['wallet_address'] ?? '';
+    $nick    = $u['nickname'] ?? '';
+
+    $mensaje = "🎉 *¡BIENVENIDO A RADIX, {$nombre}!*\n\n"
+             . "Tu cuenta ha sido creada exitosamente.\n\n"
+             . "👤 Nickname: *{$nick}*\n"
+             . "🔗 Tu wallet (link de referido):\n`{$wallet}`\n\n"
+             . "Comparte tu wallet con tus referidos para que se unan a tu red.\n\n"
+             . "💡 Vincula tu Telegram desde el dashboard para recibir notificaciones en tiempo real.\n\n"
+             . "_Sistema RADIX_";
 
     enviarTelegram($chat_id, $mensaje);
 }

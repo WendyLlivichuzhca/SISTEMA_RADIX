@@ -489,9 +489,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $stmt = $pdo->query("SELECT COUNT(*) FROM usuarios WHERE tipo_usuario = 'real'");
             $total_reales = (int)($stmt->fetchColumn() ?? 0);
 
-            // Reserva Fase 1 acumulada (todas las retenciones de $100)
-            $stmt = $pdo->query("SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE tipo = 'salto_fase_1' AND estado = 'completado'");
-            $fase1_pool = (float)($stmt->fetchColumn() ?? 0);
+            // Pools acumulados por salto de fase (Fase 1, 2 y 3).
+            // utilidad_master se informa aparte porque ya ingresa al balance de tesoreria.
+            $phase_pools = [
+                'fase_1' => 0.0,
+                'fase_2' => 0.0,
+                'fase_3' => 0.0,
+            ];
+            $utilidad_master_total = 0.0;
+            $stmt = $pdo->query("
+                SELECT tipo, COALESCE(SUM(monto), 0) AS total
+                FROM pagos
+                WHERE tipo IN ('salto_fase_1','salto_fase_2','salto_fase_3','utilidad_master')
+                  AND estado = 'completado'
+                GROUP BY tipo
+            ");
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $pool_row) {
+                $tipo_pool = (string)($pool_row['tipo'] ?? '');
+                $monto_pool = (float)($pool_row['total'] ?? 0);
+                if ($tipo_pool === 'utilidad_master') {
+                    $utilidad_master_total = $monto_pool;
+                } elseif ($tipo_pool === 'salto_fase_1') {
+                    $phase_pools['fase_1'] = $monto_pool;
+                } elseif ($tipo_pool === 'salto_fase_2') {
+                    $phase_pools['fase_2'] = $monto_pool;
+                } elseif ($tipo_pool === 'salto_fase_3') {
+                    $phase_pools['fase_3'] = $monto_pool;
+                }
+            }
+            $fase1_pool = (float)$phase_pools['fase_1'];
+            $phase_pool_total = array_sum($phase_pools);
 
             // Libro Mayor (Últimos movimientos de tesorería)
             $stmt = $pdo->query("
@@ -511,6 +538,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 'tesoreria_balance' => $tesoreria_bal,
                 'total_reales'      => $total_reales,
                 'fase1_pool'        => $fase1_pool,
+                'phase_pool_total'  => $phase_pool_total,
+                'phase_pools'       => $phase_pools,
+                'utilidad_master_total' => $utilidad_master_total,
                 'ledger'            => $ledger,
                 'master_earnings'   => $master_earnings,
             ];

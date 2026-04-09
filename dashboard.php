@@ -408,11 +408,11 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
 
                 <div class="widgets-master">
                     <div class="widget"><h4>Tesorería (Agentes IA)</h4><div id="val-balance" class="value">$0.00</div><div class="trend">💰 Fondo Cuentas Espejo</div></div>
-                    <div class="widget"><h4>Reserva Fase 1 (Pool)</h4><div id="val-fase" class="value">$0.00</div><div class="trend">Acumulado Saltos</div></div>
+                    <div class="widget"><h4>Pools de Fase (1-3)</h4><div id="val-fase" class="value">$0.00</div><div class="trend">Saltos acumulados</div></div>
                     <div class="widget"><h4>Usuarios Reales</h4><div id="val-usuarios-reales" class="value">0</div><div class="trend">Crecimiento Orgánico</div></div>
-                    <div class="widget"><h4>💰 Ganancia Red</h4><div id="val-master-earnings" class="value">$0.00</div><div class="trend">Distribuido a usuarios</div></div>
+                    <div class="widget"><h4>📊 Ganancia Red</h4><div id="val-master-earnings" class="value">$0.00</div><div class="trend">Generado por la red (ref.)</div></div>
                     <div class="widget" style="border-left: 3px solid #00d2ff;"><h4>💎 Total Blockchain</h4><div id="val-total-blockchain" class="value">$0.00</div><div class="trend">Recibido en tu wallet</div></div>
-                    <div class="widget" style="border-left: 3px solid #ffab00;"><h4>⏳ Por Distribuir</h4><div id="val-pendiente-dist" class="value">$0.00</div><div class="trend">Comisiones red pendientes</div></div>
+                    <div class="widget" style="border-left: 3px solid #ffab00;"><h4>⏳ Saldo Adeudado</h4><div id="val-pendiente-dist" class="value">$0.00</div><div class="trend">Usuarios aún no retiran</div></div>
                     <div class="widget" style="border-left: 3px solid #39d98a;"><h4>🧾 Créditos Excedente</h4><div id="val-creditos-excedente" class="value">$0.00</div><div class="trend">Saldo a favor de usuarios</div></div>
                 </div>
 
@@ -504,7 +504,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                                 </li>
                                 <li style="display:flex; align-items:center; gap:8px; color:#ccc; font-size:0.8rem;">
                                     <span style="background:rgba(157,0,255,0.2); border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center;">🤖</span>
-                                    Se activa un Agente IA
+                                    Se confirma un pago en blockchain
                                 </li>
                             </ul>
                         </div>
@@ -1346,4 +1346,4 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
     <script src="assets/js/dashboard.js?v=<?php echo filemtime(__DIR__ . '/assets/js/dashboard.js'); ?>"></script>
 </body>
 </html>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+                                                            

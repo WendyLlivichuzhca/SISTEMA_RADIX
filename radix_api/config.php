@@ -28,13 +28,17 @@ if (file_exists($env_path)) {
         if ($trimmed === '' || $trimmed[0] === '#') continue;
         if (strpos($line, '=') !== false) {
             [$key, $value] = explode('=', $line, 2);
-            $_ENV[trim($key)] = trim($value);
+            $key = trim($key);
+            $value = trim($value);
+            $_ENV[$key] = $value;
+            putenv("{$key}={$value}");
         }
     }
 }
 
 // ── BSCScan API Key ──────────────────────────────────────────────────────────
 define('BSCSCAN_API_KEY',   $_ENV['BSCSCAN_API_KEY'] ?? '');
+define('RESUMEN_DIARIO_CLAVE', $_ENV['RESUMEN_DIARIO_CLAVE'] ?? (getenv('RESUMEN_DIARIO_CLAVE') ?: ''));
 
 // ── Red Tron (TRC-20) ────────────────────────────────────────────────────────
 define('RADIX_CENTRAL_WALLET', 'TDLFwy5swL2B8stX6tgUgQr2BjB1DFdwoU');
