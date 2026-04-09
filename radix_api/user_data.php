@@ -16,6 +16,19 @@ function userDataHasColumn(PDO $pdo, string $column): bool
     return (int)$stmt->fetchColumn() > 0;
 }
 
+function userDataRetiroColumnExists(PDO $pdo, string $column): bool
+{
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'retiros'
+          AND COLUMN_NAME = ?
+    ");
+    $stmt->execute([$column]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
 function userDataDisplayNameExpr(PDO $pdo, string $alias = ''): string
 {
     $prefix = $alias !== '' ? $alias . '.' : '';
@@ -322,11 +335,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $stmt->execute([$user_id]);
         $reserva_fase1 = (float)$stmt->fetch()['total'];
 
-        // 5d. Retiros ya procesados (aprobados y pagados por el admin)
-        //     Se descuentan para evitar que el usuario pueda retirar el mismo saldo dos veces.
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(monto), 0) as total FROM retiros WHERE usuario_id = ? AND estado = 'procesado'");
+        // 5d. Retiros ya comprometidos (pendientes + procesados).
+        //     Si un retiro uso credito reservado, solo se descuenta la porcion no cubierta
+        //     por ese credito porque el saldo del usuario ya fue reducido al reservarlo.
+        $retirosTienenCreditoConsumido = userDataRetiroColumnExists($pdo, 'credito_consumido');
+        if ($retirosTienenCreditoConsumido) {
+            $stmt = $pdo->prepare("
+                SELECT COALESCE(SUM(monto - COALESCE(credito_consumido, 0)), 0) as total
+                FROM retiros
+                WHERE usuario_id = ?
+                  AND estado IN ('pendiente', 'procesado')
+            ");
+        } else {
+            $stmt = $pdo->prepare("
+                SELECT COALESCE(SUM(monto), 0) as total
+                FROM retiros
+                WHERE usuario_id = ?
+                  AND estado IN ('pendiente', 'procesado')
+            ");
+        }
         $stmt->execute([$user_id]);
-        $total_ya_retirado = (float)($stmt->fetch()['total'] ?? 0);
+        $total_comprometido_retiros = (float)($stmt->fetch()['total'] ?? 0);
 
         // 5e. Crédito por excedente de pago (cuando el usuario pagó más de $10 al entrar)
         //     Se acumula en usuarios.credito_saldo y se suma al saldo final.
@@ -334,8 +363,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $stmt->execute([$user_id]);
         $credito_saldo = (float)($stmt->fetch()['credito'] ?? 0);
 
-        // Saldo neto disponible para retiro (bruto - deducciones + crédito excedente - retiros ya cobrados)
-        $earnings_net = $total_ganado_bruto - $total_deducciones + $credito_saldo - $total_ya_retirado;
+        // Saldo neto disponible para retiro (bruto - deducciones + credito restante - retiros comprometidos)
+        $earnings_net = $total_ganado_bruto - $total_deducciones + $credito_saldo - $total_comprometido_retiros;
 
         // 5f. Verificar si el usuario completó la Fase 0 (Tablero C completado)
         //     Solo cuando fase0_completada=true se habilita el botón RETIRAR en el frontend.
@@ -397,7 +426,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ");
 
         // Sólo preparar queries con fase_numero si la columna existe en retiros
-        $stmtFaseRetiro   = $retirosTienenFase ? $pdo->prepare("SELECT COALESCE(SUM(monto),0) as t FROM retiros WHERE usuario_id=? AND fase_numero=? AND estado='procesado'") : null;
+        $stmtFaseRetiro = null;
+        if ($retirosTienenFase && $retirosTienenCreditoConsumido) {
+            $stmtFaseRetiro = $pdo->prepare("
+                SELECT COALESCE(SUM(monto - COALESCE(credito_consumido, 0)),0) as t
+                FROM retiros
+                WHERE usuario_id=?
+                  AND fase_numero=?
+                  AND estado IN ('pendiente','procesado')
+            ");
+        } elseif ($retirosTienenFase) {
+            $stmtFaseRetiro = $pdo->prepare("
+                SELECT COALESCE(SUM(monto),0) as t
+                FROM retiros
+                WHERE usuario_id=?
+                  AND fase_numero=?
+                  AND estado IN ('pendiente','procesado')
+            ");
+        }
         $stmtFasePendiente= $retirosTienenFase ? $pdo->prepare("SELECT COUNT(*) FROM retiros WHERE usuario_id=? AND fase_numero=? AND estado='pendiente'") : null;
 
         for ($fn = 0; $fn <= 3; $fn++) {
@@ -412,13 +458,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $fn_credito = $credito_saldo;
             }
 
-            $fn_retirado = 0.0;
+            $fn_comprometido = 0.0;
             if ($stmtFaseRetiro) {
                 $stmtFaseRetiro->execute([$user_id, $fn]);
-                $fn_retirado = (float)$stmtFaseRetiro->fetch()['t'];
+                $fn_comprometido = (float)$stmtFaseRetiro->fetch()['t'];
             }
 
-            $fn_saldo = $fn_bruto - $fn_deduc + $fn_credito - $fn_retirado;
+            $fn_saldo = $fn_bruto - $fn_deduc + $fn_credito - $fn_comprometido;
 
             $stmtFaseCompletadaC->execute([$user_id, $fn]);
             $fn_tablero_c_ok = (int)$stmtFaseCompletadaC->fetchColumn() > 0;

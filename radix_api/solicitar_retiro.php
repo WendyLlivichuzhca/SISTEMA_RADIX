@@ -19,6 +19,19 @@ require_once __DIR__ . '/notificaciones.php';
 require_once __DIR__ . '/master_notif.php';
 session_start();
 
+function solicitarRetiroColumnExists(PDO $pdo, string $column): bool
+{
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'retiros'
+          AND COLUMN_NAME = ?
+    ");
+    $stmt->execute([$column]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
 if (empty($_SESSION['radix_wallet'])) {
     sendResponse(['error' => 'No autorizado'], 401);
 }
@@ -78,6 +91,28 @@ try {
     // consistencia y evitar duplicados por doble clic o solicitudes paralelas.
     $pdo->beginTransaction();
 
+    if (!solicitarRetiroColumnExists($pdo, 'credito_consumido')) {
+        $pdo->rollBack();
+        sendResponse([
+            'error' => 'La tabla retiros aun no tiene soporte para credito_saldo. Ejecuta la migracion add_retiro_credito_consumido_support.php primero.',
+        ], 500);
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id, tipo_usuario, credito_saldo, nickname
+        FROM usuarios
+        WHERE id = ?
+        LIMIT 1
+        FOR UPDATE
+    ");
+    $stmt->execute([$user_id]);
+    $user_locked = $stmt->fetch();
+    if (!$user_locked) {
+        $pdo->rollBack();
+        sendResponse(['error' => 'Usuario no encontrado'], 404);
+    }
+    $user = $user_locked;
+
     // 3. Verificar que no haya retiro PENDIENTE — con FOR UPDATE para bloquear
     //    la fila mientras procesamos, evitando que dos solicitudes simultáneas
     //    pasen este check al mismo tiempo.
@@ -136,20 +171,20 @@ try {
         $credito = (float)($user['credito_saldo'] ?? 0);
     }
 
-    // 4d. Ya retirado o en proceso (procesado + pendiente) de esta fase.
-    //     Incluir pendientes evita que nuevas ganancias de ciclos recientes
-    //     queden "atrapadas" en una solicitud anterior aún no procesada.
+    // 4d. Ya comprometido en retiros de esta fase, pero solo la parte no
+    //     cubierta por credito reservado.
     $stmt = $pdo->prepare("
-        SELECT COALESCE(SUM(monto), 0) as total
+        SELECT COALESCE(SUM(monto - COALESCE(credito_consumido, 0)), 0) as total
         FROM retiros
         WHERE usuario_id = ?
           AND fase_numero = ?
           AND estado IN ('procesado', 'pendiente')
     ");
     $stmt->execute([$user_id, $fase_numero]);
-    $ya_comprometido = (float)($stmt->fetch()['total'] ?? 0);
+    $ya_comprometido_no_credito = (float)($stmt->fetch()['total'] ?? 0);
 
-    $saldo_disponible = round($bruto - $deducciones + $credito - $ya_comprometido, 2);
+    $saldo_base_disponible = round($bruto - $deducciones - $ya_comprometido_no_credito, 2);
+    $saldo_disponible = round($saldo_base_disponible + $credito, 2);
 
     if ($saldo_disponible < 10) {
         $pdo->rollBack();
@@ -173,12 +208,27 @@ try {
         $monto_retiro = $saldo_disponible;
     }
 
+    $credito_consumido_retiro = 0.0;
+    if ($fase_numero === 0 && $credito > 0) {
+        $base_sin_credito = max(0, $saldo_base_disponible);
+        $credito_consumido_retiro = round(min($credito, max(0, $monto_retiro - $base_sin_credito)), 2);
+    }
+
     // 5. Registrar solicitud de retiro
     $stmt = $pdo->prepare("
-        INSERT INTO retiros (usuario_id, fase_numero, monto, wallet_destino)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO retiros (usuario_id, fase_numero, monto, wallet_destino, credito_consumido)
+        VALUES (?, ?, ?, ?, ?)
     ");
-    $stmt->execute([$user_id, $fase_numero, $monto_retiro, $wallet]);
+    $stmt->execute([$user_id, $fase_numero, $monto_retiro, $wallet, $credito_consumido_retiro]);
+
+    if ($credito_consumido_retiro > 0) {
+        $stmt = $pdo->prepare("
+            UPDATE usuarios
+            SET credito_saldo = GREATEST(credito_saldo - ?, 0)
+            WHERE id = ?
+        ");
+        $stmt->execute([$credito_consumido_retiro, $user_id]);
+    }
 
     // 6. Log de auditoría
     $stmt = $pdo->prepare("
@@ -189,7 +239,8 @@ try {
         $user_id,
         $fase_numero,
         "Solicitud de retiro de \${$monto_retiro} USDT de Fase {$fase_numero} a wallet {$wallet}"
-        . ($monto_solicitado !== null ? " (monto personalizado; disponible: \${$saldo_disponible})" : " (saldo completo)"),
+        . ($monto_solicitado !== null ? " (monto personalizado; disponible: \${$saldo_disponible})" : " (saldo completo)")
+        . ($credito_consumido_retiro > 0 ? " | Credito reservado: \$" . number_format($credito_consumido_retiro, 2) : ""),
     ]);
 
     $pdo->commit();

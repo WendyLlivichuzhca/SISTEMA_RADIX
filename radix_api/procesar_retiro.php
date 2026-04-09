@@ -41,9 +41,15 @@ if ($tx_hash !== '' && strncasecmp($tx_hash, '0x', 2) === 0) {
 }
 
 try {
+    $retiroHasCreditoConsumido = retiroColumnExists($pdo, 'credito_consumido');
+    $creditoSelect = $retiroHasCreditoConsumido
+        ? ", COALESCE(r.credito_consumido, 0) AS credito_consumido"
+        : ", 0 AS credito_consumido";
+
     $stmt = $pdo->prepare("
         SELECT r.id, r.usuario_id, r.monto, r.wallet_destino, r.estado, r.fase_numero,
                u.nickname, u.telegram_chat_id
+               {$creditoSelect}
         FROM retiros r
         JOIN usuarios u ON r.usuario_id = u.id
         WHERE r.id = ? AND r.estado = 'pendiente'
@@ -74,6 +80,7 @@ try {
         }
 
         $uid = (int)$retiro['usuario_id'];
+        $credito_consumido_actual = (float)($retiro['credito_consumido'] ?? 0);
 
         $stmt = $pdo->prepare("
             SELECT COALESCE(SUM(monto), 0) AS t
@@ -107,21 +114,22 @@ try {
         }
 
         $stmt = $pdo->prepare("
-            SELECT COALESCE(SUM(monto), 0) AS t
+            SELECT COALESCE(SUM(monto - COALESCE(credito_consumido, 0)), 0) AS t
             FROM retiros
             WHERE usuario_id = ?
               AND fase_numero = ?
-              AND estado = 'procesado'
+              AND estado IN ('procesado', 'pendiente')
+              AND id <> ?
         ");
-        $stmt->execute([$uid, $fase_num]);
-        $ya_retirado = (float)$stmt->fetch()['t'];
+        $stmt->execute([$uid, $fase_num, $retiro_id]);
+        $ya_comprometido = (float)$stmt->fetch()['t'];
 
-        $saldo_real = $bruto - $deducciones + $credito - $ya_retirado;
-        $monto_retiro = (float)$retiro['monto'];
+        $saldo_real = $bruto - $deducciones + $credito - $ya_comprometido;
+        $monto_retiro = max(0.0, (float)$retiro['monto'] - $credito_consumido_actual);
 
         if ($saldo_real < $monto_retiro) {
             sendResponse([
-                'error' => "Saldo insuficiente en Fase {$fase_num}. El usuario tiene $" . number_format($saldo_real, 2) . " USDT disponible pero solicita $" . number_format($monto_retiro, 2) . " USDT."
+                'error' => "Saldo insuficiente en Fase {$fase_num}. El usuario tiene $" . number_format($saldo_real, 2) . " USDT disponibles para cubrir este retiro pero necesita $" . number_format($monto_retiro, 2) . " USDT."
             ], 400);
         }
 
@@ -158,6 +166,15 @@ try {
               AND estado = 'pendiente'
         ");
         $stmt->execute([$notas !== '' ? $notas : null, $retiro_id]);
+
+        if ($fase_num === 0 && $retiroHasCreditoConsumido && (float)($retiro['credito_consumido'] ?? 0) > 0) {
+            $stmtCredito = $pdo->prepare("
+                UPDATE usuarios
+                SET credito_saldo = credito_saldo + ?
+                WHERE id = ?
+            ");
+            $stmtCredito->execute([(float)$retiro['credito_consumido'], (int)$retiro['usuario_id']]);
+        }
     }
 
     if ($stmt->rowCount() !== 1) {
@@ -168,6 +185,9 @@ try {
     $detalles = "Retiro ID {$retiro_id} (Fase {$fase_num}) de $" . number_format((float)$retiro['monto'], 2) . " USDT a {$retiro['wallet_destino']}.";
     if ($accion === 'aprobar') {
         $detalles .= " TX_HASH: {$tx_hash}.";
+    }
+    if ((float)($retiro['credito_consumido'] ?? 0) > 0) {
+        $detalles .= " Credito aplicado: $" . number_format((float)$retiro['credito_consumido'], 2) . ".";
     }
     if ($notas !== '') {
         $detalles .= " Notas: {$notas}";

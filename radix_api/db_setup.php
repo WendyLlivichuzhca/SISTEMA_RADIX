@@ -252,6 +252,7 @@ try {
             estado ENUM('pendiente','procesado','rechazado') DEFAULT 'pendiente',
             fecha_solicitud TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
             fecha_proceso TIMESTAMP NULL DEFAULT NULL,
+            credito_consumido DECIMAL(10,2) NOT NULL DEFAULT 0.00,
             tx_hash VARCHAR(66) DEFAULT NULL,
             notas TEXT DEFAULT NULL,
             KEY usuario_id (usuario_id),
@@ -262,6 +263,7 @@ try {
 
     if (tableExists($pdo, 'retiros')) {
         ensureColumn($pdo, 'retiros', 'fase_numero', "TINYINT NOT NULL DEFAULT 0");
+        ensureColumn($pdo, 'retiros', 'credito_consumido', "DECIMAL(10,2) NOT NULL DEFAULT 0.00");
         ensureColumn($pdo, 'retiros', 'tx_hash', "VARCHAR(66) DEFAULT NULL");
         ensureIndex($pdo, 'retiros', 'usuario_id', "KEY `usuario_id` (`usuario_id`)");
         ensureIndex($pdo, 'retiros', 'uk_retiros_tx_hash', "UNIQUE KEY `uk_retiros_tx_hash` (`tx_hash`)");
