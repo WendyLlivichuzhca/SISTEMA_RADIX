@@ -54,6 +54,17 @@ let _dashboardContext   = null;
 let _masterUserList     = [];
 let _masterRetirosList  = [];
 let _masterAuditoria    = [];
+// ── Filtros Retiros ───────────────────────────────────────────────
+let _retirosFiltroFase     = 'all';
+let _retirosFiltroUrgencia = 'all';
+let _retirosFiltroSearch   = '';
+// ── Filtros Libro Mayor ──────────────────────────────────────────
+let _ledgerData            = [];
+let _ledgerFiltroTipo      = 'all';
+let _ledgerSearch          = '';
+// ── Filtros Auditoría adicionales ────────────────────────────────
+let _auditDateFiltro       = 'all';   // 'all' | 'hoy' | 'semana' | 'mes'
+let _auditUserSearch       = '';
 let _chartInstance      = null;
 let _lastEventTimestamp = Math.floor(Date.now() / 1000);
 let _profileSnapshot    = null;
@@ -987,19 +998,10 @@ async function loadDashboard() {
             animateValue(document.getElementById('val-fase'),             data.treasury.phase_pool_total ?? data.treasury.fase1_pool ?? 0, '$', '', true);
             animateValue(document.getElementById('val-usuarios-reales'),  data.treasury.total_reales,      '',  '', false);
             
-            // Master Ledger (Libro Mayor)
-            const ledgerBody = document.getElementById('master-ledger-body');
-            if (ledgerBody && data.treasury.ledger) {
-                ledgerBody.innerHTML = data.treasury.ledger.map(row => {
-                    const isIngreso = row.tipo === 'ingreso';
-                    const color = isIngreso ? '#00e676' : '#ff5252';
-                    return `<tr style="border-bottom:1px solid rgba(255,255,255,0.02);">
-                        <td style="padding:14px 12px; color:#555;">${row.fecha.split(' ')[0]}</td>
-                        <td style="padding:14px 12px; color:#ddd; font-weight:600;">${row.concepto}</td>
-                        <td style="padding:14px 12px; color:${color}; font-weight:800;">${isIngreso?'+':'-'}$${parseFloat(row.monto).toFixed(2)}</td>
-                        <td style="padding:14px 12px;"><span style="background:${color}15; color:${color}; padding:2px 8px; border-radius:4px; font-size:0.7rem; font-weight:800;">${row.tipo.toUpperCase()}</span></td>
-                    </tr>`;
-                }).join('') || '<tr><td colspan="4" style="text-align:center;padding:20px;color:#444;">Sin movimientos.</td></tr>';
+            // Master Ledger (Libro Mayor) — almacenar y renderizar con filtros
+            if (data.treasury.ledger) {
+                _ledgerData = data.treasury.ledger;
+                renderLedger();
             }
 
             const masterPhaseSelect = document.getElementById('master-tree-phase');
@@ -1831,11 +1833,54 @@ async function loadMasterAdvancedData() {
         animateValue(document.getElementById('val-master-earnings'),    data.master_id1_earnings || 0,   '$', '', true);
         animateValue(document.getElementById('val-total-blockchain'),  data.total_blockchain || 0,      '$', '', true);
         animateValue(document.getElementById('val-wallet-estimado'),   data.saldo_wallet_estimado || 0, '$', '', true);
-        animateValue(document.getElementById('val-pendiente-dist'),    data.obligacion_usuarios ?? data.pendiente_distribuir ?? 0, '$', '', true);
+        animateValue(
+            document.getElementById('val-pendiente-dist'),
+            data.obligacion_total_usuarios ?? data.obligacion_usuarios ?? data.pendiente_distribuir ?? 0,
+            '$',
+            '',
+            true
+        );
+        const creditosCard = document.getElementById('val-creditos-excedente')?.closest('.widget');
+        let creditosLiquidadosEl = document.getElementById('val-creditos-liquidados');
+        if (!creditosLiquidadosEl) {
+            const widgetsMaster = document.querySelector('.widgets-master');
+            const cardMarkup = `
+                <div class="widget" id="widget-creditos-liquidados" style="border-left: 3px solid #7dd3fc;">
+                    <h4>Creditos Liquidados</h4>
+                    <div id="val-creditos-liquidados" class="value">$0.00</div>
+                    <div class="trend">Ya salieron por retiros procesados</div>
+                </div>
+            `;
+
+            if (creditosCard) {
+                creditosCard.insertAdjacentHTML('afterend', cardMarkup);
+            } else if (widgetsMaster) {
+                widgetsMaster.insertAdjacentHTML('beforeend', cardMarkup);
+            }
+
+            creditosLiquidadosEl = document.getElementById('val-creditos-liquidados');
+        }
+
         animateValue(document.getElementById('val-creditos-excedente'), data.creditos_excedente || 0,  '$', '', true);
+        animateValue(creditosLiquidadosEl, data.creditos_liquidados || 0, '$', '', true);
         animateValue(document.getElementById('val-usuarios-reales'),   data.usuarios?.reales || 0,      '',  '', false);
         animateValue(document.getElementById('val-balance'),           data.tesoreria || 0,             '$', '', true);
         animateValue(document.getElementById('val-fase'),              data.phase_pool_total ?? data.fase1_pool ?? 0, '$', '', true);
+
+        const obligacionCard = document.getElementById('val-pendiente-dist')?.closest('.widget');
+        if (obligacionCard) {
+            const titleEl = obligacionCard.querySelector('h4');
+            const trendEl = obligacionCard.querySelector('.trend');
+            if (titleEl) titleEl.textContent = 'Obligacion Total Usuarios';
+            if (trendEl) trendEl.textContent = 'Incluye saldo pendiente + creditos';
+        }
+
+        if (creditosCard) {
+            const titleEl = creditosCard.querySelector('h4');
+            const trendEl = creditosCard.querySelector('.trend');
+            if (titleEl) titleEl.textContent = 'Creditos Vigentes';
+            if (trendEl) trendEl.textContent = 'A favor de usuarios, aun no usados';
+        }
         
         renderMasterCharts(data.crecimiento_diario || []);
 
@@ -2358,6 +2403,7 @@ let _userFilters = {
     fase:    'all',
     fecha:   'all',
     orden:   'recientes',
+    incluir_inactivos: false,
 };
 
 function _applyUfStyle(cls, activeVal) {
@@ -2387,14 +2433,21 @@ function setUserFilter(campo, valor) {
 }
 
 function clearUserFilters() {
-    _userFilters = { texto:'', pago:'all', tablero:'all', fase:'all', fecha:'all', orden:'recientes' };
+    _userFilters = { texto:'', pago:'all', tablero:'all', fase:'all', fecha:'all', orden:'recientes', incluir_inactivos:false };
     const inp = document.getElementById('users-search');
     if (inp) inp.value = '';
+    const chk = document.getElementById('users-include-inactivos');
+    if (chk) chk.checked = false;
     _applyUfStyle('uf-pago',    'all');
     _applyUfStyle('uf-tablero', 'all');
     _applyUfStyle('uf-fase',    'all');
     _applyUfStyle('uf-fecha',   'all');
     _applyUfStyle('uf-orden',   'recientes');
+    renderMasterUsers();
+}
+
+function toggleInactivos(enabled) {
+    _userFilters.incluir_inactivos = !!enabled;
     renderMasterUsers();
 }
 
@@ -2409,9 +2462,12 @@ function _filterAndSortUsers(list) {
     const DAY = 86400000;
 
     let result = list.filter(u => {
+        if (!f.incluir_inactivos && String(u.tipo_usuario || '').toLowerCase() === 'inactivo') {
+            return false;
+        }
         // Texto libre
         if (f.texto) {
-            const haystack = [u.nombre_completo, u.nickname, u.wallet_address, u.correo_electronico, u.telefono]
+            const haystack = [u.nombre_completo, u.nickname, u.wallet_address, u.correo_electronico, u.telefono, u.telegram_username, u.telegram_chat_id]
                 .join(' ').toLowerCase();
             if (!haystack.includes(f.texto)) return false;
         }
@@ -2460,7 +2516,9 @@ function renderMasterUsers() {
     if (!body) return;
 
     const filtered = _filterAndSortUsers(_masterUserList);
-    const total    = _masterUserList.length;
+    const total    = _userFilters.incluir_inactivos
+        ? _masterUserList.length
+        : _masterUserList.filter(u => String(u.tipo_usuario || '').toLowerCase() !== 'inactivo').length;
 
     // Actualizar contador
     const showEl = document.getElementById('users-showing');
@@ -2509,6 +2567,14 @@ function renderMasterUsers() {
         return ` <span style="display:inline-block; margin-left:6px; padding:1px 6px; border-radius:999px; border:1px solid ${meta.color}44; background:${meta.color}14; color:${meta.color}; font-size:0.63rem; font-weight:800; vertical-align:middle;">${meta.label}</span>`;
     };
 
+    const estadoBadge = (type) => {
+        const normalized = String(type || '').toLowerCase();
+        if (normalized === 'inactivo') {
+            return '<span style="color:#ffb300; font-size:0.72rem; font-weight:800;">Inactivo</span>';
+        }
+        return '<span style="color:#00e676; font-size:0.72rem; font-weight:800;">Activo</span>';
+    };
+
     // Highlight de texto buscado
     const highlight = txt => {
         if (!_userFilters.texto || !txt) return txt || '—';
@@ -2525,8 +2591,10 @@ function renderMasterUsers() {
                 ${highlight(u.nombre_completo) || '<span style="color:#444;">Sin dato</span>'}${userTypeBadge(u.tipo_usuario)}
             </td>
             <td style="color:#aaa;">${highlight(u.nickname) || '—'}</td>
+            <td>${estadoBadge(u.tipo_usuario)}</td>
             <td style="color:#888; font-size:0.78rem;">${highlight(u.telefono) || '<span style="color:#333;">—</span>'}</td>
             <td style="color:#888; font-size:0.75rem; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${highlight(u.correo_electronico) || '<span style="color:#333;">—</span>'}</td>
+            <td style="color:#888; font-size:0.75rem; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${highlight(u.telegram_username ? '@' + u.telegram_username : (u.telegram_chat_id || '')) || '<span style="color:#333;">â€”</span>'}</td>
             <td>${tableroChip(u.tablero_actual, u.fase_actual)}</td>
             <td>${payBadge(u.pago_estado)}</td>
             <td style="color:#555; font-size:0.72rem; white-space:nowrap;">${fmtFecha(u.fecha_registro)}</td>
@@ -2540,20 +2608,22 @@ function renderMasterUsers() {
  */
 function exportarUsuariosCSV() {
     const filtered = _filterAndSortUsers(_masterUserList);
-    const headers  = ['ID','Nombre','Nickname','Telefono','Correo','Tablero','Fase','Pago','Registro','Wallet'];
+    const headers  = ['ID','Nombre','Nickname','Estado','Telefono','Correo','Telegram','Tablero','Fase','Pago','Registro','Wallet'];
     const rows     = filtered.map(u => [
         u.id,
         u.nombre_completo || '',
         u.nickname || '',
+        (String(u.tipo_usuario || '').toLowerCase() === 'inactivo') ? 'Inactivo' : 'Activo',
         u.telefono || '',
         u.correo_electronico || '',
+        u.telegram_username ? '@' + u.telegram_username : (u.telegram_chat_id || ''),
         u.tablero_actual || '',
         u.fase_actual ?? '',
         u.pago_estado || 'sin_registro',
         (u.fecha_registro || '').split(' ')[0],
         u.wallet_address || '',
-    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
-    const csv  = [headers.join(','), ...rows].join('\n');
+    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(';'));
+    const csv  = [headers.join(';'), ...rows].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a'); a.href = url;
@@ -2566,17 +2636,53 @@ function exportarUsuariosCSV() {
 function renderMasterRetirosFull() {
     const box = document.getElementById('master-retiros-full-list');
     if (!box) return;
-    if (!_masterRetirosList.length) {
+
+    // ── Aplicar filtros ──────────────────────────────────────────
+    let lista = _masterRetirosList;
+
+    if (_retirosFiltroFase !== 'all') {
+        lista = lista.filter(r => String(r.fase_numero ?? 0) === _retirosFiltroFase);
+    }
+    if (_retirosFiltroUrgencia !== 'all') {
+        lista = lista.filter(r => {
+            const h = parseInt(r.horas_esperando ?? 0);
+            if (_retirosFiltroUrgencia === 'urgente')  return h >= 20;
+            if (_retirosFiltroUrgencia === 'espera')   return h >= 12 && h < 20;
+            if (_retirosFiltroUrgencia === 'reciente') return h < 12;
+            return true;
+        });
+    }
+    if (_retirosFiltroSearch.trim()) {
+        const q = _retirosFiltroSearch.toLowerCase().trim();
+        lista = lista.filter(r =>
+            (r.nombre_completo || '').toLowerCase().includes(q) ||
+            (r.nickname || '').toLowerCase().includes(q) ||
+            (r.wallet_destino || '').toLowerCase().includes(q)
+        );
+    }
+
+    // Actualizar badge
+    const badge = document.getElementById('retiros-count-badge');
+    if (badge) {
+        if (lista.length) {
+            badge.textContent = lista.length + (lista.length === 1 ? ' solicitud' : ' solicitudes');
+            badge.style.display = 'inline';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    if (!lista.length) {
         box.innerHTML = `
             <div style="text-align:center; padding:40px 20px; color:#444;">
-                <div style="font-size:2.5rem; margin-bottom:12px;">✅</div>
-                <div style="font-size:0.85rem;">Sin solicitudes pendientes.</div>
+                <div style="font-size:2.5rem; margin-bottom:12px;">${_masterRetirosList.length ? '🔍' : '✅'}</div>
+                <div style="font-size:0.85rem;">${_masterRetirosList.length ? 'Ningún retiro coincide con los filtros.' : 'Sin solicitudes pendientes.'}</div>
             </div>`;
         return;
     }
     const faseLabel = fn => { const m = {0:'Fase 0 · $40',1:'Fase 1 · $400',2:'Fase 2',3:'Fase 3'}; return m[fn] || `Fase ${fn}`; };
     const faseColor = fn => { const m = {0:'#00d2ff',1:'#9d00ff',2:'#00e676',3:'#ffb300'}; return m[fn] || '#aaa'; };
-    box.innerHTML = _masterRetirosList.map((r, idx) => {
+    box.innerHTML = lista.map((r, idx) => {
         const nombre  = escapeHtml(r.nombre_completo || r.nickname || '—');
         const nick    = escapeHtml(r.nickname || '');
         const wallet  = escapeHtml(r.wallet_destino || '');
@@ -2673,6 +2779,84 @@ function renderMasterRetirosFull() {
             </div>
         </div>`;;
     }).join('');
+}
+
+/* ══ FUNCIONES DE FILTRO — RETIROS ═══════════════════════════════ */
+
+function _updateRetiroFaseBtns(v) {
+    document.querySelectorAll('.retiro-fase-btn').forEach(b => {
+        const active = b.dataset.v === v;
+        b.style.background   = active ? 'rgba(0,210,255,0.18)' : 'rgba(255,255,255,0.04)';
+        b.style.borderColor  = active ? '#00d2ff55' : '#333';
+        b.style.color        = active ? '#00d2ff' : '#777';
+    });
+}
+function _updateRetiroUrgBtns(v) {
+    document.querySelectorAll('.retiro-urg-btn').forEach(b => {
+        const active = b.dataset.v === v;
+        b.style.background   = active ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
+        b.style.borderColor  = active ? '#aaa' : '#333';
+    });
+}
+function setRetiroFiltroFase(v) {
+    _retirosFiltroFase = v;
+    _updateRetiroFaseBtns(v);
+    renderMasterRetirosFull();
+}
+function setRetiroFiltroUrgencia(v) {
+    _retirosFiltroUrgencia = v;
+    _updateRetiroUrgBtns(v);
+    renderMasterRetirosFull();
+}
+function setRetiroSearch(val) {
+    _retirosFiltroSearch = val;
+    renderMasterRetirosFull();
+}
+
+/* ══ FUNCIONES DE FILTRO — LIBRO MAYOR ══════════════════════════ */
+
+function renderLedger() {
+    const body = document.getElementById('master-ledger-body');
+    if (!body) return;
+
+    let rows = _ledgerData;
+    if (_ledgerFiltroTipo !== 'all') {
+        rows = rows.filter(r => r.tipo === _ledgerFiltroTipo);
+    }
+    if (_ledgerSearch.trim()) {
+        const q = _ledgerSearch.toLowerCase().trim();
+        rows = rows.filter(r => (r.concepto || '').toLowerCase().includes(q));
+    }
+
+    // Actualizar badge de conteo
+    const badge = document.getElementById('ledger-count-badge');
+    if (badge) badge.textContent = rows.length + ' movimiento' + (rows.length !== 1 ? 's' : '');
+
+    body.innerHTML = rows.map(row => {
+        const isIngreso = row.tipo === 'ingreso';
+        const color = isIngreso ? '#00e676' : '#ff5252';
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.02);">
+            <td style="padding:14px 12px; color:#555;">${row.fecha.split(' ')[0]}</td>
+            <td style="padding:14px 12px; color:#ddd; font-weight:600;">${escapeHtml(row.concepto || '—')}</td>
+            <td style="padding:14px 12px; color:${color}; font-weight:800;">${isIngreso?'+':'-'}$${parseFloat(row.monto).toFixed(2)}</td>
+            <td style="padding:14px 12px;"><span style="background:${color}15; color:${color}; padding:2px 8px; border-radius:4px; font-size:0.7rem; font-weight:800;">${row.tipo.toUpperCase()}</span></td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="4" style="text-align:center;padding:20px;color:#444;">Sin movimientos.</td></tr>';
+}
+
+function setLedgerFiltroTipo(v) {
+    _ledgerFiltroTipo = v;
+    document.querySelectorAll('.ledger-tipo-btn').forEach(b => {
+        const active = b.dataset.v === v;
+        b.style.background   = active ? 'rgba(157,0,255,0.2)'  : 'rgba(255,255,255,0.04)';
+        b.style.borderColor  = active ? '#9d00ff55' : '#333';
+        b.style.color        = active ? '#e040fb' : '#777';
+    });
+    renderLedger();
+}
+function setLedgerSearch(val) {
+    _ledgerSearch = val;
+    renderLedger();
 }
 
 async function procesarRetiroDashboard(retiroId, accion) {
@@ -2819,8 +3003,35 @@ function renderMasterAuditoriaFull() {
     if (!container) return;
 
     let filtered = _masterAuditoria;
+
+    // Filtro por categoría
     if (_auditFiltro !== 'all') {
         filtered = filtered.filter(l => _auditMeta(l.accion).group === _auditFiltro);
+    }
+
+    // Filtro por período
+    if (_auditDateFiltro !== 'all') {
+        const ahora = new Date();
+        const inicioDelDia  = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+        const hace7Dias     = new Date(ahora - 7  * 864e5);
+        const hace30Dias    = new Date(ahora - 30 * 864e5);
+        const desde = _auditDateFiltro === 'hoy'   ? inicioDelDia
+                    : _auditDateFiltro === 'semana' ? hace7Dias
+                    :                                  hace30Dias;
+        filtered = filtered.filter(l => {
+            const t = new Date((l.fecha || '').replace(' ', 'T'));
+            return t >= desde;
+        });
+    }
+
+    // Filtro por usuario (nombre o nickname)
+    if (_auditUserSearch.trim()) {
+        const q = _auditUserSearch.toLowerCase().trim();
+        filtered = filtered.filter(l =>
+            (l.nombre_completo || '').toLowerCase().includes(q) ||
+            (l.nickname || '').toLowerCase().includes(q) ||
+            (l.detalles || '').toLowerCase().includes(q)
+        );
     }
 
     if (!filtered.length) {
@@ -2901,6 +3112,22 @@ function setAuditFiltro(f) {
         b.style.color       = b.dataset.f === f ? '#e040fb' : '#888';
         b.style.borderColor = b.dataset.f === f ? '#9d00ff' : '#333';
     });
+    renderMasterAuditoriaFull();
+}
+
+function setAuditDateFiltro(p) {
+    _auditDateFiltro = p;
+    document.querySelectorAll('.audit-date-btn').forEach(b => {
+        const active = b.dataset.p === p;
+        b.style.background  = active ? 'rgba(0,210,255,0.15)' : 'rgba(255,255,255,0.04)';
+        b.style.borderColor = active ? '#00d2ff55' : '#333';
+        b.style.color       = active ? '#00d2ff' : '#666';
+    });
+    renderMasterAuditoriaFull();
+}
+
+function setAuditUserSearch(val) {
+    _auditUserSearch = val;
     renderMasterAuditoriaFull();
 }
 
@@ -3149,10 +3376,12 @@ function renderIntegridad(data) {
     const utilidadMaster = parseFloat(data.utilidad_master_total || 0);
     const reentrada      = parseFloat(data.reentrada_pool        || 0);
     const creditos       = parseFloat(data.creditos_excedente    || 0);
+    const creditosLiquidados = parseFloat(data.creditos_liquidados || 0);
     const retirados      = parseFloat(data.retiros_procesados    || 0);
     // Obligación con usuarios: derivada desde blockchain (evita doble conteo de ciclos internos)
     const obligacion     = parseFloat(data.obligacion_usuarios   ||
         Math.max(0, blockchain - retirados - tesoreria - phasePools - reentrada - creditos));
+    const obligacionTotalUsuarios = parseFloat(data.obligacion_total_usuarios || (obligacion + creditos));
 
     // La suma SIEMPRE debe cuadrar con el blockchain recibido
     const suma = obligacion + retirados + tesoreria + phasePools + reentrada + creditos;
@@ -3167,8 +3396,10 @@ function renderIntegridad(data) {
             ${!ok ? `<div style="font-size:0.68rem; color:#888; margin-top:3px;">Δ ${fmt(diff)} sin explicación</div>` : ''}
         </div>
         <div style="font-size:0.68rem; color:#555; margin-bottom:6px;">Blockchain total recibido: <strong style="color:#00d2ff;">${fmt(blockchain)}</strong></div>
+        <div style="font-size:0.68rem; color:#555; margin-bottom:8px;">Obligacion total con usuarios: <strong style="color:#ffd166;">${fmt(obligacionTotalUsuarios)}</strong></div>
+        ${creditosLiquidados > 0 ? `<div style="font-size:0.66rem; color:#666; margin-bottom:8px;">Creditos liquidados: <strong style="color:#7dd3fc;">${fmt(creditosLiquidados)}</strong> · ya incluidos en retiros procesados.</div>` : ''}
         ${[
-            ['Saldo adeudado usuarios', obligacion,  '#9d00ff'],
+            ['Pendiente sin credito',   obligacion,  '#9d00ff'],
             ['Ya pagado a usuarios',    retirados,   '#c47aff'],
             ['Tesorería',               tesoreria,   '#00e676'],
             ['Pools Fases 1-3',         phasePools,  '#ffb300'],

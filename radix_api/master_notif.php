@@ -57,7 +57,8 @@ function obtenerChatIdMaster(PDO $pdo): ?string
 function notificarMasterNuevoUsuario(PDO $pdo, string $nickname, string $patrocinador, int $total_usuarios = 0): void
 {
     $chat_id = obtenerChatIdMaster($pdo);
-    if (!$chat_id) return;
+    $correoMaster = obtenerCorreoMaster($pdo);
+    if (!$chat_id && !$correoMaster) return;
 
     // Obtener datos completos del nuevo usuario
     try {
@@ -82,7 +83,22 @@ function notificarMasterNuevoUsuario(PDO $pdo, string $nickname, string $patroci
          . $total_txt . "\n\n"
          . "_Sistema RADIX_";
 
-    enviarTelegram($chat_id, $msg);
+    if ($chat_id) {
+        enviarTelegram($chat_id, $msg);
+    }
+    if (!empty($correoMaster)) {
+        $emailTitle = "Nuevo usuario registrado";
+        $emailLines = [
+            "Nickname: {$nickname}",
+            "Nombre: {$nombre}",
+            "Teléfono: {$telefono}",
+            "Correo: {$correo}",
+            "Wallet: {$wallet}",
+            "Patrocinador: {$patrocinador}",
+            $total_usuarios > 0 ? "Total en red: {$total_usuarios}" : "Total en red: —"
+        ];
+        enviarEmail($correoMaster, $emailTitle, radix_build_email_html($emailTitle, $emailLines), radix_build_email_text($emailLines));
+    }
 }
 
 /**
@@ -96,7 +112,8 @@ function notificarMasterNuevoUsuario(PDO $pdo, string $nickname, string $patroci
 function notificarMasterPagoConfirmado(PDO $pdo, string $nickname, float $monto, int $fase = 0): void
 {
     $chat_id = obtenerChatIdMaster($pdo);
-    if (!$chat_id) return;
+    $correoMaster = obtenerCorreoMaster($pdo);
+    if (!$chat_id && !$correoMaster) return;
 
     // Obtener datos completos del usuario que pagó
     try {
@@ -120,7 +137,22 @@ function notificarMasterPagoConfirmado(PDO $pdo, string $nickname, float $monto,
          . "📌 Fase: *Fase {$fase}*\n\n"
          . "_Sistema RADIX_";
 
-    enviarTelegram($chat_id, $msg);
+    if ($chat_id) {
+        enviarTelegram($chat_id, $msg);
+    }
+    if (!empty($correoMaster)) {
+        $emailTitle = "Pago confirmado en blockchain";
+        $emailLines = [
+            "Nickname: {$nickname}",
+            "Nombre: {$nombre}",
+            "Teléfono: {$telefono}",
+            "Correo: {$correo}",
+            "Wallet: {$wallet}",
+            "Monto pagado: $" . number_format($monto, 2) . " USDT",
+            "Fase: {$fase}"
+        ];
+        enviarEmail($correoMaster, $emailTitle, radix_build_email_html($emailTitle, $emailLines), radix_build_email_text($emailLines));
+    }
 }
 
 /**
@@ -136,7 +168,8 @@ function notificarMasterPagoConfirmado(PDO $pdo, string $nickname, float $monto,
 function notificarMasterRetiroSolicitado(PDO $pdo, string $nickname, float $monto, string $wallet, int $fase = 0): void
 {
     $chat_id = obtenerChatIdMaster($pdo);
-    if (!$chat_id) return;
+    $correoMaster = obtenerCorreoMaster($pdo);
+    if (!$chat_id && !$correoMaster) return;
 
     // Obtener datos completos del usuario que solicita el retiro
     try {
@@ -160,7 +193,22 @@ function notificarMasterRetiroSolicitado(PDO $pdo, string $nickname, float $mont
          . "⚡ Aprueba o rechaza desde el panel admin.\n\n"
          . "_Sistema RADIX_";
 
-    enviarTelegram($chat_id, $msg);
+    if ($chat_id) {
+        enviarTelegram($chat_id, $msg);
+    }
+    if (!empty($correoMaster)) {
+        $emailTitle = "Retiro solicitado - acción requerida";
+        $emailLines = [
+            "Nickname: {$nickname}",
+            "Nombre: {$nombre}",
+            "Teléfono: {$telefono}",
+            "Correo: {$correo}",
+            "Monto: $" . number_format($monto, 2) . " USDT",
+            "Fase: {$fase}",
+            "Wallet destino: {$wallet}"
+        ];
+        enviarEmail($correoMaster, $emailTitle, radix_build_email_html($emailTitle, $emailLines), radix_build_email_text($emailLines));
+    }
 }
 
 /**
@@ -173,7 +221,8 @@ function notificarMasterRetiroSolicitado(PDO $pdo, string $nickname, float $mont
 function notificarMasterTesoreriaBaja(PDO $pdo, float $tesoreria): void
 {
     $chat_id = obtenerChatIdMaster($pdo);
-    if (!$chat_id) return;
+    $correoMaster = obtenerCorreoMaster($pdo);
+    if (!$chat_id && !$correoMaster) return;
 
     if ($tesoreria >= MASTER_TESORERIA_UMBRAL) return;
 
@@ -183,7 +232,18 @@ function notificarMasterTesoreriaBaja(PDO $pdo, float $tesoreria): void
          . "Considera recargar la tesorería para seguir activando Agentes IA.\n\n"
          . "_Sistema RADIX_";
 
-    enviarTelegram($chat_id, $msg);
+    if ($chat_id) {
+        enviarTelegram($chat_id, $msg);
+    }
+    if (!empty($correoMaster)) {
+        $emailTitle = "Tesorería baja - atención";
+        $emailLines = [
+            "Balance actual: $" . number_format($tesoreria, 2) . " USDT",
+            "Umbral mínimo: $" . number_format(MASTER_TESORERIA_UMBRAL, 2) . " USDT",
+            "Considera recargar la tesorería para seguir activando Agentes IA."
+        ];
+        enviarEmail($correoMaster, $emailTitle, radix_build_email_html($emailTitle, $emailLines), radix_build_email_text($emailLines));
+    }
 }
 
 /**
@@ -195,7 +255,8 @@ function notificarMasterTesoreriaBaja(PDO $pdo, float $tesoreria): void
 function enviarResumenDiarioMaster(PDO $pdo): void
 {
     $chat_id = obtenerChatIdMaster($pdo);
-    if (!$chat_id) return;
+    $correoMaster = obtenerCorreoMaster($pdo);
+    if (!$chat_id && !$correoMaster) return;
 
     $hoy = date('Y-m-d');
 
@@ -278,7 +339,25 @@ function enviarResumenDiarioMaster(PDO $pdo): void
              . ($retiros_pendientes > 0 ? "⚠️ _Hay retiros pendientes de aprobación._\n\n" : "✅ _Sin retiros pendientes._\n\n")
              . "_Sistema RADIX_";
 
-        enviarTelegram($chat_id, $msg);
+        if ($chat_id) {
+            enviarTelegram($chat_id, $msg);
+        }
+        if (!empty($correoMaster)) {
+            $emailTitle = "Resumen diario RADIX";
+            $emailLines = [
+                "Fecha: " . $fecha_display,
+                "Usuarios nuevos hoy: {$nuevos_hoy}",
+                "Total en red: {$total_usuarios}",
+                "Pagos confirmados hoy: {$pagos_hoy}",
+                "Monto pagos hoy: $" . number_format((float)$monto_pagos_hoy, 2) . " USDT",
+                "Tableros completados hoy: {$tableros_hoy}",
+                "Retiros pendientes: {$retiros_pendientes}",
+                "Monto retiros pendientes: $" . number_format((float)$monto_retiros, 2) . " USDT",
+                "Tesorería: $" . number_format($tesoreria, 2) . " USDT",
+                "Total blockchain: $" . number_format($total_blockchain, 2) . " USDT"
+            ];
+            enviarEmail($correoMaster, $emailTitle, radix_build_email_html($emailTitle, $emailLines), radix_build_email_text($emailLines));
+        }
 
     } catch (Exception $e) {
         error_log("RADIX master_notif resumen_diario ERROR: " . $e->getMessage());

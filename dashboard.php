@@ -415,7 +415,7 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                     <div class="widget"><h4>Usuarios Reales</h4><div id="val-usuarios-reales" class="value">0</div><div class="trend">Crecimiento Orgánico</div></div>
                     <div class="widget"><h4>📊 Ganancia Red</h4><div id="val-master-earnings" class="value">$0.00</div><div class="trend">Generado por la red (ref.)</div></div>
                     <div class="widget" style="border-left: 3px solid #00d2ff;"><h4>💎 Total Blockchain</h4><div id="val-total-blockchain" class="value">$0.00</div><div class="trend">Recibido en tu wallet</div></div>
-                    <div class="widget" style="border-left: 3px solid #00bcd4;"><h4>Saldo Wallet Estimado</h4><div id="val-wallet-estimado" class="value">$0.00</div><div class="trend">Total blockchain - retiros pagados</div></div>
+                    <div class="widget" style="border-left: 3px solid #00bcd4;"><h4>Saldo Wallet Estimado (post-retiros)</h4><div id="val-wallet-estimado" class="value">$0.00</div><div class="trend">Total blockchain - retiros pagados (estimado)</div></div>
                     <div class="widget" style="border-left: 3px solid #ffab00;"><h4>⏳ Saldo Adeudado</h4><div id="val-pendiente-dist" class="value">$0.00</div><div class="trend">Usuarios aún no retiran</div></div>
                     <div class="widget" style="border-left: 3px solid #39d98a;"><h4>🧾 Créditos Excedente</h4><div id="val-creditos-excedente" class="value">$0.00</div><div class="trend">Saldo a favor de usuarios</div></div>
                 </div>
@@ -973,6 +973,13 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                             onfocus="this.style.borderColor='#9d00ff'" onblur="this.style.borderColor='#1e1e2e'">
                     </div>
 
+                    <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px; margin:-6px 0 14px;">
+                        <label style="display:flex; align-items:center; gap:8px; font-size:0.74rem; color:#888; cursor:pointer; background:rgba(255,255,255,0.03); border:1px solid #1e1e2e; padding:6px 10px; border-radius:999px;">
+                            <input id="users-include-inactivos" type="checkbox" onchange="toggleInactivos(this.checked)" style="accent-color:#ffb300;">
+                            Incluir inactivos
+                        </label>
+                    </div>
+
                     <!-- ── TARJETAS DE FILTRO ────────────────────────────── -->
                     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:16px;">
 
@@ -1109,8 +1116,10 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                                         <th>ID</th>
                                         <th>Nombre Completo</th>
                                         <th>Nick</th>
+                                        <th>Estado</th>
                                         <th>Teléfono</th>
                                         <th>Correo</th>
+                                        <th>Telegram</th>
                                         <th>Tablero</th>
                                         <th>Pago</th>
                                         <th>Registro</th>
@@ -1218,7 +1227,29 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
             <div id="section-ledger" class="master-section">
                 <div id="master-panel-ledger" style="margin-bottom:20px;">
                     <div class="master-card" style="margin-bottom:20px;">
-                        <h4>📒 Libro Mayor de Tesorería</h4>
+                        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+                            <h4 style="margin:0;">📒 Libro Mayor de Tesorería</h4>
+                            <span id="ledger-count-badge" style="font-size:0.72rem; color:#555;"></span>
+                        </div>
+                        <!-- Filtros Libro Mayor -->
+                        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; align-items:center;">
+                            <?php
+                            $ledgerTipos = [
+                                ['v'=>'all',    'label'=>'Todos'],
+                                ['v'=>'ingreso','label'=>'⬆ Ingresos'],
+                                ['v'=>'egreso', 'label'=>'⬇ Egresos'],
+                            ];
+                            foreach($ledgerTipos as $lt): ?>
+                            <button class="ledger-tipo-btn" data-v="<?= $lt['v'] ?>"
+                                onclick="setLedgerFiltroTipo('<?= $lt['v'] ?>')"
+                                style="background:<?= $lt['v']==='all'?'rgba(157,0,255,0.2)':'rgba(255,255,255,0.04)' ?>; border:1px solid <?= $lt['v']==='all'?'#9d00ff55':'#333' ?>; color:<?= $lt['v']==='all'?'#e040fb':'#777' ?>; border-radius:8px; padding:4px 12px; cursor:pointer; font-size:0.72rem; font-weight:700; white-space:nowrap;">
+                                <?= $lt['label'] ?>
+                            </button>
+                            <?php endforeach; ?>
+                            <input type="text" id="ledger-search-input" placeholder="🔍 Buscar concepto…"
+                                oninput="setLedgerSearch(this.value)"
+                                style="flex:1; min-width:160px; max-width:260px; background:rgba(255,255,255,0.04); border:1px solid #333; border-radius:8px; padding:5px 12px; color:#ccc; font-size:0.75rem; outline:none;">
+                        </div>
                         <div style="overflow-x:auto;"><table class="master-table"><thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th><th>Estado</th></tr></thead><tbody id="master-ledger-body"></tbody></table></div>
                     </div>
                 </div>
@@ -1305,7 +1336,56 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                         </table>
                 </div>
             </div>
-            <div id="section-retiros" class="master-section"><div class="master-card"><h3>💰 Retiros Full</h3><div id="master-retiros-full-list"></div></div></div>
+            <div id="section-retiros" class="master-section">
+                <div class="master-card">
+                    <!-- Cabecera -->
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+                        <h3 style="margin:0;">💰 Retiros Pendientes</h3>
+                        <span id="retiros-count-badge" style="background:rgba(255,82,82,0.12); border:1px solid rgba(255,82,82,0.25); color:#ff5252; border-radius:20px; padding:3px 14px; font-size:0.72rem; font-weight:700; display:none;"></span>
+                    </div>
+                    <!-- Filtros -->
+                    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; align-items:center;">
+                        <!-- Por Fase -->
+                        <?php
+                        $fases = [
+                            ['v'=>'all','label'=>'Todas las fases'],
+                            ['v'=>'0',  'label'=>'F0 · $40'],
+                            ['v'=>'1',  'label'=>'F1 · $400'],
+                            ['v'=>'2',  'label'=>'F2'],
+                            ['v'=>'3',  'label'=>'F3'],
+                        ];
+                        foreach($fases as $fa): ?>
+                        <button class="retiro-fase-btn" data-v="<?= $fa['v'] ?>"
+                            onclick="setRetiroFiltroFase('<?= $fa['v'] ?>')"
+                            style="background:<?= $fa['v']==='all'?'rgba(0,210,255,0.18)':'rgba(255,255,255,0.04)' ?>; border:1px solid <?= $fa['v']==='all'?'#00d2ff55':'#333' ?>; color:<?= $fa['v']==='all'?'#00d2ff':'#777' ?>; border-radius:8px; padding:4px 11px; cursor:pointer; font-size:0.72rem; font-weight:700; white-space:nowrap;">
+                            <?= $fa['label'] ?>
+                        </button>
+                        <?php endforeach; ?>
+                        <!-- Separador visual -->
+                        <span style="width:1px; height:20px; background:#222; flex-shrink:0;"></span>
+                        <!-- Por Urgencia -->
+                        <?php
+                        $urgs = [
+                            ['v'=>'all',    'label'=>'Todas','c'=>'#555'],
+                            ['v'=>'urgente','label'=>'🔴 URGENTE','c'=>'#ff5252'],
+                            ['v'=>'espera', 'label'=>'🟡 En espera','c'=>'#ffb300'],
+                            ['v'=>'reciente','label'=>'🟢 Reciente','c'=>'#00e676'],
+                        ];
+                        foreach($urgs as $ug): ?>
+                        <button class="retiro-urg-btn" data-v="<?= $ug['v'] ?>"
+                            onclick="setRetiroFiltroUrgencia('<?= $ug['v'] ?>')"
+                            style="background:rgba(255,255,255,0.03); border:1px solid #333; color:<?= $ug['c'] ?>; border-radius:8px; padding:4px 11px; cursor:pointer; font-size:0.72rem; font-weight:700; white-space:nowrap;">
+                            <?= $ug['label'] ?>
+                        </button>
+                        <?php endforeach; ?>
+                        <!-- Búsqueda por nombre / wallet -->
+                        <input type="text" id="retiro-search-input" placeholder="🔍 Nombre, @nick o wallet…"
+                            oninput="setRetiroSearch(this.value)"
+                            style="flex:1; min-width:180px; max-width:280px; background:rgba(255,255,255,0.04); border:1px solid #333; border-radius:8px; padding:5px 12px; color:#ccc; font-size:0.75rem; outline:none;">
+                    </div>
+                    <div id="master-retiros-full-list"></div>
+                </div>
+            </div>
             <div id="section-auditoria" class="master-section">
                 <div class="master-card">
                     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
@@ -1315,8 +1395,8 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                             🔄 Actualizar
                         </button>
                     </div>
-                    <!-- Filtros -->
-                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+                    <!-- Filtros por categoría -->
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
                         <?php
                         $filtros = [
                             ['f'=>'all',      'label'=>'🗂 Todos'],
@@ -1334,6 +1414,26 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
                         </button>
                         <?php endforeach; ?>
                     </div>
+                    <!-- Filtros por período y búsqueda de usuario -->
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; align-items:center;">
+                        <?php
+                        $periodos = [
+                            ['p'=>'all',   'label'=>'📅 Todo'],
+                            ['p'=>'hoy',   'label'=>'Hoy'],
+                            ['p'=>'semana','label'=>'7 días'],
+                            ['p'=>'mes',   'label'=>'30 días'],
+                        ];
+                        foreach($periodos as $per): ?>
+                        <button class="audit-date-btn" data-p="<?= $per['p'] ?>"
+                            onclick="setAuditDateFiltro('<?= $per['p'] ?>')"
+                            style="background:<?= $per['p']==='all'?'rgba(0,210,255,0.15)':'rgba(255,255,255,0.04)' ?>; border:1px solid <?= $per['p']==='all'?'#00d2ff55':'#333' ?>; color:<?= $per['p']==='all'?'#00d2ff':'#666' ?>; border-radius:8px; padding:4px 11px; cursor:pointer; font-size:0.72rem; font-weight:700; white-space:nowrap;">
+                            <?= $per['label'] ?>
+                        </button>
+                        <?php endforeach; ?>
+                        <input type="text" id="audit-user-search" placeholder="🔍 Buscar usuario…"
+                            oninput="setAuditUserSearch(this.value)"
+                            style="flex:1; min-width:160px; max-width:240px; background:rgba(255,255,255,0.04); border:1px solid #333; border-radius:8px; padding:5px 12px; color:#ccc; font-size:0.75rem; outline:none;">
+                    </div>
                     <!-- Leyenda de cascada -->
                     <div style="background:rgba(255,107,0,0.04); border:1px solid rgba(255,107,0,0.12); border-radius:8px; padding:8px 12px; margin-bottom:14px; font-size:0.74rem; color:#888; line-height:1.5;">
                         <strong style="color:#ff6d00;">⚡ Cascada automática</strong> — cuando varios eventos ocurren en menos de 30 segundos entre sí se agrupan como una cascada. Haz clic para expandir y ver cada paso.
@@ -1350,4 +1450,3 @@ $nickname = $user_info ? ($user_info['display_name'] ?: $user_info['nickname']) 
     <script src="assets/js/dashboard.js?v=<?php echo filemtime(__DIR__ . '/assets/js/dashboard.js'); ?>"></script>
 </body>
 </html>
-                                                            

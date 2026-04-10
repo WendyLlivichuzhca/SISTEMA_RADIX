@@ -15,6 +15,19 @@ function userColumnExists(PDO $pdo, string $column): bool
     return (int)$stmt->fetchColumn() > 0;
 }
 
+function retiroColumnExists(PDO $pdo, string $column): bool
+{
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'retiros'
+          AND COLUMN_NAME = ?
+    ");
+    $stmt->execute([$column]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
 function readNullableIntFilter(string $key): ?int
 {
     $value = $_GET[$key] ?? 'all';
@@ -241,6 +254,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $resCred = $stmt->fetch();
         $creditosExcedente = (float)($resCred['total'] ?? 0);
 
+        $creditosLiquidados = 0.0;
+        try {
+            if (retiroColumnExists($pdo, 'credito_consumido')) {
+                $stmt = $pdo->query("
+                    SELECT COALESCE(SUM(COALESCE(credito_consumido, 0)), 0) AS total
+                    FROM retiros
+                    WHERE estado = 'procesado'
+                ");
+                $creditosLiquidados = (float)($stmt->fetchColumn() ?: 0);
+            }
+        } catch (Exception $e) { /* instalaciones antiguas o tablas incompletas */ }
+
         // Retiros ya pagados a usuarios (salieron físicamente del sistema)
         $retirosProcessados = 0.0;
         try {
@@ -265,6 +290,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             - $reentradaPool
             - $creditosExcedente
         );
+        $obligacionTotalUsuarios = $obligacionUsuarios + $creditosExcedente;
 
         // pendienteDistribuir ya no se necesita en la vista de integridad;
         // se mantiene en 0 para no romper otras partes del sistema.
@@ -483,6 +509,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $selectCorreo = userColumnExists($pdo, 'correo_electronico')
             ? 'u.correo_electronico'
             : "'' AS correo_electronico";
+        $selectTelegram = userColumnExists($pdo, 'telegram_username')
+            ? 'u.telegram_username'
+            : "'' AS telegram_username";
+        $selectTelegramChat = userColumnExists($pdo, 'telegram_chat_id')
+            ? 'u.telegram_chat_id'
+            : "'' AS telegram_chat_id";
 
         $stmt = $pdo->query("
             SELECT
@@ -494,6 +526,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 {$selectNombre},
                 {$selectTelefono},
                 {$selectCorreo},
+                {$selectTelegram},
+                {$selectTelegramChat},
                 (
                     SELECT p.estado
                     FROM pagos p
@@ -527,7 +561,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                       AND tp2.estado = 'completado'
                 ) AS ciclos_completados
             FROM usuarios u
-            WHERE u.tipo_usuario IN ('real', 'master', 'inactivo')
+            WHERE u.tipo_usuario IN ('real', 'inactivo')
             ORDER BY u.id ASC
         ");
         $listaUsuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -874,8 +908,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'retiros_procesados' => $retirosProcessados,
             'saldo_wallet_estimado' => $saldoWalletEstimado,
             'obligacion_usuarios' => $obligacionUsuarios,
+            'obligacion_total_usuarios' => $obligacionTotalUsuarios,
             'total_blockchain' => $totalBlockchain,
             'creditos_excedente' => $creditosExcedente,
+            'creditos_liquidados' => $creditosLiquidados,
             'pendiente_distribuir' => $pendienteDistribuir,
             'usuarios' => [
                 'reales' => $totalReales,

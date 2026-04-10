@@ -125,7 +125,16 @@ try {
         $ya_comprometido = (float)$stmt->fetch()['t'];
 
         $saldo_real = $bruto - $deducciones + $credito - $ya_comprometido;
-        $monto_retiro = max(0.0, (float)$retiro['monto'] - $credito_consumido_actual);
+
+        // Si el retiro pendiente fue creado por una version antigua que no
+        // reservaba el credito excedente, lo regularizamos al aprobar.
+        $credito_consumido_ajuste = 0.0;
+        if ($fase_num === 0 && $retiroHasCreditoConsumido && $credito_consumido_actual <= 0 && $credito > 0) {
+            $saldo_base_sin_credito = round(max(0.0, $bruto - $deducciones - $ya_comprometido), 2);
+            $credito_consumido_ajuste = round(min($credito, max(0.0, (float)$retiro['monto'] - $saldo_base_sin_credito)), 2);
+        }
+
+        $monto_retiro = max(0.0, (float)$retiro['monto'] - $credito_consumido_actual - $credito_consumido_ajuste);
 
         if ($saldo_real < $monto_retiro) {
             sendResponse([
@@ -146,16 +155,26 @@ try {
     $nuevo_estado = $accion === 'aprobar' ? 'procesado' : 'rechazado';
 
     if ($accion === 'aprobar') {
+        if ($credito_consumido_ajuste > 0) {
+            $stmtCredito = $pdo->prepare("
+                UPDATE usuarios
+                SET credito_saldo = GREATEST(credito_saldo - ?, 0)
+                WHERE id = ?
+            ");
+            $stmtCredito->execute([$credito_consumido_ajuste, (int)$retiro['usuario_id']]);
+        }
+
         $stmt = $pdo->prepare("
             UPDATE retiros
             SET estado = 'procesado',
                 fecha_proceso = NOW(),
                 notas = ?,
-                tx_hash = ?
+                tx_hash = ?,
+                credito_consumido = COALESCE(credito_consumido, 0) + ?
             WHERE id = ?
               AND estado = 'pendiente'
         ");
-        $stmt->execute([$notas !== '' ? $notas : null, $tx_hash, $retiro_id]);
+        $stmt->execute([$notas !== '' ? $notas : null, $tx_hash, $credito_consumido_ajuste, $retiro_id]);
     } else {
         $stmt = $pdo->prepare("
             UPDATE retiros
@@ -186,8 +205,9 @@ try {
     if ($accion === 'aprobar') {
         $detalles .= " TX_HASH: {$tx_hash}.";
     }
-    if ((float)($retiro['credito_consumido'] ?? 0) > 0) {
-        $detalles .= " Credito aplicado: $" . number_format((float)$retiro['credito_consumido'], 2) . ".";
+    $credito_aplicado_total = (float)($retiro['credito_consumido'] ?? 0) + ($accion === 'aprobar' ? $credito_consumido_ajuste : 0.0);
+    if ($credito_aplicado_total > 0) {
+        $detalles .= " Credito aplicado: $" . number_format($credito_aplicado_total, 2) . ".";
     }
     if ($notas !== '') {
         $detalles .= " Notas: {$notas}";
